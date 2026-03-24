@@ -210,7 +210,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
 <!-- ACCESS GATE -->
 <div id="access-gate">
   <div class="ag-card">
-    <div class="ag-logo"><img id="gate-logo" src="" alt="585 Plug"></div>
+    <div class="ag-logo"><img id="gate-logo" src="#" alt="585 Plug"></div>
     <div class="ag-brand">585 Plug</div>
     <div class="ag-tag">Smoke Happy · Smoke Healthy</div>
     <div class="ag-label">Enter Access Code</div>
@@ -240,7 +240,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
   <header>
     <div class="header-inner">
       <div class="logo-wrap">
-        <div class="logo-circle"><img id="header-logo" src="" alt="585 Plug"></div>
+        <div class="logo-circle"><img id="header-logo" src="#" alt="585 Plug"></div>
         <div>
           <div class="logo-text">585 Plug</div>
           <div class="logo-sub">Quality You Can Trust · Rochester NY</div>
@@ -253,7 +253,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
   </header>
 
   <div class="hero">
-    <div class="hero-van"><img id="hero-logo" src="" alt="585 Plug"></div>
+    <div class="hero-van"><img id="hero-logo" src="#" alt="585 Plug"></div>
     <div class="hero-top">
       <div class="hero-badge">🍁 Rochester's Finest · Est. 585</div>
       <div id="sync-status"></div>
@@ -364,13 +364,6 @@ let searchQuery = '';
 let fbPollTimer = null;
 let addrTimer = null;
 let addrResults = [];
-
-// ── LOGOS (embedded) ──
-// Load logos after DOM ready
-function loadLogos() {
-  // Using placeholder leaf until logos are embedded
-  // Logos will be embedded as base64 in production
-}
 
 
 // ── LIGHTBOX ──
@@ -808,34 +801,7 @@ function sendOrder() {
 
   window.open('sms:'+OWNER_PHONE+'&body='+encodeURIComponent(msg),'_blank');
 
-  // Write order to Firebase so it auto-logs in inventory app
-  const orderEntry = {
-    type: 'order',
-    source: 'website',
-    customer: '('+customerPhone.slice(0,3)+') '+customerPhone.slice(3,6)+'-'+customerPhone.slice(6),
-    orderItems: cart.map(c => ({cat:c.cat, itemName:c.name, qty:1})),
-    total: total,
-    payMethod: payMethod,
-    payMethodLabel: pm,
-    amtReceived: total,
-    profit: total - (sub * 0.4), // rough estimate
-    commission: 0,
-    creditApplied: 0,
-    extraCredit: 0,
-    shortPaid: 0,
-    note: (orderType==='delivery' ? '🚗 '+addr : '🏪 Pickup'),
-    who: 'Website',
-    timestamp: Date.now(),
-    date: new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}).replace(/\//g,'/'),
-    time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true})
-  };
 
-  // Push to Firebase pending_orders — inventory app will pick it up
-  fetch(FB_URL + '/pending_orders.json', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(orderEntry)
-  }).catch(e => console.log('Order log failed:', e));
 
   setTimeout(() => {
     cart=[];payMethod=null;orderType=null;selectedPrices={};
@@ -863,7 +829,7 @@ function showToast(msg, type='') {
 <div id="lightbox">
   <button id="lightbox-close" onclick="closeLightbox()">✕</button>
   <div id="lightbox-img-wrap" onclick="if(event.target===this)closeLightbox()">
-    <img id="lightbox-img" src="" alt="">
+    <img id="lightbox-img" src="#" alt="">
   </div>
 </div>
 
