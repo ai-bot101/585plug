@@ -135,6 +135,34 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .add-btn:disabled{background:var(--black4);color:var(--white3);cursor:not-allowed;}
 .add-btn.added{background:#1a5c1a;}
 
+/* FLAVOR PICKER */
+#flavor-picker{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:600;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
+#flavor-picker.open{display:flex;}
+.fp-card{background:var(--black2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;padding:24px 20px;}
+.fp-title{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--white);letter-spacing:2px;margin-bottom:4px;}
+.fp-sub{font-family:'Oswald',sans-serif;font-size:12px;color:var(--white3);margin-bottom:16px;line-height:1.4;}
+.fp-count-bar{display:flex;justify-content:space-between;align-items:center;background:var(--black3);border:1px solid var(--border2);border-radius:10px;padding:10px 14px;margin-bottom:14px;}
+.fp-count-label{font-family:'Oswald',sans-serif;font-size:12px;color:var(--white3);text-transform:uppercase;letter-spacing:1px;}
+.fp-count-val{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;}
+.fp-count-val.ok{color:var(--green);}
+.fp-count-val.need{color:var(--red);}
+.fp-row{display:flex;align-items:center;gap:10px;background:var(--black3);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:8px;transition:border-color .15s;}
+.fp-row.has-pick{border-color:rgba(204,31,31,0.4);}
+.fp-row.out-of-stock{opacity:0.35;pointer-events:none;}
+.fp-fname{flex:1;font-family:'Oswald',sans-serif;font-size:14px;color:var(--white);font-weight:500;}
+.fp-fstock{font-family:monospace;font-size:10px;color:var(--white3);margin-right:8px;}
+.fp-fstock .num{color:var(--orange);font-weight:700;}
+.fp-qty-ctrl{display:flex;align-items:center;gap:6px;}
+.fp-qty-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--border2);background:var(--black4);color:var(--white);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;transition:all .15s;}
+.fp-qty-btn:hover{border-color:var(--red);background:rgba(204,31,31,0.1);}
+.fp-qty-btn:disabled{opacity:0.3;cursor:not-allowed;}
+.fp-qty-num{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--red);width:24px;text-align:center;}
+.fp-actions{display:flex;gap:8px;margin-top:16px;}
+.fp-cancel{flex:1;background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:12px;color:var(--white3);font-family:'Oswald',sans-serif;font-size:14px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;}
+.fp-confirm{flex:2;background:var(--red);border:none;border-radius:10px;padding:12px;color:#fff;font-family:'Oswald',sans-serif;font-size:14px;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:background .2s;}
+.fp-confirm:hover{background:var(--red3);}
+.fp-confirm:disabled{background:var(--black4);color:var(--white3);cursor:not-allowed;}
+
 /* EMPTY */
 .empty-state{text-align:center;padding:60px 20px;color:var(--white3);}
 .empty-state .ei{font-size:44px;margin-bottom:14px;opacity:.4;}
@@ -236,6 +264,23 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
     <input class="pg-inp" id="pg-phone" type="tel" placeholder="(585) 000-0000" maxlength="14" oninput="fmtPhone(this)">
     <button class="pg-btn" onclick="submitPhone()">Send Order →</button>
     <button class="pg-cancel" onclick="document.getElementById('phone-gate').classList.remove('open')">Cancel</button>
+  </div>
+</div>
+
+<!-- FLAVOR PICKER -->
+<div id="flavor-picker">
+  <div class="fp-card">
+    <div class="fp-title" id="fp-title">Pick Your Flavors</div>
+    <div class="fp-sub" id="fp-sub">Choose your flavors below</div>
+    <div class="fp-count-bar">
+      <div class="fp-count-label">Flavors picked</div>
+      <div class="fp-count-val need" id="fp-count">0 / 0</div>
+    </div>
+    <div id="fp-list"></div>
+    <div class="fp-actions">
+      <button class="fp-cancel" onclick="closeFP()">Cancel</button>
+      <button class="fp-confirm" id="fp-confirm" disabled onclick="confirmFP()">Pick Flavors First</button>
+    </div>
   </div>
 </div>
 
@@ -447,7 +492,8 @@ function processData(data) {
       const left = item.left !== undefined ? item.left : (item.bought || 0);
       const soldOut = left <= 0 && (item.bought || 0) > 0;
       const allAddOn = prices.length>0 && prices.every(p=>p.addOnOnly);
-      built.push({id:id++, name:item.name, cat:cat.toUpperCase(), desc:item.desc||'', img:item.img||'', prices, soldOut, allAddOn});
+      const flavors = Array.isArray(item.flavors) ? item.flavors.filter(f=>f.name&&f.name.trim()) : [];
+      built.push({id:id++, name:item.name, cat:cat.toUpperCase(), desc:item.desc||'', img:item.img||'', prices, soldOut, allAddOn, flavors});
     });
   });
   menuItems = built;
@@ -582,6 +628,7 @@ function renderCard(item) {
       <div class="cat-badge">${item.cat}</div>
       ${item.soldOut?'<div class="sold-badge">Sold Out</div>':''}
       ${item.allAddOn?'<div style="position:absolute;top:8px;left:8px;background:rgba(200,50,50,0.9);border-radius:6px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;font-weight:600;color:#fff;letter-spacing:1px;z-index:2;">ADD-ON ONLY</div>':''}
+      ${item.flavors&&item.flavors.length?'<div style="position:absolute;bottom:8px;left:8px;background:rgba(244,162,74,0.9);border-radius:6px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;font-weight:600;color:#fff;letter-spacing:1px;z-index:2;">🍬 '+item.flavors.length+' FLAVORS</div>':''}
     </div>
     <div class="item-body">
       <div class="item-name">${item.name}</div>
@@ -603,6 +650,113 @@ function selPrice(itemId, idx) {
   renderMenu();
 }
 
+// ── FLAVOR PICKER ──
+let fpState = null; // {itemId, priceIdx, qtyNeeded, picks:{flavorName:count}}
+
+function parseQtyFromLabel(label) {
+  // Try to extract a number from the label: "3" → 3, "3 for" → 3, "10" → 10
+  const m = label.match(/^(\d+)/);
+  return m ? parseInt(m[1]) : 1;
+}
+
+function openFP(itemId, priceIdx) {
+  const item = menuItems.find(i=>i.id===itemId);
+  if (!item) return;
+  const price = item.prices[priceIdx];
+  const qtyNeeded = parseQtyFromLabel(price.label);
+  fpState = {itemId, priceIdx, qtyNeeded, picks:{}};
+  item.flavors.forEach(f => { fpState.picks[f.name] = 0; });
+
+  document.getElementById('fp-title').textContent = 'Pick Flavors — ' + item.name;
+  document.getElementById('fp-sub').textContent = 'You selected ' + price.label + ' ($' + price.price + '). Choose ' + qtyNeeded + ' flavor' + (qtyNeeded!==1?'s':'') + '.';
+  renderFP();
+  document.getElementById('flavor-picker').classList.add('open');
+}
+
+function closeFP() {
+  fpState = null;
+  document.getElementById('flavor-picker').classList.remove('open');
+}
+
+function renderFP() {
+  if (!fpState) return;
+  const item = menuItems.find(i=>i.id===fpState.itemId);
+  if (!item) return;
+  const totalPicked = Object.values(fpState.picks).reduce((s,v)=>s+v,0);
+  const countEl = document.getElementById('fp-count');
+  countEl.textContent = totalPicked + ' / ' + fpState.qtyNeeded;
+  countEl.className = 'fp-count-val ' + (totalPicked >= fpState.qtyNeeded ? 'ok' : 'need');
+
+  const list = document.getElementById('fp-list');
+  list.innerHTML = item.flavors.map(f => {
+    const picked = fpState.picks[f.name] || 0;
+    const oos = f.stock <= 0;
+    const maxReached = totalPicked >= fpState.qtyNeeded && picked === 0;
+    const cantAdd = oos || picked >= f.stock || totalPicked >= fpState.qtyNeeded;
+    return `<div class="fp-row ${picked>0?'has-pick':''} ${oos?'out-of-stock':''}">
+      <div class="fp-fname">${f.name}</div>
+      <div class="fp-fstock"><span class="num">${f.stock}</span> left</div>
+      <div class="fp-qty-ctrl">
+        <button class="fp-qty-btn" onclick="fpAdj('${f.name}',-1)" ${picked<=0?'disabled':''}>−</button>
+        <div class="fp-qty-num">${picked}</div>
+        <button class="fp-qty-btn" onclick="fpAdj('${f.name}',1)" ${cantAdd?'disabled':''}>+</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const btn = document.getElementById('fp-confirm');
+  if (totalPicked >= fpState.qtyNeeded) {
+    btn.disabled = false;
+    btn.textContent = 'Add to Order';
+  } else {
+    btn.disabled = true;
+    btn.textContent = 'Pick ' + (fpState.qtyNeeded - totalPicked) + ' more';
+  }
+}
+
+function fpAdj(flavorName, delta) {
+  if (!fpState) return;
+  const cur = fpState.picks[flavorName] || 0;
+  const newVal = cur + delta;
+  if (newVal < 0) return;
+  const item = menuItems.find(i=>i.id===fpState.itemId);
+  const flav = item?.flavors.find(f=>f.name===flavorName);
+  if (flav && newVal > flav.stock) return;
+  const totalPicked = Object.values(fpState.picks).reduce((s,v)=>s+v,0);
+  if (delta > 0 && totalPicked >= fpState.qtyNeeded) return;
+  fpState.picks[flavorName] = newVal;
+  renderFP();
+}
+
+function confirmFP() {
+  if (!fpState) return;
+  const item = menuItems.find(i=>i.id===fpState.itemId);
+  if (!item) return;
+  const price = item.prices[fpState.priceIdx];
+  const totalPicked = Object.values(fpState.picks).reduce((s,v)=>s+v,0);
+  if (totalPicked < fpState.qtyNeeded) return;
+
+  // Build flavor summary
+  const flavorList = Object.entries(fpState.picks).filter(([_,v])=>v>0).map(([name,qty])=>qty>1?qty+'x '+name:name);
+  const flavorText = flavorList.join(', ');
+
+  cart.push({
+    itemId: fpState.itemId,
+    priceIdx: fpState.priceIdx,
+    name: item.name,
+    label: price.label,
+    price: price.price,
+    cat: item.cat,
+    flavors: {...fpState.picks},
+    flavorText: flavorText
+  });
+  showToast(item.name + ' added with ' + flavorList.length + ' flavor' + (flavorList.length!==1?'s':'') + ' 🍬','green');
+  closeFP();
+  updateCartCount();
+  renderMenu();
+  renderCart();
+}
+
 // ── CART ──
 function addToCart(itemId) {
   const item = menuItems.find(i => i.id===itemId);
@@ -615,6 +769,18 @@ function addToCart(itemId) {
   if (price.addOnOnly) {
     const hasBase = cart.some(c => { const ci=menuItems.find(m=>m.id===c.itemId); return ci && !ci.allAddOn; });
     if (!hasBase) { showToast('This price is add-on only — add another item first',''); return; }
+  }
+  // If item has flavors, open flavor picker instead of adding directly
+  if (item.flavors && item.flavors.length > 0) {
+    const existing = cart.findIndex(c => c.itemId===itemId && c.priceIdx===selIdx);
+    if (existing > -1) {
+      cart.splice(existing,1);
+      showToast('Removed from order','');
+      updateCartCount(); renderMenu(); renderCart();
+      return;
+    }
+    openFP(itemId, selIdx);
+    return;
   }
   const existing = cart.findIndex(c => c.itemId===itemId && c.priceIdx===selIdx);
   if (existing > -1) {
@@ -677,6 +843,7 @@ function renderCart() {
         <div class="ci-info">
           <div class="ci-name">${c.name}</div>
           <div class="ci-size">${c.label} · ${c.cat}</div>
+          ${c.flavorText ? '<div style="font-family:Oswald,sans-serif;font-size:10px;color:var(--orange,#f4a24a);margin-top:2px;line-height:1.3;">🍬 '+c.flavorText+'</div>' : ''}
         </div>
         <div class="ci-price">$${c.price}</div>
         <button class="ci-remove" onclick="removeFromCart(${idx})">✕</button>
@@ -812,7 +979,11 @@ function sendOrder() {
   const sub = getSub();
   const fee = getFee();
   const total = sub + fee;
-  const itemLines = cart.map(c => '• '+c.name+' ('+c.label+') — $'+c.price).join('\n');
+  const itemLines = cart.map(c => {
+    let line = '• '+c.name+' ('+c.label+') — $'+c.price;
+    if (c.flavorText) line += '\n  🍬 Flavors: '+c.flavorText;
+    return line;
+  }).join('\n');
   const feeNote = fee > 0 ? 'VIRTUAL FEE: +$'+fee+'\n' : '';
   const addr = document.getElementById('addr-inp')?.value.trim() || '';
   const delivLine = orderType === 'pickup' ? 'TYPE: 🏪 PICKUP' : 'TYPE: 🚗 DELIVERY\nADDRESS: '+addr;
@@ -823,7 +994,7 @@ function sendOrder() {
 
   // Save to Firebase as pending order for inventory app to confirm
   const pendingOrder = {
-    orderItems: cart.map(c => ({itemName:c.name, cat:c.cat, qty:1, label:c.label, price:c.price})),
+    orderItems: cart.map(c => ({itemName:c.name, cat:c.cat, qty:1, label:c.label, price:c.price, flavors:c.flavors||null, flavorText:c.flavorText||''})),
     total, payMethod, payMethodLabel:pm,
     customerPhone: phone,
     orderType, address: addr,
