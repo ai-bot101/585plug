@@ -429,6 +429,8 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
     <div id="dash-view" style="display:none">
       <!-- PENDING WEBSITE ORDERS -->
       <div id="pending-orders-section" style="display:none;margin-bottom:14px;"></div>
+      <!-- CONFIRMED WEBSITE ORDERS (reversible) -->
+      <div id="confirmed-orders-section" style="display:none;margin-bottom:14px;"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
         <div class="day-tabs-wrap" style="margin-bottom:0;flex:1;"><div class="dtabs" id="dtabs"></div></div>
         <button onclick="openEOD()" style="background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:10px;padding:8px 14px;color:var(--accent);font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;">📊 End of Day</button>
@@ -1492,6 +1494,7 @@ function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today
   renderEODLogsList();
   renderLoginLog();
   renderCancelledOrders();
+  renderConfirmedWebOrders();
   const us={};cfg.users.forEach((u,i)=>{us[u.name]={c:0,t:0,comm:0};});sells.forEach(e=>{if(!us[e.who])us[e.who]={c:0,t:0,comm:0};us[e.who].c++;us[e.who].t+=(e.amtReceived||0);us[e.who].comm+=(e.commission||0);});// all-time totals per person
   const allTime={};
   cfg.users.forEach(u=>{allTime[u.name]={c:0,t:0,comm:0};});
@@ -2046,7 +2049,32 @@ function processWebsiteOrders(pendingOrders) {
   if (!pendingOrders || typeof pendingOrders !== 'object') return;
   let newCount = 0;
   Object.entries(pendingOrders).forEach(([fbKey, order]) => {
-    if (!order || order.confirmed || order.cancelled) return;
+    if (!order) return;
+    // Check if admin cancelled a previously confirmed order — auto-reverse stock
+    if (order.cancelled && !order._reversedByAdmin) {
+      const logIdx = log.findIndex(e => e.webOrderKey === fbKey);
+      if (logIdx > -1) {
+        // This confirmed order was cancelled from admin panel — reverse it
+        const logEntry = log[logIdx];
+        (logEntry.orderItems||[]).forEach(oi => {
+          const itemName = (oi.itemName||'').toLowerCase();
+          const labelQty = oi.label ? parseInt(oi.label) : NaN;
+          const qty = !isNaN(labelQty) && labelQty > 0 ? labelQty : (oi.qty || 1);
+          for (const c of C()) {
+            const found = (inv[c]||[]).find(item => item.name === itemName);
+            if (found) { found.left = Math.round((gl(found) + qty)*10)/10; break; }
+          }
+        });
+        log.splice(logIdx, 1);
+        // Mark as reversed so we don't do it again
+        fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({['pending_orders/'+fbKey+'/_reversedByAdmin']: true})
+        }).catch(()=>{});
+        persist(); renderStats(); renderItems();
+        showToast('Admin cancelled a confirmed order — stock restored', 'err');
+      }
+    }
+    if (order.confirmed || order.cancelled) return;
     if (!pendingWebOrders[fbKey]) {
       pendingWebOrders[fbKey] = {...order, fbKey};
       newCount++;
@@ -2151,14 +2179,15 @@ function confirmWebOrder(fbKey) {
     type: 'order',
     source: 'website',
     customer: order.customerPhone || 'Website Customer',
-    orderItems: (order.orderItems||[]).map(i => ({cat:i.cat||'', itemName:i.itemName||i.name||'', qty:i.qty||1})),
+    orderItems: (order.orderItems||[]).map(i => ({cat:i.cat||'', itemName:i.itemName||i.name||'', qty:i.qty||1, label:i.label||'', price:i.price||0, flavorText:i.flavorText||''})),
     total, payMethod,
     payMethodLabel: order.payMethodLabel || 'Cash',
     amtReceived: total, profit, commission,
     creditApplied: 0, extraCredit: 0, shortPaid: 0,
     note: order.address ? 'Address: '+order.address : '',
     who: cu?.name || 'Owner',
-    timestamp: Date.now(), date: tday(), time: tstr()
+    timestamp: Date.now(), date: tday(), time: tstr(),
+    webOrderKey: fbKey
   };
 
   // Deduct stock for each item
@@ -2232,6 +2261,94 @@ function cancelWebOrder(fbKey) {
   showToast('Order cancelled — saved to log', 'err');
 }
 
+function reverseConfirmedOrder(fbKey) {
+  if (!confirm('Cancel this confirmed order and restore stock?')) return;
+
+  // Find the log entry for this confirmed order
+  const logIdx = log.findIndex(e => e.webOrderKey === fbKey);
+  const logEntry = logIdx > -1 ? log[logIdx] : null;
+
+  // Restore stock for each item
+  const orderItems = logEntry ? logEntry.orderItems : [];
+  // Also try to get items from Firebase order data
+  orderItems.forEach(oi => {
+    const itemName = (oi.itemName||oi.name||'').toLowerCase();
+    const labelQty = oi.label ? parseInt(oi.label) : NaN;
+    const qty = !isNaN(labelQty) && labelQty > 0 ? labelQty : (oi.qty || 1);
+    const cat = oi.cat || '';
+
+    let realCat = cat;
+    if (cat && !inv[cat]) {
+      const match = C().find(c => c.toLowerCase() === cat.toLowerCase());
+      if (match) realCat = match;
+    }
+    if (!realCat || !inv[realCat]) {
+      for (const c of C()) {
+        const found = (inv[c]||[]).find(item => item.name === itemName);
+        if (found) { found.left = Math.round((gl(found) + qty)*10)/10; break; }
+      }
+    } else {
+      const found = (inv[realCat]||[]).find(item => item.name === itemName);
+      if (found) found.left = Math.round((gl(found) + qty)*10)/10;
+    }
+  });
+
+  // Remove from sales log
+  if (logIdx > -1) log.splice(logIdx, 1);
+
+  // Mark cancelled in Firebase
+  fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({['pending_orders/'+fbKey+'/cancelled']: true})
+  }).catch(()=>{});
+
+  persist();
+  renderStats();
+  renderItems();
+  if (cu?.role==='owner') renderDash(); else renderStaffLog();
+  showToast('Order reversed — stock restored ✅', 'ok');
+}
+
+// ── CONFIRMED WEBSITE ORDERS (reversible) ──
+function renderConfirmedWebOrders() {
+  const el = document.getElementById('confirmed-orders-section');
+  if (!el) return;
+  // Find today's confirmed website orders in the log
+  const today = tday();
+  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && e.date === today);
+  if (!webOrders.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
+  el.style.display = 'block';
+  el.innerHTML = `<div style="background:rgba(62,207,142,0.06);border:1px solid rgba(62,207,142,0.3);border-radius:14px;padding:16px;margin-bottom:4px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+      <h3 style="margin-bottom:0;color:var(--green);">✅ Confirmed Website Orders</h3>
+      <span style="background:var(--green);color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-family:var(--mono);font-weight:700;">${webOrders.length}</span>
+    </div>
+    ${webOrders.map(o => {
+      const items = (o.orderItems||[]).map(i => {
+        let txt = (i.qty||1) + 'x ' + (i.itemName||'?') + ' (' + (i.label||'?') + ' · $' + (i.price||0) + ')';
+        if (i.flavorText) txt += ' 🍬 ' + i.flavorText;
+        return txt;
+      }).join('<br>');
+      return `<div style="background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;">${items||'No items'}</div>
+            <div style="font-size:11px;color:var(--text3);line-height:1.8;">
+              ${o.customer?'📱 '+o.customer+'<br>':''}
+              💳 ${o.payMethodLabel||o.payMethod||'Cash'}
+              ${o.note?'<br>📍 '+o.note:''}
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--green);">$${o.total||0}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px;">${o.time||''}</div>
+          </div>
+        </div>
+        <button onclick="reverseConfirmedOrder('${o.webOrderKey}')" style="width:100%;background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:10px;color:var(--red);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">❌ Cancel & Restore Stock</button>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
 
 // ── CANCELLED ORDERS LOG (Owner only) ──
 function renderCancelledOrders() {
@@ -2555,7 +2672,12 @@ async function fbPullNow(){
     const res=await fetch(FB_URL+'.json?t='+Date.now());
     if(!res.ok)return;
     const data=await res.json();
-    if(!data||!data.updatedAt)return;
+    if(!data)return;
+    // Always check for new pending orders even if updatedAt hasn't changed
+    if(data.pending_orders && cu){
+      processWebsiteOrders(data.pending_orders);
+    }
+    if(!data.updatedAt)return;
     if(data.updatedAt<=fbLastTimestamp)return;
     fbLastTimestamp=data.updatedAt;
     // always overwrite ALL fields so resets/clears propagate to all devices
