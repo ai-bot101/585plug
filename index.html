@@ -212,6 +212,46 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .checkout-btn:hover{background:var(--red3);}
 .checkout-btn:disabled{background:var(--black4);color:var(--white3);cursor:not-allowed;}
 
+/* ADMIN PANEL */
+#admin-gate{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:700;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
+#admin-gate.open{display:flex;}
+.adg-card{background:var(--black2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:340px;padding:28px 24px;text-align:center;}
+.adg-icon{font-size:36px;margin-bottom:8px;}
+.adg-title{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--white);letter-spacing:2px;margin-bottom:4px;}
+.adg-sub{font-family:'Oswald',sans-serif;font-size:12px;color:var(--white3);margin-bottom:16px;}
+.adg-inp{width:100%;background:var(--black3);border:1px solid var(--border2);border-radius:10px;padding:12px 16px;color:var(--white);font-family:monospace;font-size:18px;text-align:center;letter-spacing:6px;outline:none;margin-bottom:8px;}
+.adg-inp:focus{border-color:var(--red);}
+.adg-err{font-family:'Oswald',sans-serif;font-size:11px;color:var(--red);min-height:16px;margin-bottom:8px;}
+.adg-btn{width:100%;background:var(--red);border:none;border-radius:10px;padding:12px;color:#fff;font-family:'Oswald',sans-serif;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+.adg-cancel{width:100%;background:transparent;border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--white3);font-family:'Oswald',sans-serif;font-size:12px;cursor:pointer;}
+
+#admin-panel{position:fixed;inset:0;background:var(--black);z-index:800;display:none;flex-direction:column;}
+#admin-panel.open{display:flex;}
+.ap-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);background:var(--black2);}
+.ap-title{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--white);letter-spacing:2px;}
+.ap-close{background:rgba(204,31,31,0.1);border:1px solid rgba(204,31,31,0.2);border-radius:8px;padding:8px 14px;color:var(--red);font-family:'Oswald',sans-serif;font-size:12px;cursor:pointer;font-weight:600;}
+.ap-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);}
+.ap-stat{background:var(--black2);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;}
+.ap-stat-val{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--red);letter-spacing:1px;}
+.ap-stat-label{font-family:'Oswald',sans-serif;font-size:10px;color:var(--white3);text-transform:uppercase;letter-spacing:1px;}
+.ap-list{flex:1;overflow-y:auto;padding:12px 16px;}
+.ap-order{background:var(--black2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;}
+.ap-order-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.ap-order-time{font-family:monospace;font-size:11px;color:var(--white3);}
+.ap-order-total{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--red);letter-spacing:1px;}
+.ap-order-items{margin-bottom:6px;}
+.ap-order-item{font-family:'Oswald',sans-serif;font-size:12px;color:var(--white2);padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+.ap-order-item .ao-flavors{font-size:10px;color:var(--orange,#f4a24a);margin-top:1px;}
+.ap-order-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.ap-order-tag{font-family:'Oswald',sans-serif;font-size:10px;padding:3px 8px;border-radius:6px;background:var(--black3);border:1px solid var(--border);color:var(--white3);}
+.ap-order-tag.pay{border-color:rgba(62,207,142,0.3);color:var(--green);}
+.ap-order-tag.type{border-color:rgba(108,99,255,0.3);color:#8b85ff;}
+.ap-order-tag.phone{border-color:rgba(244,162,74,0.3);color:var(--orange,#f4a24a);}
+.ap-empty{text-align:center;padding:40px 20px;color:var(--white3);font-family:'Oswald',sans-serif;}
+.ap-del-btn{background:rgba(204,31,31,0.1);border:1px solid rgba(204,31,31,0.3);border-radius:8px;padding:6px 12px;color:var(--red);font-family:'Oswald',sans-serif;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .15s;margin-top:10px;width:100%;}
+.ap-del-btn:hover{background:rgba(204,31,31,0.2);border-color:var(--red);}
+.ap-order.cancelled{opacity:0.4;border-style:dashed;}
+
 /* TOAST */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--black3);border:1px solid var(--border2);border-radius:10px;padding:12px 20px;font-family:'Oswald',sans-serif;font-size:14px;color:var(--white);z-index:999;transition:transform .3s;white-space:nowrap;}
 .toast.show{transform:translateX(-50%) translateY(0);}
@@ -295,6 +335,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
           <div class="logo-sub">Quality You Can Trust · Rochester NY</div>
         </div>
       </div>
+      <button onclick="openAdminGate()" style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white3);font-size:14px;cursor:pointer;opacity:0.4;transition:opacity .2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.4'" title="Admin">⚙️</button>
       <button class="cart-btn" onclick="openCart()">
         🛒 Cart <div class="cart-count" id="cart-count">0</div>
       </button>
@@ -371,6 +412,40 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
         📱 Send Order via Text
       </button>
     </div>
+  </div>
+</div>
+
+<!-- ADMIN GATE -->
+<div id="admin-gate">
+  <div class="adg-card">
+    <div class="adg-icon">⚙️</div>
+    <div class="adg-title">Admin Access</div>
+    <div class="adg-sub">Enter admin password to view order log</div>
+    <input class="adg-inp" id="adg-pw" type="password" placeholder="· · · · · ·" maxlength="20"
+      oninput="document.getElementById('adg-err').textContent=''"
+      onkeydown="if(event.key==='Enter')tryAdmin()">
+    <div class="adg-err" id="adg-err"></div>
+    <button class="adg-btn" onclick="tryAdmin()">Enter →</button>
+    <button class="adg-cancel" onclick="closeAdminGate()">Cancel</button>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="admin-panel">
+  <div class="ap-header">
+    <div class="ap-title">📋 Order Log</div>
+    <div style="display:flex;gap:8px;">
+      <button class="ap-close" onclick="loadAdminOrders()" style="background:rgba(62,207,142,0.1);border-color:rgba(62,207,142,0.2);color:var(--green);">↻ Refresh</button>
+      <button class="ap-close" onclick="closeAdmin()">✕ Close</button>
+    </div>
+  </div>
+  <div class="ap-stats">
+    <div class="ap-stat"><div class="ap-stat-val" id="ap-total-orders">0</div><div class="ap-stat-label">Orders</div></div>
+    <div class="ap-stat"><div class="ap-stat-val" id="ap-total-revenue">$0</div><div class="ap-stat-label">Revenue</div></div>
+    <div class="ap-stat"><div class="ap-stat-val" id="ap-today-orders">0</div><div class="ap-stat-label">Today</div></div>
+  </div>
+  <div class="ap-list" id="ap-list">
+    <div class="ap-empty">Loading orders...</div>
   </div>
 </div>
 
@@ -1029,6 +1104,125 @@ function sendOrder() {
     const vn=document.getElementById('vfee-notice');if(vn)vn.style.display='none';
     showToast('Order sent! ✅','green');
   },600);
+}
+
+// ── ADMIN ──
+const ADMIN_PW = '251765';
+let adminUnlocked = false;
+
+function openAdminGate() {
+  if (adminUnlocked) { openAdmin(); return; }
+  document.getElementById('adg-pw').value = '';
+  document.getElementById('adg-err').textContent = '';
+  document.getElementById('admin-gate').classList.add('open');
+  setTimeout(() => document.getElementById('adg-pw').focus(), 100);
+}
+
+function closeAdminGate() {
+  document.getElementById('admin-gate').classList.remove('open');
+}
+
+function tryAdmin() {
+  const pw = document.getElementById('adg-pw').value.trim();
+  if (pw === ADMIN_PW) {
+    adminUnlocked = true;
+    closeAdminGate();
+    openAdmin();
+  } else {
+    document.getElementById('adg-err').textContent = 'Wrong password';
+    document.getElementById('adg-pw').value = '';
+    document.getElementById('adg-pw').focus();
+  }
+}
+
+function openAdmin() {
+  document.getElementById('admin-panel').classList.add('open');
+  loadAdminOrders();
+}
+
+function closeAdmin() {
+  document.getElementById('admin-panel').classList.remove('open');
+}
+
+async function loadAdminOrders() {
+  const list = document.getElementById('ap-list');
+  list.innerHTML = '<div class="ap-empty">Loading orders...</div>';
+  try {
+    const res = await fetch(FB_URL + '/inv_d6bb4/pending_orders.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data) { list.innerHTML = '<div class="ap-empty">No orders yet</div>'; updateAdminStats([]); return; }
+
+    const orders = Object.entries(data).map(([key, o]) => ({key, ...o}));
+    orders.sort((a,b) => (b.timestamp||0) - (a.timestamp||0));
+
+    updateAdminStats(orders);
+
+    if (!orders.length) { list.innerHTML = '<div class="ap-empty">No orders yet</div>'; return; }
+
+    list.innerHTML = orders.map(o => {
+      const items = (o.orderItems || []).map(it => {
+        let line = '<div class="ap-order-item">' + (it.itemName||'?') + ' <span style="color:var(--red);">(' + (it.label||'') + ' · $' + (it.price||0) + ')</span>';
+        if (it.flavorText) line += '<div class="ao-flavors">🍬 ' + it.flavorText + '</div>';
+        line += '</div>';
+        return line;
+      }).join('');
+
+      const tags = [
+        '<span class="ap-order-tag pay">' + (o.payMethodLabel||o.payMethod||'?') + '</span>',
+        '<span class="ap-order-tag type">' + (o.orderType==='pickup'?'🏪 Pickup':'🚗 Delivery') + '</span>',
+        o.customerPhone ? '<span class="ap-order-tag phone">📱 ' + o.customerPhone + '</span>' : '',
+        o.address ? '<span class="ap-order-tag">📍 ' + o.address + '</span>' : ''
+      ].filter(Boolean).join('');
+
+      const isCancelled = o.cancelled;
+      return '<div class="ap-order ' + (isCancelled?'cancelled':'') + '">' +
+        '<div class="ap-order-head">' +
+          '<div class="ap-order-time">' + (o.date||'') + ' · ' + (o.time||'') + (isCancelled?' · <span style="color:var(--red);font-weight:700;">CANCELLED</span>':'') + '</div>' +
+          '<div class="ap-order-total">$' + (o.total||0) + '</div>' +
+        '</div>' +
+        '<div class="ap-order-items">' + items + '</div>' +
+        '<div class="ap-order-meta">' + tags + '</div>' +
+        (isCancelled
+          ? '<button class="ap-del-btn" style="background:rgba(244,162,74,0.1);border-color:rgba(244,162,74,0.3);color:var(--orange,#f4a24a);" onclick="adminDeleteOrder(\'' + o.key + '\')">🗑 Delete Permanently</button>'
+          : '<button class="ap-del-btn" onclick="adminCancelOrder(\'' + o.key + '\')">✕ Cancel Order</button>'
+        ) +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    console.error('Admin fetch error:', e);
+    list.innerHTML = '<div class="ap-empty">Failed to load orders. Check connection.</div>';
+  }
+}
+
+async function adminCancelOrder(key) {
+  if (!confirm('Cancel this order?')) return;
+  try {
+    await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + key + '/cancelled.json', {
+      method: 'PUT', headers:{'Content-Type':'application/json'}, body: 'true'
+    });
+    showToast('Order cancelled','red-t');
+    loadAdminOrders();
+  } catch(e) { showToast('Failed to cancel','red-t'); }
+}
+
+async function adminDeleteOrder(key) {
+  if (!confirm('Permanently delete this order? This cannot be undone.')) return;
+  try {
+    await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + key + '.json', { method: 'DELETE' });
+    showToast('Order deleted','red-t');
+    loadAdminOrders();
+  } catch(e) { showToast('Failed to delete','red-t'); }
+}
+
+function updateAdminStats(orders) {
+  const today = new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'});
+  const todayOrders = orders.filter(o => o.date === today);
+  const totalRevenue = orders.reduce((s,o) => s + (o.total||0), 0);
+
+  document.getElementById('ap-total-orders').textContent = orders.length;
+  document.getElementById('ap-total-revenue').textContent = '$' + totalRevenue;
+  document.getElementById('ap-today-orders').textContent = todayOrders.length;
 }
 
 // ── TOAST ──
