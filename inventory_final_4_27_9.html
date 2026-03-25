@@ -83,6 +83,7 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
 .sdot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;}
 .sdot.ok{background:var(--green);}.sdot.busy{background:var(--orange);animation:pulse 1s infinite;}.sdot.fail{background:var(--red);}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes flashOrder{0%,100%{transform:scale(1);box-shadow:none;}50%{transform:scale(1.01);box-shadow:0 0 20px rgba(108,99,255,0.4);}}
 .sbtn-sync{margin-left:auto;background:transparent;border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--text3);font-size:11px;cursor:pointer;font-family:var(--sans);}
 .totals-banner{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;}
 .tot-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;}
@@ -2056,7 +2057,29 @@ function processWebsiteOrders(pendingOrders) {
     if (!pendingOrders[k]) delete pendingWebOrders[k];
   });
   renderPendingOrders();
-  if (newCount > 0) showToast(newCount + ' new order' + (newCount>1?'s':'') + ' waiting! 🛒', 'ok');
+  if (newCount > 0) {
+    showToast('🚨 ' + newCount + ' NEW ORDER' + (newCount>1?'S':'') + ' WAITING!', 'ok');
+    // Play alert sound
+    try {
+      const ac = new (window.AudioContext||window.webkitAudioContext)();
+      [0,150,300].forEach(delay => {
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.connect(gain); gain.connect(ac.destination);
+        osc.frequency.value = 880;
+        osc.type = 'sine';
+        gain.gain.value = 0.3;
+        osc.start(ac.currentTime + delay/1000);
+        osc.stop(ac.currentTime + delay/1000 + 0.12);
+      });
+    } catch(e){}
+    // Flash the pending orders section
+    const ownerEl = document.getElementById('pending-orders-section');
+    const staffEl = document.getElementById('pending-orders-staff');
+    [ownerEl, staffEl].forEach(el => {
+      if (el) { el.style.animation = 'none'; el.offsetHeight; el.style.animation = 'flashOrder 0.5s ease 3'; }
+    });
+  }
 }
 
 function renderPendingOrders() {
@@ -2078,7 +2101,11 @@ function renderPendingOrders() {
       </div>
     </div>
     ${orders.map(o => {
-      const items = (o.orderItems||[]).map(i => `${i.qty||1}x ${i.itemName||i.name||'?'}`).join(', ');
+      const items = (o.orderItems||[]).map(i => {
+        let txt = `${i.qty||1}x ${i.itemName||i.name||'?'} (${i.label||'?'} · $${i.price||0})`;
+        if (i.flavorText) txt += ` 🍬 ${i.flavorText}`;
+        return txt;
+      }).join('<br>');
       const payLabel = o.payMethodLabel || o.payMethod || 'Cash';
       const delivType = o.orderType === 'pickup' ? '🏪 Pickup' : o.address ? '🚗 '+o.address : '🚗 Delivery';
       const phone = o.customerPhone ? '📱 '+o.customerPhone : '';
