@@ -2138,15 +2138,23 @@ function confirmWebOrder(fbKey) {
   (order.orderItems||[]).forEach(oi => {
     const cat = oi.cat || '';
     const itemName = (oi.itemName||oi.name||'').toLowerCase();
-    const qty = oi.qty || 1;
-    if (!cat || !inv[cat]) {
+    // Parse real qty from label (e.g. "3" → 3, "3 for" → 3, "eighth" → 1)
+    const labelQty = oi.label ? parseInt(oi.label) : NaN;
+    const qty = !isNaN(labelQty) && labelQty > 0 ? labelQty : (oi.qty || 1);
+    // Find the right category key (handle case mismatch)
+    let realCat = cat;
+    if (cat && !inv[cat]) {
+      const match = C().find(c => c.toLowerCase() === cat.toLowerCase());
+      if (match) realCat = match;
+    }
+    if (!realCat || !inv[realCat]) {
       // Try to find item by name across all categories
       for (const c of C()) {
         const found = (inv[c]||[]).find(item => item.name === itemName);
         if (found) { found.left = Math.max(0, Math.round((gl(found) - qty)*10)/10); break; }
       }
     } else {
-      const found = (inv[cat]||[]).find(item => item.name === itemName);
+      const found = (inv[realCat]||[]).find(item => item.name === itemName);
       if (found) found.left = Math.max(0, Math.round((gl(found) - qty)*10)/10);
     }
   });
@@ -2567,11 +2575,22 @@ function fbPush(){
   // push after 300ms debounce
   fbPushTimer=setTimeout(async()=>{
     try{
+      // First fetch current pending_orders so we don't wipe them
+      let currentPending = null;
+      try {
+        const poRes = await fetch(FB_URL+'/pending_orders.json');
+        if (poRes.ok) currentPending = await poRes.json();
+      } catch(e) {}
+
       const payload={
         inv,log,cfg,
         customerCredits,vipCustomers,dayNotes,eodLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
         updatedAt:Date.now()
       };
+      // Preserve pending_orders from Firebase so PUT doesn't wipe them
+      if (currentPending && typeof currentPending === 'object' && Object.keys(currentPending).length) {
+        payload.pending_orders = currentPending;
+      }
       fbLastTimestamp=payload.updatedAt; // prevent echo pull
       await fetch(FB_URL+'.json',{
         method:'PUT',
