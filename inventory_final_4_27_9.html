@@ -1781,14 +1781,14 @@ function handleImgUpload(input, imgFieldId, previewId) {
   // Check file size - limit to 500KB for Firebase storage
   if (file.size > 800000) {
     // Compress if too large
-    compressImage(file, 1200, 0.92, function(dataUrl) {
+    compressImage(file, 600, 0.75, function(dataUrl) {
       document.getElementById(imgFieldId).value = dataUrl;
       showImgPreview(dataUrl, previewId);
     });
   } else {
     const reader = new FileReader();
     reader.onload = function(e) {
-      compressImage(file, 1200, 0.92, function(dataUrl) {
+      compressImage(file, 600, 0.75, function(dataUrl) {
         document.getElementById(imgFieldId).value = dataUrl;
         showImgPreview(dataUrl, previewId);
       });
