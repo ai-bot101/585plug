@@ -646,7 +646,11 @@ function selPrice(itemId, idx) {
     const hasBase = cart.some(c=>{ const ci=menuItems.find(m=>m.id===c.itemId); return ci && !ci.allAddOn; });
     if (!hasBase) { showToast('Add another item to your order first — this is an add-on price',''); return; }
   }
-  selectedPrices[itemId] = idx;
+  if (selectedPrices[itemId] === idx) {
+    delete selectedPrices[itemId];
+  } else {
+    selectedPrices[itemId] = idx;
+  }
   renderMenu();
 }
 
