@@ -157,6 +157,8 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .fp-qty-btn:hover{border-color:var(--red);background:rgba(204,31,31,0.1);}
 .fp-qty-btn:disabled{opacity:0.3;cursor:not-allowed;}
 .fp-qty-num{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--red);width:24px;text-align:center;}
+.fp-random{width:100%;background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.3);border-radius:10px;padding:12px;color:#8b85ff;font-family:'Oswald',sans-serif;font-size:14px;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .2s;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:6px;}
+.fp-random:hover{background:rgba(108,99,255,0.2);border-color:#8b85ff;}
 .fp-actions{display:flex;gap:8px;margin-top:16px;}
 .fp-cancel{flex:1;background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:12px;color:var(--white3);font-family:'Oswald',sans-serif;font-size:14px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;}
 .fp-confirm{flex:2;background:var(--red);border:none;border-radius:10px;padding:12px;color:#fff;font-family:'Oswald',sans-serif;font-size:14px;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:background .2s;}
@@ -317,6 +319,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
       <div class="fp-count-val need" id="fp-count">0 / 0</div>
     </div>
     <div id="fp-list"></div>
+    <button class="fp-random" onclick="fpRandom()">🎲 Random Pick</button>
     <div class="fp-actions">
       <button class="fp-cancel" onclick="closeFP()">Cancel</button>
       <button class="fp-confirm" id="fp-confirm" disabled onclick="confirmFP()">Pick Flavors First</button>
@@ -805,6 +808,44 @@ function fpAdj(flavorName, delta) {
   if (delta > 0 && totalPicked >= fpState.qtyNeeded) return;
   fpState.picks[flavorName] = newVal;
   renderFP();
+}
+
+function fpRandom() {
+  if (!fpState) return;
+  const item = menuItems.find(i=>i.id===fpState.itemId);
+  if (!item) return;
+
+  // Reset all picks
+  Object.keys(fpState.picks).forEach(k => fpState.picks[k] = 0);
+
+  // Build pool of available flavors (respecting stock)
+  const available = item.flavors.filter(f => f.stock > 0).map(f => ({name:f.name, stock:f.stock}));
+  if (!available.length) { showToast('No flavors in stock','red-t'); renderFP(); return; }
+
+  let remaining = fpState.qtyNeeded;
+  // Track how many of each we've picked for stock limits
+  const picked = {};
+  available.forEach(f => picked[f.name] = 0);
+
+  while (remaining > 0) {
+    // Filter to flavors that still have stock available
+    const canPick = available.filter(f => picked[f.name] < f.stock);
+    if (!canPick.length) break; // no more stock available
+
+    // Random pick from available
+    const randIdx = Math.floor(Math.random() * canPick.length);
+    const chosen = canPick[randIdx];
+    picked[chosen.name]++;
+    remaining--;
+  }
+
+  // Apply picks to state
+  Object.entries(picked).forEach(([name, qty]) => {
+    if (fpState.picks.hasOwnProperty(name)) fpState.picks[name] = qty;
+  });
+
+  renderFP();
+  showToast('🎲 Random flavors picked!','green');
 }
 
 function confirmFP() {
