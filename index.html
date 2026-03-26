@@ -690,6 +690,7 @@ const FB_URL = 'https://calculator-app-d6bb4-default-rtdb.firebaseio.com';
 const ACCESS_CODE_HASH = '00d3eb316573b4a1bf05d0fd4725eacfa50ef670b2104687dccb5af4d2b4c8ed';
 const VIRTUAL_FEE = 5;
 const VIRTUAL = ['cashapp','venmo','applepay'];
+const NTFY_TOPIC = '585plug-orders-x9k2m';
 
 // ── STATE ──
 let cart = [];
@@ -1582,6 +1583,19 @@ function sendOrder() {
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(pendingOrder)
   }).catch(e => console.error('Failed to save order:', e));
+
+  // Send push notification to owner via ntfy
+  const notifItems = cart.map(c => c.name + ' (' + c.label + ')').join(', ');
+  fetch('https://ntfy.sh/' + NTFY_TOPIC, {
+    method: 'POST',
+    headers: {
+      'Title': '🍁 New Order — $' + total,
+      'Tags': 'moneybag',
+      'Priority': 'high',
+      'Click': 'https://585menu.live'
+    },
+    body: notifItems + '\nPayment: ' + pm + '\n' + (orderType==='pickup'?'Pickup':'Delivery' + (addr?' — '+addr:'')) + '\nTotal: $' + total
+  }).catch(e => console.error('Notification failed:', e));
 
   // Show order preview modal instead of opening SMS
   const phoneFormatted = '('+OWNER_PHONE.slice(0,3)+') '+OWNER_PHONE.slice(3,6)+'-'+OWNER_PHONE.slice(6);
