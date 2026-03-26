@@ -1696,7 +1696,7 @@ const sellExpand=`<div class="ae-expand">
 return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot sell"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name}</span><span class="ae-qbadge">x ${fmt(e.amount)}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${sellExpand}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.amtReceived||0)}</span></div>${showC&&e.commission!=null?`<div class="ae-comm">you: ${fmtP(e.commission)}</div>`:''}${sDelBtn}</div></div>`;}else{if(e.type==='restock'){const w=wcls(e.who);return`<div class="ae"><div class="adot" style="background:var(--green)"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name}</span><span class="ae-qbadge">+${fmt(e.amount)}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div></div><div class="ae-right"><span class="ae-badge add">📦 Restock</span></div></div>`;}
 const tm={add:'add',del:'del',edit:'edit'};const lm={add:'+ Added',del:'Deleted',edit:'Edited'};return`<div class="ae"><div class="adot ${e.type}"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name||''}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div></div><div class="ae-right"><span class="ae-badge ${tm[e.type]||'edit'}">${lm[e.type]||e.type}</span></div></div>`;}}
 function buildLog(entries,staffOnly,showC){if(!entries.length)return'<div class="empty">No activity this day</div>';const f=staffOnly?entries.filter(e=>e.type==='sell'||e.type==='order'||(e.type==='selfbuy'&&e.who===cu?.name)):entries;if(!f.length)return'<div class="empty">No sales this day</div>';return f.map(e=>logEntry(e,showC)).join('');}
-function renderStaffLog(){renderPendingOrders();const days=getDays(),today=tday();const isAllTime=staffSelDay==='alltime';const dl=isAllTime?'alltime':staffSelDay==='today'?today:staffSelDay;document.getElementById('staff-dtabs').innerHTML=`<div class="dtab ${isAllTime?'active':''}" onclick="setSD('alltime')" style="${isAllTime?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`+days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setSD('${d}')">${it?'Today':d}</div>`;}).join('');const dayLog=isAllTime?log:log.filter(e=>e.date===dl);const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order');const ec=document.getElementById('staff-earn');const mn=cu?.name;const myDebt=getStaffDebt(mn);const isPaused=!!commissionPaused[mn];if(cfg.showEarnings){const ms=isAllTime?log.filter(e=>(e.type==='sell'||e.type==='order')&&e.who===mn):sells.filter(e=>e.who===mn&&e.type!=='selfbuy');const te=ms.reduce((s,e)=>s+(e.commission||0),0);const ts=ms.reduce((s,e)=>s+(e.amtReceived||0),0);const earnLabel=isAllTime?'All-Time Earnings':'Your Earnings Today';const earnSub=isAllTime?`across ${[...new Set(ms.map(e=>e.date))].length} day${[...new Set(ms.map(e=>e.date))].length!==1?'s':''}`:(`from ${ms.length} sale${ms.length!==1?'s':''}`);ec.innerHTML=`<div class="earn-card"><div class="ec-title">${earnLabel}</div><div class="ec-total">${fmtP(te)}</div><div class="ec-sub">${earnSub}</div><div class="ec-bk"><div class="ec-row"><span class="ec-rl">${isAllTime?'All-time sales total':'Your sales total'}</span><span class="ec-rv">${fmtP(ts)}</span></div><div class="ec-row"><span class="ec-rl">${isAllTime?'All-time commission':'Your commission'}</span><span class="ec-rv">${fmtP(te)}</span></div><div class="ec-row"><span class="ec-rl">Total orders</span><span class="ec-rv">${ms.length}</span></div>${myDebt>0?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">&#9888; Amount Owed to Owner</span><span class="ec-rv" style="color:var(--red);">-${fmtP(myDebt)}</span></div><div style="font-size:11px;color:var(--red);margin-top:4px;opacity:.8;">Will be deducted from your next payout</div>`:""}${isPaused?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">&#9940; Commission Paused</span><span class="ec-rv" style="color:var(--red);">$0 earned</span></div>`:"" }</div></div>`;}else{const notices=[];if(myDebt>0)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9888; You Owe</div><div style="font-size:28px;font-weight:700;font-family:var(--mono);color:var(--red);">${fmtP(myDebt)}</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Will be deducted from your next commission payout</div></div>`);if(isPaused)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9940; Commission Paused</div><div style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--red);">$0 per order</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Owner has paused your commission</div></div>`);ec.innerHTML=notices.join('');}document.getElementById('staff-totals').innerHTML=isAllTime?totBanner(sells,'All Time',false):totBanner(sells,dl,dl===today);document.getElementById('staff-dact').innerHTML=isAllTime?buildLog(log.slice(0,100),true,cfg.showEarnings):buildLog(dayLog,true,cfg.showEarnings);renderStaffCommHistory();}
+function renderStaffLog(){renderPendingOrders();const days=getDays(),today=tday();const isAllTime=staffSelDay==='alltime';const dl=isAllTime?'alltime':staffSelDay==='today'?today:staffSelDay;document.getElementById('staff-dtabs').innerHTML=`<div class="dtab ${isAllTime?'active':''}" onclick="setSD('alltime')" style="${isAllTime?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`+days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setSD('${d}')">${it?'Today':d}</div>`;}).join('');const dayLog=isAllTime?log:log.filter(e=>e.date===dl);const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order');const ec=document.getElementById('staff-earn');const mn=cu?.name;const myDebt=getStaffDebt(mn);const isPaused=!!commissionPaused[mn];const myDailyDebtCfg=autoDailyDebts.find(dd=>dd.staffName===mn);if(cfg.showEarnings){const ms=isAllTime?log.filter(e=>(e.type==='sell'||e.type==='order')&&e.who===mn):sells.filter(e=>e.who===mn&&e.type!=='selfbuy');const te=ms.reduce((s,e)=>s+(e.commission||0),0);const ts=ms.reduce((s,e)=>s+(e.amtReceived||0),0);const earnLabel=isAllTime?'All-Time Earnings':'Your Earnings Today';const earnSub=isAllTime?`across ${[...new Set(ms.map(e=>e.date))].length} day${[...new Set(ms.map(e=>e.date))].length!==1?'s':''}`:(`from ${ms.length} sale${ms.length!==1?'s':''}`);ec.innerHTML=`<div class="earn-card"><div class="ec-title">${earnLabel}</div><div class="ec-total">${fmtP(te)}</div><div class="ec-sub">${earnSub}</div><div class="ec-bk"><div class="ec-row"><span class="ec-rl">${isAllTime?'All-time sales total':'Your sales total'}</span><span class="ec-rv">${fmtP(ts)}</span></div><div class="ec-row"><span class="ec-rl">${isAllTime?'All-time commission':'Your commission'}</span><span class="ec-rv">${fmtP(te)}</span></div><div class="ec-row"><span class="ec-rl">Total orders</span><span class="ec-rv">${ms.length}</span></div>${myDailyDebtCfg?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">📌 Daily Deduction</span><span class="ec-rv" style="color:var(--red);">-${fmtP(myDailyDebtCfg.amountPerDay)}/day</span></div>`:''}${myDebt>0?`<div class="ec-row" style="${myDailyDebtCfg?'':'border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;'}"><span class="ec-rl" style="color:var(--red);">&#9888; Total Owed</span><span class="ec-rv" style="color:var(--red);">-${fmtP(myDebt)}</span></div><div style="font-size:11px;color:var(--red);margin-top:4px;opacity:.8;">Collects daily · Deducted from next payout</div>`:""}${isPaused?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">&#9940; Commission Paused</span><span class="ec-rv" style="color:var(--red);">$0 earned</span></div>`:"" }</div></div>`;}else{const notices=[];if(myDailyDebtCfg)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📌 Daily Deduction</div><div style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--red);">-${fmtP(myDailyDebtCfg.amountPerDay)}/day</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Accumulates every day · Deducted from payouts</div></div>`);if(myDebt>0)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9888; You Owe</div><div style="font-size:28px;font-weight:700;font-family:var(--mono);color:var(--red);">${fmtP(myDebt)}</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Collects daily · Deducted from next payout</div></div>`);if(isPaused)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9940; Commission Paused</div><div style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--red);">$0 per order</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Owner has paused your commission</div></div>`);ec.innerHTML=notices.join('');}document.getElementById('staff-totals').innerHTML=isAllTime?totBanner(sells,'All Time',false):totBanner(sells,dl,dl===today);document.getElementById('staff-dact').innerHTML=isAllTime?buildLog(log.slice(0,100),true,cfg.showEarnings):buildLog(dayLog,true,cfg.showEarnings);renderStaffCommHistory();}
 let staffCommExpanded={};
 function renderStaffCommHistory(){
   const el=document.getElementById('staff-comm-history');
@@ -1705,13 +1705,24 @@ function renderStaffCommHistory(){
   const allSells=log.filter(e=>(e.type==='sell'||e.type==='order')&&e.who===mn);
   const totalComm=allSells.reduce((s,e)=>s+(e.commission||0),0);
   const totalSales=allSells.reduce((s,e)=>s+(e.amtReceived||0),0);
+  // calculate total daily deductions for this staff
+  const debtLogs=log.filter(e=>e.type==='debt'&&e.who===mn);
+  const totalDeducted=debtLogs.reduce((s,e)=>s+(e.amount||0),0);
+  const currentDebt=getStaffDebt(mn);
+  // find active daily debt config for this staff
+  const myDailyDebt=autoDailyDebts.find(d=>d.staffName===mn);
   // group by date
   const byDate={};
   allSells.forEach(e=>{
-    if(!byDate[e.date])byDate[e.date]={orders:[],comm:0,sales:0};
+    if(!byDate[e.date])byDate[e.date]={orders:[],comm:0,sales:0,debts:[]};
     byDate[e.date].orders.push(e);
     byDate[e.date].comm+=(e.commission||0);
     byDate[e.date].sales+=(e.amtReceived||0);
+  });
+  // also add debt log entries to byDate
+  debtLogs.forEach(e=>{
+    if(!byDate[e.date])byDate[e.date]={orders:[],comm:0,sales:0,debts:[]};
+    byDate[e.date].debts.push(e);
   });
   const dates=Object.keys(byDate).sort((a,b)=>new Date(b)-new Date(a));
   const today=tday();
@@ -1731,7 +1742,21 @@ function renderStaffCommHistory(){
         <div style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--green);">${fmtP(totalSales)}</div>
         <div style="font-size:10px;color:var(--text3);margin-top:2px;">all time</div>
       </div>
-    </div>`;
+    </div>
+    ${myDailyDebt?`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:9px;color:var(--red);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">📌 Daily Deduction</div>
+          <div style="font-size:13px;color:var(--text);">-${fmtP(myDailyDebt.amountPerDay)}/day</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px;">Accumulates daily · Deducted from payouts</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--red);">-${fmtP(currentDebt)}</div>
+          <div style="font-size:9px;color:var(--text3);font-family:var(--mono);">OWED NOW</div>
+        </div>
+      </div>
+      ${totalDeducted>0?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(244,107,107,0.15);font-size:11px;color:var(--text3);">Total accumulated: ${fmtP(totalDeducted)} · Days not worked collect until next payout</div>`:''}
+    </div>`:''}`;
   if(!dates.length){
     html+='<div class="empty">No sales yet</div></div>';
     el.innerHTML=html;return;
@@ -1741,18 +1766,20 @@ function renderStaffCommHistory(){
     const dd=byDate[d];
     const isToday=d===today;
     const isOpen=!!staffCommExpanded[d];
+    const dayDebtTotal=dd.debts.reduce((s,e)=>s+(e.amount||0),0);
+    const netDay=dd.comm-dayDebtTotal;
     html+=`<div style="background:var(--bg3);border:1px solid ${isToday?'rgba(62,207,142,0.3)':'var(--border)'};border-radius:12px;overflow:hidden;">
       <div onclick="toggleStaffCommDay('${d}')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;user-select:none;">
         <div style="display:flex;align-items:center;gap:10px;">
           <span style="font-size:14px;">${isOpen?'▼':'▶'}</span>
           <div>
             <div style="font-size:14px;font-weight:600;color:${isToday?'var(--green)':'var(--text)'};">${isToday?'Today':d}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:2px;">${dd.orders.length} order${dd.orders.length!==1?'s':''} · Sales: ${fmtP(dd.sales)}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">${dd.orders.length} order${dd.orders.length!==1?'s':''} · Sales: ${fmtP(dd.sales)}${dayDebtTotal>0?' · <span style="color:var(--red);">-'+fmtP(dayDebtTotal)+' debt</span>':''}</div>
           </div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:var(--orange);">${fmtP(dd.comm)}</div>
-          <div style="font-size:9px;color:var(--text3);font-family:var(--mono);">COMMISSION</div>
+          ${dayDebtTotal>0?`<div style="font-size:11px;font-weight:600;font-family:var(--mono);color:var(--red);">-${fmtP(dayDebtTotal)}</div>`:`<div style="font-size:9px;color:var(--text3);font-family:var(--mono);">COMMISSION</div>`}
         </div>
       </div>`;
     if(isOpen){
@@ -1774,6 +1801,19 @@ function renderStaffCommHistory(){
           <div style="text-align:right;flex-shrink:0;margin-left:10px;">
             <div style="font-size:15px;font-weight:700;font-family:var(--mono);color:var(--green);">${fmtP(o.amtReceived||0)}</div>
             <div style="font-size:12px;font-weight:600;font-family:var(--mono);color:var(--orange);">+${fmtP(o.commission||0)}</div>
+          </div>
+        </div>`;
+      });
+      // show debt entries for this day
+      dd.debts.forEach(dt=>{
+        html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(244,107,107,0.06);border:1px solid rgba(244,107,107,0.2);border-radius:9px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;color:var(--red);">📌 Daily Deduction</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:3px;">${dt.reason||'Auto daily debt'}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;margin-left:10px;">
+            <div style="font-size:15px;font-weight:700;font-family:var(--mono);color:var(--red);">-${fmtP(dt.amount||0)}</div>
+            <div style="font-size:9px;color:var(--text3);font-family:var(--mono);">OWED</div>
           </div>
         </div>`;
       });
@@ -1828,6 +1868,10 @@ function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today
           <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:var(--accent)">${fmtP(at.comm)}</div>
         </div>
       </div>
+      ${(()=>{const dd=autoDailyDebts.find(x=>x.staffName===u.name);const debt=getStaffDebt(u.name);return dd?`<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(244,107,107,0.06);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:8px 10px;width:100%;">
+        <div><span style="font-size:11px;color:var(--red);font-weight:600;">📌 -$${dd.amountPerDay}/day</span><span style="font-size:10px;color:var(--text3);margin-left:6px;">collects daily</span></div>
+        <div style="font-size:13px;font-weight:700;font-family:var(--mono);color:var(--red);">Owes: ${fmtP(debt)}</div>
+      </div>`:'';})()}
     </div>`;
   }).join('');const is={};sells.forEach(e=>{if(e.type==='order'){(e.orderItems||[]).forEach(o=>{if(!is[o.itemName])is[o.itemName]=0;is[o.itemName]+=(e.amtReceived||0)/Math.max(1,(e.orderItems||[]).length);});}else{if(!is[e.name])is[e.name]=0;is[e.name]+=(e.amtReceived||0);}});const sorted=Object.entries(is).sort((a,b)=>b[1]-a[1]).slice(0,8),mx=sorted[0]?.[1]||1;document.getElementById('dtop').innerHTML=sorted.length?sorted.map(([n,a])=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)"><span style="flex:1;font-size:12px;color:var(--text);text-transform:capitalize">${n}</span><div style="flex:2;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden"><div style="height:100%;width:${(a/mx*100).toFixed(1)}%;background:var(--green);border-radius:2px"></div></div><span style="font-family:var(--mono);font-size:11px;color:var(--green);min-width:40px;text-align:right">${fmtP(a)}</span></div>`).join(''):'<div class="empty">No sales recorded</div>';}
 function renderCredits(){
@@ -2576,11 +2620,12 @@ function processWebsiteOrders(pendingOrders) {
   let newCount = 0;
   Object.entries(pendingOrders).forEach(([fbKey, order]) => {
     if (!order) return;
-    // Check if admin cancelled a previously confirmed order — auto-reverse stock
+    // Check if admin cancelled from the website menu
     if (order.cancelled && !order._reversedByAdmin) {
+      // Check if it was a confirmed order (has a log entry)
       const logIdx = log.findIndex(e => e.webOrderKey === fbKey);
       if (logIdx > -1) {
-        // This confirmed order was cancelled from admin panel — reverse it
+        // Confirmed order cancelled — reverse stock from log
         const logEntry = log[logIdx];
         (logEntry.orderItems||[]).forEach(oi => {
           const itemName = (oi.itemName||'').toLowerCase();
@@ -2591,13 +2636,48 @@ function processWebsiteOrders(pendingOrders) {
           }
         });
         log.splice(logIdx, 1);
-        // Mark as reversed so we don't do it again
-        fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({['pending_orders/'+fbKey+'/_reversedByAdmin']: true})
-        }).catch(()=>{});
-        persist(); renderStats(); renderItems();
-        showToast('Admin cancelled a confirmed order — stock restored', 'err');
+      } else if (pendingWebOrders[fbKey]) {
+        // Pending held order cancelled from menu — restore held stock + flavors
+        const heldOrder = pendingWebOrders[fbKey];
+        (heldOrder.orderItems||[]).forEach(oi => {
+          const itemName = (oi.itemName||oi.name||'').toLowerCase();
+          const qty = labelToQty(oi.label);
+          const cat = oi.cat||'';
+          let realCat = cat;
+          if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
+          let foundItem=null;
+          if(!realCat||!inv[realCat]){
+            for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
+          }else{
+            const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
+            if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
+          }
+          if(foundItem&&foundItem.flavors&&oi.flavors&&typeof oi.flavors==='object'){
+            Object.entries(oi.flavors).forEach(([fname,fqty])=>{
+              if(fqty<=0)return;
+              const flav=foundItem.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
+              if(flav)flav.stock=(flav.stock||0)+fqty;
+            });
+          }
+        });
+        delete pendingWebOrders[fbKey];
+      } else {
+        // Order wasn't held locally — still restore from order data
+        (order.orderItems||[]).forEach(oi => {
+          const itemName = (oi.itemName||oi.name||'').toLowerCase();
+          const qty = labelToQty(oi.label);
+          for (const c of C()) {
+            const found = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
+            if (found) { found.left = Math.round((gl(found) + qty)*10)/10; break; }
+          }
+        });
       }
+      // Mark as reversed so we don't do it again
+      fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({['pending_orders/'+fbKey+'/_reversedByAdmin']: true})
+      }).catch(()=>{});
+      persist(); renderStats(); renderItems(); renderPendingOrders();
+      showToast('Order cancelled from menu — stock restored 🔄', 'err');
     }
     if (order.confirmed || order.cancelled) return;
     if (!pendingWebOrders[fbKey]) {
@@ -2726,12 +2806,52 @@ function confirmWebOrder(fbKey) {
   const order = pendingWebOrders[fbKey];
   if (!order) return;
 
-  // Build order log entry
+  // If owner is confirming, show staff picker modal
+  if(cu?.role==='owner'){
+    showConfirmStaffPicker(fbKey);
+    return;
+  }
+  // Staff confirms — they get the credit
+  finalizeConfirmOrder(fbKey, cu?.name || 'Staff');
+}
+
+function showConfirmStaffPicker(fbKey){
+  const order=pendingWebOrders[fbKey];
+  if(!order)return;
+  const items=(order.orderItems||[]).map(i=>`${i.qty||1}x ${i.itemName||i.name||'?'}`).join(', ');
+  const userBtns=cfg.users.map(u=>{
+    const col=u.role==='owner'?'var(--accent)':UC[cfg.users.indexOf(u)]||'var(--green)';
+    return`<button onclick="finalizeConfirmOrder('${fbKey}','${u.name}')" style="flex:1;background:${col}15;border:1px solid ${col}44;border-radius:10px;padding:14px 8px;color:${col};font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <span style="width:36px;height:36px;border-radius:10px;background:${col}22;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;">${u.name.charAt(0).toUpperCase()}</span>
+      ${u.name}
+    </button>`;
+  }).join('');
+  const m=document.createElement('div');
+  m.id='staff-pick-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  m.innerHTML=`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:24px;max-width:400px;width:100%;">
+    <h3 style="margin:0 0 6px;color:var(--text);">Who hit this order?</h3>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">${items} · $${order.total||0}</div>
+    <div style="display:flex;gap:10px;margin-bottom:14px;">${userBtns}</div>
+    <button onclick="document.getElementById('staff-pick-modal')?.remove()" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text3);font-family:var(--sans);font-size:13px;cursor:pointer;">Cancel</button>
+  </div>`;
+  m.addEventListener('click',e=>{if(e.target===m)m.remove();});
+  document.body.appendChild(m);
+}
+
+function finalizeConfirmOrder(fbKey, assignedTo){
+  document.getElementById('staff-pick-modal')?.remove();
+  const order = pendingWebOrders[fbKey];
+  if (!order) return;
+
   const total = order.total || 0;
   const payMethod = order.payMethod || 'cash';
   const isVirtual = ['cashapp','venmo','applepay'].includes(payMethod);
   const profit = calcProfit([], total, isVirtual);
-  const {commission} = calcComm2(total, profit);
+  // Only calc commission for staff, not owner
+  const ownerNames=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
+  const isOwner=ownerNames.includes(assignedTo);
+  const {commission}=isOwner?{commission:0}:calcComm2(total, profit, assignedTo);
 
   const e = {
     type: 'order',
@@ -2743,7 +2863,7 @@ function confirmWebOrder(fbKey) {
     amtReceived: total, profit, commission,
     creditApplied: 0, extraCredit: 0, shortPaid: 0,
     note: order.address ? 'Address: '+order.address : '',
-    who: cu?.name || 'Owner',
+    who: assignedTo,
     timestamp: Date.now(), date: tday(), time: tstr(),
     webOrderKey: fbKey
   };
@@ -2763,7 +2883,7 @@ function confirmWebOrder(fbKey) {
   renderStats();
   renderItems();
   if (cu?.role==='owner') renderDash(); else renderStaffLog();
-  showToast('Order confirmed ✅ · $'+total, 'ok');
+  showToast(`Order confirmed ✅ · $${total} → ${assignedTo}`, 'ok');
 }
 
 function cancelWebOrder(fbKey) {
@@ -3670,6 +3790,23 @@ function buildEODRecord(dateStr){
   const staffComm=cfg.users.filter(u=>u.role==='staff').reduce((s,u)=>s+(commByPerson[u.name]||0),0);
   const ownerNet=Math.max(0,totalProfit-staffComm);
 
+  // Build payout summary per staff (commission earned minus daily deduction for today)
+  const payouts={};
+  cfg.users.filter(u=>u.role==='staff').forEach(u=>{
+    const earned=commByPerson[u.name]||0;
+    // daily deduction for this day
+    let dayDeduct=0;
+    autoDailyDebts.forEach(d=>{
+      if(d.staffName!==u.name)return;
+      const start=new Date(d.startDate+'T00:00:00');
+      const end=new Date(d.endDate+'T00:00:00');
+      const day=new Date(dl.replace(/(\d+)\/(\d+)\/(\d+)/,'$3-$1-$2')+'T00:00:00');
+      if(day>=start&&day<=end)dayDeduct+=d.amountPerDay;
+    });
+    const payout=Math.max(0,earned-dayDeduct);
+    payouts[u.name]={earned,deduction:dayDeduct,payout};
+  });
+
   // credits used today
   const creditsUsed=[];
   dayLog.filter(e=>e.type==='order'&&e.creditApplied>0).forEach(e=>{
@@ -3693,12 +3830,26 @@ function buildEODRecord(dateStr){
     });
   });
 
+  // Daily deductions for this day
+  const dailyDeductions=[];
+  autoDailyDebts.forEach(d=>{
+    const start=new Date(d.startDate+'T00:00:00');
+    const end=new Date(d.endDate+'T00:00:00');
+    const day=new Date(dl.replace(/(\d+)\/(\d+)\/(\d+)/,'$3-$1-$2')+'T00:00:00');
+    if(day>=start&&day<=end){
+      dailyDeductions.push({staffName:d.staffName,amount:d.amountPerDay});
+    }
+  });
+  const totalDailyDeductions=dailyDeductions.reduce((s,d)=>s+d.amount,0);
+
   return{
     date:dl,
     savedAt:new Date().toLocaleString(),
     grandTotal,cashTotal,virtTotal,
     txCount:sells.length,
     commByPerson,totalProfit,staffComm,ownerNet,
+    dailyDeductions,totalDailyDeductions,
+    payouts,
     creditsUsed,
     orders:orders.map(e=>({
       type:e.type,
@@ -4322,7 +4473,10 @@ function viewEODLog(i,filterPerson){
   });
   const liveTotalProfit=allOrders.reduce((s,o)=>s+(o._liveProfit||0),0);
   const liveStaffComm=cfg.users.filter(u=>u.role==='staff').reduce((s,u)=>s+(liveCommByPerson[u.name]||0),0);
-  const liveOwnerNet=Math.max(0,liveTotalProfit-liveStaffComm);
+  // Calculate daily deductions for staff payouts
+  const eodDailyDeds=r.dailyDeductions||[];
+  const eodTotalDailyDed=eodDailyDeds.reduce((s,d)=>s+d.amount,0);
+  const liveOwnerNet=Math.max(0,liveTotalProfit-liveStaffComm+eodTotalDailyDed);
 
   if(eodPersonFilter==='all'){
     // show full commission breakdown for everyone
@@ -4353,6 +4507,31 @@ function viewEODLog(i,filterPerson){
             <span style="font-family:var(--mono);font-weight:700;color:var(--green);font-size:18px;">${fmtP(liveOwnerNet)}</span>
           </div>
           ${(()=>{
+            // Daily deductions for this EOD date
+            const dd=r.dailyDeductions||[];
+            if(!dd.length){
+              // compute on the fly for older logs
+              const eodDate=r.date||'';
+              autoDailyDebts.forEach(d=>{
+                try{
+                  const parts=eodDate.split('/');
+                  if(parts.length===3){
+                    const dayISO=parts[2]+'-'+parts[0].padStart(2,'0')+'-'+parts[1].padStart(2,'0');
+                    const start=new Date(d.startDate+'T00:00:00');
+                    const end=new Date(d.endDate+'T00:00:00');
+                    const day=new Date(dayISO+'T00:00:00');
+                    if(day>=start&&day<=end) dd.push({staffName:d.staffName,amount:d.amountPerDay});
+                  }
+                }catch(e){}
+              });
+            }
+            if(!dd.length)return'';
+            return'<div style="margin-top:8px;padding:10px 14px;background:rgba(244,107,107,0.06);border:1px solid rgba(244,107,107,0.2);border-radius:8px;">'+
+              '<div style="font-size:10px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📌 Daily Deductions</div>'+
+              dd.map(d=>'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;"><span style="color:var(--text);">'+d.staffName+'</span><span style="font-family:var(--mono);font-weight:700;color:var(--red);">-'+fmtP(d.amount)+'</span></div>').join('')+
+            '</div>';
+          })()}
+          ${(()=>{
             const recons=r.cashReconResults||[];
             if(!recons.length)return'';
             const issues=recons.filter(rc=>rc.diff!==0);
@@ -4376,6 +4555,23 @@ function viewEODLog(i,filterPerson){
                 <span style="font-weight:600;color:${rc.diff>0?'var(--orange)':'var(--red)'}">${rc.diff>0?'+':''}$${rc.diff.toFixed(2)}</span>
               </div>`).join('')}
             </div>`;
+          })()}
+          ${(()=>{
+            // Staff Payout Summary
+            const po=r.payouts||{};
+            const staffUsers=cfg.users.filter(u=>u.role==='staff');
+            if(!staffUsers.length)return'';
+            return'<div style="margin-top:10px;padding:12px 14px;background:rgba(108,99,255,0.06);border:1px solid rgba(108,99,255,0.2);border-radius:8px;">'+
+              '<div style="font-size:10px;font-family:var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">💰 Staff Payouts (Morning)</div>'+
+              staffUsers.map(u=>{
+                const p=po[u.name]||{earned:liveCommByPerson[u.name]||0,deduction:0,payout:liveCommByPerson[u.name]||0};
+                const deductNote=p.deduction>0?' <span style="color:var(--red);font-size:10px;">(-$'+p.deduction+' daily)</span>':'';
+                return'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">'+
+                  '<div><span style="font-weight:600;color:var(--text);">'+u.name+'</span>'+deductNote+'</div>'+
+                  '<span style="font-family:var(--mono);font-weight:700;color:var(--accent);">'+fmtP(p.payout)+'</span>'+
+                '</div>';
+              }).join('')+
+            '</div>';
           })()}
         </div>`:''}
       </div>`;
