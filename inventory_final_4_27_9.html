@@ -3800,8 +3800,8 @@ function buildEODRecord(dateStr){
       if(d.staffName!==u.name)return;
       const start=new Date(d.startDate+'T00:00:00');
       const end=new Date(d.endDate+'T00:00:00');
-      const day=new Date(dl.replace(/(\d+)\/(\d+)\/(\d+)/,'$3-$1-$2')+'T00:00:00');
-      if(day>=start&&day<=end)dayDeduct+=d.amountPerDay;
+      const day=new Date(dl); // dl is "Mar 25, 2026" format
+      if(!isNaN(day)&&day>=start&&day<=end)dayDeduct+=d.amountPerDay;
     });
     const payout=Math.max(0,earned-dayDeduct);
     payouts[u.name]={earned,deduction:dayDeduct,payout};
@@ -3835,8 +3835,8 @@ function buildEODRecord(dateStr){
   autoDailyDebts.forEach(d=>{
     const start=new Date(d.startDate+'T00:00:00');
     const end=new Date(d.endDate+'T00:00:00');
-    const day=new Date(dl.replace(/(\d+)\/(\d+)\/(\d+)/,'$3-$1-$2')+'T00:00:00');
-    if(day>=start&&day<=end){
+    const day=new Date(dl+'T00:00:00'); // dl is "Mar 25, 2026" format — Date() parses it fine
+    if(!isNaN(day)&&day>=start&&day<=end){
       dailyDeductions.push({staffName:d.staffName,amount:d.amountPerDay});
     }
   });
@@ -4510,18 +4510,14 @@ function viewEODLog(i,filterPerson){
             // Daily deductions for this EOD date
             const dd=r.dailyDeductions||[];
             if(!dd.length){
-              // compute on the fly for older logs
+              // compute on the fly for older logs — date is "Mar 25, 2026" format
               const eodDate=r.date||'';
               autoDailyDebts.forEach(d=>{
                 try{
-                  const parts=eodDate.split('/');
-                  if(parts.length===3){
-                    const dayISO=parts[2]+'-'+parts[0].padStart(2,'0')+'-'+parts[1].padStart(2,'0');
-                    const start=new Date(d.startDate+'T00:00:00');
-                    const end=new Date(d.endDate+'T00:00:00');
-                    const day=new Date(dayISO+'T00:00:00');
-                    if(day>=start&&day<=end) dd.push({staffName:d.staffName,amount:d.amountPerDay});
-                  }
+                  const start=new Date(d.startDate+'T00:00:00');
+                  const end=new Date(d.endDate+'T00:00:00');
+                  const day=new Date(eodDate);
+                  if(!isNaN(day)&&day>=start&&day<=end) dd.push({staffName:d.staffName,amount:d.amountPerDay});
                 }catch(e){}
               });
             }
