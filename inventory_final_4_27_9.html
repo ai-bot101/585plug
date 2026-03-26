@@ -106,6 +106,7 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
 .igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;}
 .icard{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;position:relative;}
 .icard:hover{border-color:var(--border2);}.icard.gone{opacity:.38;}
+.sold-out-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;color:rgba(244,107,107,0.6);letter-spacing:4px;text-transform:uppercase;transform:rotate(-18deg);pointer-events:none;z-index:2;font-family:var(--mono);}
 /* card-price-area removed */
 /* price-pill removed */
 
@@ -1592,7 +1593,11 @@ const costDisplay=own?`<div style="display:flex;align-items:center;gap:8px;margi
 </div>`:'';
 const staffPriceTag=cu?.role!=='owner'?getStaffPriceTag(item):'';
 const aoTag=isAddOnOnly(item)?'<span style="font-size:8px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;vertical-align:middle;">ADD-ON ONLY</span>':'';
-html+=`<div class="icard ${so2?'gone':''}">${pa}<div class="card-status">${so2?'<span class="tag sold">SOLD OUT</span>':isLow?'<span class="tag low">LOW</span>':''}</div><div class="iname">${item.name}${aoTag}${staffPriceTag}</div>${costDisplay}<div class="nums"><div class="nb"><div class="nl">Left</div><div class="nv hi">${fmt(left)}</div></div><div class="nb"><div class="nl">Bought</div><div class="nv">${fmt(bought)||'--'}</div></div>${bought?`<div class="nb"><div class="nl">Sold</div><div class="nv">${fmt(Math.max(0,bought-left))}</div></div>`:''}</div>${bought?`<div class="pbar"><div class="pfill ${fc}" style="width:${pct}%"></div></div>`:''}${own?`<div class="sell-row"><input class="qi" type="number" placeholder="Quick qty" min="0.1" step="0.1" id="qi-${cat}-${ri}" onkeydown="if(event.key==='Enter')sell('${cat}',${ri})"><button class="sbtn2" onclick="sell('${cat}',${ri})" ${so2?'disabled':''}>Sell</button></div>`:''}${own?`<div class="oc"><button class="ebtn" onclick="openEdit('${cat}',${ri})">Edit</button><button class="ebtn" onclick="openRestock('${cat}',${ri})" style="background:rgba(62,207,142,0.08);border-color:rgba(62,207,142,0.2);color:var(--green);">Restock</button><button class="dbtn" onclick="delItem('${cat}',${ri})">Delete</button></div>`:''}</div>`;});if(own)html+=`<div class="addcard" onclick="openAdd('${cat}')">+ Add item to ${cat}</div>`;html+='</div>';}area.innerHTML=html||'<div class="empty">No items yet</div>';}
+const isSoldOut=!!item.soldOutAt;
+const soldOutClass=isSoldOut?'sold-out-card':'';
+const soldOutOverlay=isSoldOut?'<div class="sold-out-overlay">SOLD OUT</div>':'';
+const soldOutBtn=own?`<button class="${isSoldOut?'ebtn sold-out-active':'ebtn sold-out-btn'}" onclick="toggleSoldOut('${cat}',${ri})" style="${isSoldOut?'background:rgba(244,107,107,0.15);border-color:rgba(244,107,107,0.4);color:var(--red);':'background:rgba(244,107,107,0.06);border-color:rgba(244,107,107,0.15);color:rgba(244,107,107,0.5);'}">${isSoldOut?'✅ Restock':'🚫 Sold Out'}</button>`:'';
+html+=`<div class="icard ${so2?'gone':''} ${soldOutClass}" style="position:relative;${isSoldOut?'opacity:0.5;':''}">${soldOutOverlay}${pa}<div class="card-status">${so2?'<span class="tag sold">SOLD OUT</span>':isLow?'<span class="tag low">LOW</span>':''}</div><div class="iname">${item.name}${aoTag}${staffPriceTag}</div>${costDisplay}<div class="nums"><div class="nb"><div class="nl">Left</div><div class="nv hi">${fmt(left)}</div></div><div class="nb"><div class="nl">Bought</div><div class="nv">${fmt(bought)||'--'}</div></div>${bought?`<div class="nb"><div class="nl">Sold</div><div class="nv">${fmt(Math.max(0,bought-left))}</div></div>`:''}</div>${bought?`<div class="pbar"><div class="pfill ${fc}" style="width:${pct}%"></div></div>`:''}${own?`<div class="sell-row"><input class="qi" type="number" placeholder="Quick qty" min="0.1" step="0.1" id="qi-${cat}-${ri}" onkeydown="if(event.key==='Enter')sell('${cat}',${ri})"><button class="sbtn2" onclick="sell('${cat}',${ri})" ${so2||isSoldOut?'disabled':''}>Sell</button></div>`:''}${own?`<div class="oc"><button class="ebtn" onclick="openEdit('${cat}',${ri})">Edit</button><button class="ebtn" onclick="openRestock('${cat}',${ri})" style="background:rgba(62,207,142,0.08);border-color:rgba(62,207,142,0.2);color:var(--green);">Restock</button>${soldOutBtn}<button class="dbtn" onclick="delItem('${cat}',${ri})">Delete</button></div>`:''}</div>`;});if(own)html+=`<div class="addcard" onclick="openAdd('${cat}')">+ Add item to ${cat}</div>`;html+='</div>';}area.innerHTML=html||'<div class="empty">No items yet</div>';}
 function totBanner(sells,dl,isT,showProfit){
   const g=sells.reduce((s,e)=>s+(e.amtReceived||0),0);
   const cv=calcCashVirt(sells);
@@ -2488,6 +2493,21 @@ function saveEdit(){
   item.left=lv!==''?parseFloat(lv):item.left;
   // prices saved via getPriceTiers above
   persist();closeOv('edit-modal');renderStats();renderItems();pushInventory();showToast('Item updated','ok');
+}
+function toggleSoldOut(cat,idx){
+  const item=(inv[cat]||[])[idx];
+  if(!item)return;
+  if(item.soldOutAt){
+    // un-sold-out (restock on menu)
+    delete item.soldOutAt;
+    persist();renderItems();
+    showToast(item.name+' back in stock ✅','ok');
+  }else{
+    // mark sold out — store timestamp so menu knows when it was marked
+    item.soldOutAt=Date.now();
+    persist();renderItems();
+    showToast(item.name+' marked SOLD OUT 🚫','err');
+  }
 }
 function delItem(cat,idx){const item=(inv[cat]||[])[idx];if(!confirm('Delete "'+item.name+'"?'))return;(inv[cat]||[]).splice(idx,1);persist();renderStats();renderItems();if(cu?.role==='owner')renderDash();showToast('Deleted: '+item.name,'err');}
 function setCat(c){activeCat=c;renderCatTabs();renderItems();}
