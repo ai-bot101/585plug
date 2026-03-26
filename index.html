@@ -60,17 +60,22 @@ html.no-scroll{overflow:hidden !important;}
 .ag-btn:hover{background:var(--red3);}
 .ag-hint{margin-top:18px;font-size:11px;color:var(--border2);font-family:'Oswald',sans-serif;letter-spacing:1px;}
 
-/* PHONE GATE */
-#phone-gate{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:20px;}
-#phone-gate.open{display:flex;}
-.pg-card{background:var(--black2);border:1px solid var(--border2);border-radius:18px;padding:32px 28px;width:100%;max-width:380px;text-align:center;}
-.pg-icon{font-size:36px;margin-bottom:14px;}
-.pg-title{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--red);letter-spacing:2px;margin-bottom:8px;}
-.pg-sub{font-size:13px;color:var(--white3);line-height:1.7;margin-bottom:20px;}
-.pg-inp{width:100%;background:var(--black3);border:1px solid var(--border2);border-radius:10px;padding:13px 16px;color:var(--white);font-family:'Oswald',sans-serif;font-size:16px;outline:none;text-align:center;letter-spacing:2px;margin-bottom:12px;}
-.pg-inp:focus{border-color:var(--red);}
-.pg-btn{width:100%;background:var(--red);border:none;border-radius:10px;padding:13px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:18px;cursor:pointer;letter-spacing:2px;margin-bottom:10px;}
-.pg-cancel{background:transparent;border:none;color:var(--white3);font-family:'Oswald',sans-serif;font-size:13px;cursor:pointer;}
+/* ORDER PREVIEW MODAL */
+#order-preview{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
+#order-preview.open{display:flex;}
+.op-card{background:var(--black2);border:1px solid var(--border2);border-radius:18px;padding:24px 20px;width:100%;max-width:400px;max-height:85vh;display:flex;flex-direction:column;}
+.op-title{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--red);letter-spacing:2px;margin-bottom:4px;text-align:center;}
+.op-sub{font-size:12px;color:var(--white3);line-height:1.6;margin-bottom:14px;text-align:center;font-family:'Oswald',sans-serif;}
+.op-phone-row{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(204,31,31,0.08);border:1px solid rgba(204,31,31,0.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;}
+.op-phone-label{font-family:'Oswald',sans-serif;font-size:12px;color:var(--white3);text-transform:uppercase;letter-spacing:1px;}
+.op-phone-num{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--red);letter-spacing:2px;}
+.op-msg-wrap{flex:1;overflow-y:auto;background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;-webkit-overflow-scrolling:touch;}
+.op-msg{font-family:'Oswald',sans-serif;font-size:13px;color:var(--white2);white-space:pre-wrap;line-height:1.6;word-break:break-word;}
+.op-copy-btn{width:100%;background:var(--green);border:none;border-radius:10px;padding:14px;color:#000;font-family:'Bebas Neue',sans-serif;font-size:20px;cursor:pointer;letter-spacing:2px;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;font-weight:700;}
+.op-copy-btn:hover{filter:brightness(1.1);}
+.op-copy-btn.copied{background:#1a5c1a;color:#fff;}
+.op-done-btn{width:100%;background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:11px;color:var(--white3);font-family:'Oswald',sans-serif;font-size:13px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .15s;}
+.op-done-btn:hover{border-color:var(--red);color:var(--white2);}
 
 /* APP */
 #app{display:none;}
@@ -355,15 +360,20 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
   </div>
 </div>
 
-<!-- PHONE GATE -->
-<div id="phone-gate">
-  <div class="pg-card">
-    <div class="pg-icon">🔐</div>
-    <div class="pg-title">Verified Customers Only</div>
-    <div class="pg-sub">Enter your phone number to send your order.</div>
-    <input class="pg-inp" id="pg-phone" type="tel" placeholder="(585) 000-0000" maxlength="14" oninput="fmtPhone(this)">
-    <button class="pg-btn" onclick="submitPhone()">Send Order →</button>
-    <button class="pg-cancel" onclick="document.getElementById('phone-gate').classList.remove('open')">Cancel</button>
+<!-- ORDER PREVIEW MODAL -->
+<div id="order-preview">
+  <div class="op-card">
+    <div class="op-title">Your Order</div>
+    <div class="op-sub">Copy the message below and text it to:</div>
+    <div class="op-phone-row">
+      <span class="op-phone-label">Send to</span>
+      <span class="op-phone-num" id="op-phone-display"></span>
+    </div>
+    <div class="op-msg-wrap">
+      <div class="op-msg" id="op-msg-text"></div>
+    </div>
+    <button class="op-copy-btn" id="op-copy-btn" onclick="copyOrderMsg()">📋 Copy Order</button>
+    <button class="op-done-btn" onclick="closeOrderPreview()">Done</button>
   </div>
 </div>
 
@@ -488,7 +498,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
         oninput="addrSearch(this.value);checkoutReady()" autocomplete="off">
       <div class="addr-dropdown" id="addr-dropdown"></div>
       <div class="pickup-msg" id="pickup-msg">📍 You'll pick up at the agreed location. We'll confirm details when you send your order.</div>
-      <button class="checkout-btn" id="checkout-btn" onclick="openPhoneGate()" disabled>
+      <button class="checkout-btn" id="checkout-btn" onclick="sendOrder()" disabled>
         📱 Send Order via Text
       </button>
     </div>
@@ -1367,6 +1377,8 @@ function submitPhone() {
 }
 
 // ── SEND ORDER ──
+let _orderMsg = '';
+
 function sendOrder() {
   const pmLabels = {cash:'💵 Cash',cashapp:'💚 CashApp',venmo:'💙 Venmo',applepay:'🍎 Apple Pay',split:'💵💚 Cash+CashApp'};
   const pm = pmLabels[payMethod] || payMethod;
@@ -1388,16 +1400,14 @@ function sendOrder() {
   }
   const addr = document.getElementById('addr-inp')?.value.trim() || '';
   const delivLine = orderType === 'pickup' ? 'TYPE: 🏪 PICKUP' : 'TYPE: 🚗 DELIVERY\nADDRESS: '+addr;
-  const phone = '('+customerPhone.slice(0,3)+') '+customerPhone.slice(3,6)+'-'+customerPhone.slice(6);
 
-  const msg = '🍁 585 PLUG ORDER 🍁\n——————————————\n'+itemLines+'\n——————————————\n'
-    +'SUBTOTAL: $'+sub+'\n'+feeNote+splitNote+'TOTAL: $'+total+'\nPAYMENT: '+pm+'\n'+delivLine+'\nCUSTOMER #: '+phone+'\n——————————————\nSent from the585plug.shop';
+  _orderMsg = '🍁 585 PLUG ORDER 🍁\n——————————————\n'+itemLines+'\n——————————————\n'
+    +'SUBTOTAL: $'+sub+'\n'+feeNote+splitNote+'TOTAL: $'+total+'\nPAYMENT: '+pm+'\n'+delivLine+'\n——————————————\nSent from the585plug.shop';
 
   // Save to Firebase as pending order for inventory app to confirm
   const pendingOrder = {
     orderItems: cart.map(c => ({itemName:c.name, cat:c.cat, qty:1, label:c.label, price:c.price, flavors:c.flavors||null, flavorText:c.flavorText||''})),
     total, payMethod, payMethodLabel:pm,
-    customerPhone: phone,
     orderType, address: addr,
     date: new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}),
     time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
@@ -1414,23 +1424,52 @@ function sendOrder() {
     body: JSON.stringify(pendingOrder)
   }).catch(e => console.error('Failed to save order:', e));
 
-  // iOS uses &body=, Android uses ?body= — detect and use correct format
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const sep = isIOS ? '&' : '?';
-  window.location.href = 'sms:' + OWNER_PHONE + sep + 'body=' + encodeURIComponent(msg);
+  // Show order preview modal instead of opening SMS
+  const phoneFormatted = '('+OWNER_PHONE.slice(0,3)+') '+OWNER_PHONE.slice(3,6)+'-'+OWNER_PHONE.slice(6);
+  document.getElementById('op-phone-display').textContent = phoneFormatted;
+  document.getElementById('op-msg-text').textContent = _orderMsg;
+  document.getElementById('op-copy-btn').innerHTML = '📋 Copy Order';
+  document.getElementById('op-copy-btn').classList.remove('copied');
+  document.getElementById('order-preview').classList.add('open');
+}
 
+function copyOrderMsg() {
+  const btn = document.getElementById('op-copy-btn');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(_orderMsg).then(() => {
+      btn.innerHTML = '✅ Copied!';
+      btn.classList.add('copied');
+      showToast('Order copied to clipboard! 📋','green');
+    }).catch(() => _fallbackCopy(btn));
+  } else {
+    _fallbackCopy(btn);
+  }
+}
 
+function _fallbackCopy(btn) {
+  const ta = document.createElement('textarea');
+  ta.value = _orderMsg;
+  ta.style.cssText = 'position:fixed;left:-9999px;';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  btn.innerHTML = '✅ Copied!';
+  btn.classList.add('copied');
+  showToast('Order copied to clipboard! 📋','green');
+}
 
-  setTimeout(() => {
-    cart=[];payMethod=null;orderType=null;selectedPrices={};
-    updateCartCount();renderCart();renderMenu();closeCart();
-    document.querySelectorAll('.pm-btn').forEach(b=>b.classList.remove('sel'));
-    document.querySelectorAll('.ot-btn').forEach(b=>b.classList.remove('sel'));
-    const ai=document.getElementById('addr-inp');if(ai){ai.value='';ai.style.display='none';}
-    const pm2=document.getElementById('pickup-msg');if(pm2)pm2.style.display='none';
-    const vn=document.getElementById('vfee-notice');if(vn)vn.style.display='none';
-    showToast('Order sent! ✅','green');
-  },600);
+function closeOrderPreview() {
+  document.getElementById('order-preview').classList.remove('open');
+  // Reset cart after closing
+  cart=[];payMethod=null;orderType=null;selectedPrices={};
+  updateCartCount();renderCart();renderMenu();closeCart();
+  document.querySelectorAll('.pm-btn').forEach(b=>b.classList.remove('sel'));
+  document.querySelectorAll('.ot-btn').forEach(b=>b.classList.remove('sel'));
+  const ai=document.getElementById('addr-inp');if(ai){ai.value='';ai.style.display='none';}
+  const pm2=document.getElementById('pickup-msg');if(pm2)pm2.style.display='none';
+  const vn=document.getElementById('vfee-notice');if(vn)vn.style.display='none';
+  showToast('Order placed! Text it to us 📲','green');
 }
 
 // ── ADMIN ──
