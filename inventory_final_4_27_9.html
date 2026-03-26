@@ -4493,6 +4493,26 @@ function viewEODLog(i,filterPerson){
         ${allEntries.map(([name,amt],si)=>{
           const col=si===0?'#3b82f6':si===1?'#f46b6b':'#c084fc';
           const role=cfg.users.find(u=>u.name===name)?.role||'staff';
+          // check if this staff has a daily deduction
+          const dd=eodDailyDeds.find(d=>d.staffName===name);
+          const deductAmt=dd?dd.amount:0;
+          const afterDeduct=Math.max(0,amt-deductAmt);
+          if(deductAmt>0){
+            return`<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+              <div style="display:flex;justify-content:space-between;font-size:13px;">
+                <span style="color:${col};font-weight:600;">${name} <span style="font-size:10px;opacity:.6;">${role}</span></span>
+                <span style="font-family:var(--mono);font-weight:700;color:var(--orange);">${fmtP(amt)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:4px;padding-left:8px;">
+                <span style="color:var(--red);">📌 Daily deduction</span>
+                <span style="font-family:var(--mono);font-weight:600;color:var(--red);">-${fmtP(deductAmt)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px;padding-left:8px;border-top:1px dashed var(--border);padding-top:4px;">
+                <span style="color:var(--green);font-weight:600;">Actual payout</span>
+                <span style="font-family:var(--mono);font-weight:700;color:var(--green);">${fmtP(afterDeduct)}</span>
+              </div>
+            </div>`;
+          }
           return`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
             <span style="color:${col};font-weight:600;">${name} <span style="font-size:10px;opacity:.6;">${role}</span></span>
             <span style="font-family:var(--mono);font-weight:700;color:var(--orange);">${fmtP(amt)}</span>
@@ -4508,31 +4528,18 @@ function viewEODLog(i,filterPerson){
             <span style="color:var(--orange);">Staff Commission Total</span>
             <span style="font-family:var(--mono);font-weight:700;color:var(--orange);">-${fmtP(liveStaffComm)}</span>
           </div>
+          ${eodTotalDailyDed>0?`<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;">
+            <span style="color:var(--red);">📌 Daily Deductions</span>
+            <span style="font-family:var(--mono);font-weight:700;color:var(--green);">+${fmtP(eodTotalDailyDed)}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;">
+            <span style="color:var(--text3);">You actually pay out</span>
+            <span style="font-family:var(--mono);font-weight:600;color:var(--orange);">-${fmtP(Math.max(0,liveStaffComm-eodTotalDailyDed))}</span>
+          </div>`:''}
           <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:15px;border-top:1px solid var(--border);margin-top:4px;">
             <span style="color:var(--green);font-weight:700;">Your Take Home</span>
             <span style="font-family:var(--mono);font-weight:700;color:var(--green);font-size:18px;">${fmtP(liveOwnerNet)}</span>
           </div>
-          ${(()=>{
-            // Daily deductions for this EOD date
-            const dd=r.dailyDeductions||[];
-            if(!dd.length){
-              // compute on the fly for older logs — date is "Mar 25, 2026" format
-              const eodDate=r.date||'';
-              autoDailyDebts.forEach(d=>{
-                try{
-                  const start=new Date(d.startDate+'T00:00:00');
-                  const end=new Date(d.endDate+'T00:00:00');
-                  const day=new Date(eodDate);
-                  if(!isNaN(day)&&day>=start&&day<=end) dd.push({staffName:d.staffName,amount:d.amountPerDay});
-                }catch(e){}
-              });
-            }
-            if(!dd.length)return'';
-            return'<div style="margin-top:8px;padding:10px 14px;background:rgba(244,107,107,0.06);border:1px solid rgba(244,107,107,0.2);border-radius:8px;">'+
-              '<div style="font-size:10px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📌 Daily Deductions</div>'+
-              dd.map(d=>'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;"><span style="color:var(--text);">'+d.staffName+'</span><span style="font-family:var(--mono);font-weight:700;color:var(--red);">-'+fmtP(d.amount)+'</span></div>').join('')+
-            '</div>';
-          })()}
           ${(()=>{
             const recons=r.cashReconResults||[];
             if(!recons.length)return'';
