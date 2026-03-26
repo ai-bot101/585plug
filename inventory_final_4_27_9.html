@@ -3711,6 +3711,18 @@ function viewEODLog(i,filterPerson){
   });
   const ownerNames=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
   const allOrders=r.orders||[];
+  // ── NORMALIZE payMethod: old records stored labels ("Cash") instead of IDs ("cash") ──
+  let eodDirty=false;
+  allOrders.forEach(o=>{
+    if(o.payMethod){
+      const pmL=o.payMethod.toLowerCase();
+      const byLabel=PM.find(m=>m.label&&m.label.toLowerCase()===pmL);
+      const byId=PM.find(m=>m.id===pmL);
+      const correctId=byId?byId.id:(byLabel?byLabel.id:pmL);
+      if(o.payMethod!==correctId){o.payMethod=correctId;eodDirty=true;}
+    }
+  });
+  if(eodDirty)persist();
   allOrders.forEach(o=>{
     let cost=0;
     (o.items||[]).forEach(it=>{
