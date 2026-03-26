@@ -1595,11 +1595,9 @@ function deleteLogEntry(idx) {
         if (found) { found.left = Math.round((gl(found) + qty)*10)/10; break; }
       }
     }
-    // If it was a website order, mark cancelled in Firebase
+    // If it was a website order, delete it from Firebase pending_orders
     if (entry.webOrderKey) {
-      fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({['pending_orders/'+entry.webOrderKey+'/cancelled']: true})
-      }).catch(()=>{});
+      fetch(FB_URL + '/pending_orders/' + entry.webOrderKey + '.json', { method: 'DELETE' }).catch(()=>{});
     }
   }
 
@@ -2284,10 +2282,8 @@ function cancelWebOrder(fbKey) {
 
   delete pendingWebOrders[fbKey];
 
-  // Mark cancelled in Firebase and save cancelled log
-  fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({['pending_orders/'+fbKey+'/cancelled']: true})
-  }).catch(()=>{});
+  // Delete from Firebase pending_orders so it disappears from menu admin too
+  fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
 
   persist();
   renderPendingOrders();
@@ -2330,10 +2326,8 @@ function reverseConfirmedOrder(fbKey) {
   // Remove from sales log
   if (logIdx > -1) log.splice(logIdx, 1);
 
-  // Mark cancelled in Firebase
-  fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({['pending_orders/'+fbKey+'/cancelled']: true})
-  }).catch(()=>{});
+  // Delete from Firebase pending_orders
+  fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
 
   persist();
   renderStats();
