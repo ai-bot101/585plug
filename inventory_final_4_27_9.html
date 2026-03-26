@@ -802,6 +802,7 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
     <div id="view-eod-content" style="max-height:75vh;overflow-y:auto;padding-right:4px;"></div>
     <div class="mact" style="flex-shrink:0;margin-top:12px;">
       <button class="mc" onclick="closeOv('view-eod-modal')">Close</button>
+      <button id="add-eod-btn" class="mp" style="background:var(--green);color:#0c0c0f;" onclick="openAddEODOrder(parseInt(document.getElementById('view-eod-title').dataset.idx))">➕ Add Order</button>
       <button class="mp" onclick="exportEODLog()">📥 Export</button>
     </div>
   </div>
@@ -3751,9 +3752,6 @@ function viewEODLog(i,filterPerson){
       }).join('')}
     </div>`;
   }
-
-  // add order button
-  html+=`<button onclick="openAddEODOrder(${i})" style="width:100%;margin-bottom:14px;background:rgba(62,207,142,0.1);border:2px dashed rgba(62,207,142,0.35);border-radius:12px;padding:14px;color:var(--green);font-family:var(--sans);font-size:15px;font-weight:700;cursor:pointer;letter-spacing:0.5px;">➕ Add Missed Order</button>`;
 
   // inventory snapshot (only in "all" view)
   if(eodPersonFilter==='all'&&r.inventorySnapshot&&r.inventorySnapshot.length){
