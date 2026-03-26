@@ -914,6 +914,24 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
       <label>Total Received ($)</label>
       <input type="number" id="edit-eod-total" min="0" step="0.01" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--sans);font-size:16px;outline:none;">
     </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Payment Method</label>
+      <div id="edit-eod-pm-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+    <div id="edit-eod-split-fields" style="display:none;margin-top:8px;background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:12px;">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-family:var(--mono);">SPLIT: Cash + CashApp</div>
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1;">
+          <label style="font-size:11px;color:var(--green);">💵 Cash</label>
+          <input type="number" id="edit-eod-split-cash" min="0" step="0.01" oninput="updateEditEODSplit()" placeholder="$0.00" style="width:100%;background:var(--bg3);border:1px solid rgba(62,207,142,0.3);border-radius:8px;padding:8px 10px;color:var(--green);font-family:var(--mono);font-size:14px;outline:none;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:11px;color:#a89cff;">💚 CashApp</label>
+          <input type="number" id="edit-eod-split-virtual" min="0" step="0.01" oninput="updateEditEODSplit()" placeholder="$0.00" style="width:100%;background:var(--bg3);border:1px solid rgba(108,99,255,0.3);border-radius:8px;padding:8px 10px;color:#a89cff;font-family:var(--mono);font-size:14px;outline:none;">
+        </div>
+      </div>
+      <div id="edit-eod-split-summary" style="margin-top:8px;font-size:12px;font-family:var(--mono);color:var(--text3);text-align:center;"></div>
+    </div>
     <div class="field">
       <label>Note</label>
       <input type="text" id="edit-eod-note" placeholder="Optional note" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;">
@@ -3460,9 +3478,44 @@ function openEditEODOrder(logIdx,orderIdx){
   `).join('');
   document.getElementById('edit-eod-total').value=o.total||0;
   document.getElementById('edit-eod-note').value=o.note||'';
+  // payment method
+  editEODPayMethod=(o.payMethod||'cash').toLowerCase();
+  const pmBtns=document.getElementById('edit-eod-pm-btns');
+  pmBtns.innerHTML=PM.map(m=>`<div onclick="setEditEODPM('${m.id}')" id="eepm-${m.id}" style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--sans);border:2px solid var(--border);background:var(--bg3);color:var(--text2);display:flex;align-items:center;gap:5px;transition:all .15s;user-select:none;"><span>${m.icon}</span><span>${m.label}</span></div>`).join('');
+  setEditEODPM(editEODPayMethod,true);
+  if(editEODPayMethod==='split'){
+    document.getElementById('edit-eod-split-cash').value=o.splitCash||0;
+    document.getElementById('edit-eod-split-virtual').value=o.splitVirtual||0;
+    updateEditEODSplit();
+  }
   document.getElementById('edit-eod-order-modal').classList.add('open');
 }
 
+let editEODPayMethod='cash';
+function setEditEODPM(id,init){
+  editEODPayMethod=id;
+  PM.forEach(m=>{
+    const btn=document.getElementById('eepm-'+m.id);
+    if(!btn)return;
+    const sel=m.id===id;
+    btn.style.borderColor=sel?'var(--accent)':'var(--border)';
+    btn.style.background=sel?'rgba(108,99,255,0.15)':'var(--bg3)';
+    btn.style.color=sel?'var(--accent)':'var(--text2)';
+  });
+  const sf=document.getElementById('edit-eod-split-fields');
+  if(sf)sf.style.display=id==='split'?'block':'none';
+  if(!init&&id==='split'){
+    document.getElementById('edit-eod-split-cash').value='';
+    document.getElementById('edit-eod-split-virtual').value='';
+    document.getElementById('edit-eod-split-summary').innerHTML='';
+  }
+}
+function updateEditEODSplit(){
+  const cashAmt=parseFloat(document.getElementById('edit-eod-split-cash').value)||0;
+  const virtAmt=parseFloat(document.getElementById('edit-eod-split-virtual').value)||0;
+  document.getElementById('edit-eod-split-summary').innerHTML='💵 '+fmtP(cashAmt)+' + 💚 '+fmtP(virtAmt)+' = '+fmtP(cashAmt+virtAmt);
+  document.getElementById('edit-eod-total').value=cashAmt+virtAmt;
+}
 function saveEODOrderEdit(){
   if(!editEODState)return;
   const{logIdx,orderIdx}=editEODState;
@@ -3497,7 +3550,17 @@ function saveEODOrderEdit(){
       cost+=cpuItem(found)*it.qty;
     }
   });
-  const vFee=o.payMethod&&(o.payMethod.toLowerCase().includes('cashapp')||o.payMethod.toLowerCase().includes('venmo')||o.payMethod.toLowerCase().includes('zelle'))?5:0;
+  // update payment method
+  const newPM=editEODPayMethod||'cash';
+  o.payMethod=newPM;
+  if(newPM==='split'){
+    o.splitCash=parseFloat(document.getElementById('edit-eod-split-cash').value)||0;
+    o.splitVirtual=parseFloat(document.getElementById('edit-eod-split-virtual').value)||0;
+  }else{
+    delete o.splitCash;
+    delete o.splitVirtual;
+  }
+  const vFee=(VIRT.includes(newPM)||newPM==='split')?5:0;
   o.profit=Math.max(0,newTotal-vFee-cost);
   // recalculate commission (respect manual override)
   if(!o.commissionManual){
@@ -3509,11 +3572,10 @@ function saveEODOrderEdit(){
   cfg.users.forEach(u=>{newCommByPerson[u.name]=0;});
   r.orders.forEach(ord=>{
     grandTotal+=ord.total||0;
-    if(ord.payMethod&&(ord.payMethod.toLowerCase().includes('cashapp')||ord.payMethod.toLowerCase().includes('venmo')||ord.payMethod.toLowerCase().includes('zelle'))){
-      virtTotal+=ord.total||0;
-    }else{
-      cashTotal+=ord.total||0;
-    }
+    const opm=(ord.payMethod||'cash').toLowerCase();
+    if(opm==='split'){cashTotal+=(ord.splitCash||0);virtTotal+=(ord.splitVirtual||0);}
+    else if(opm==='cash'||opm==='nopay'){cashTotal+=ord.total||0;}
+    else{virtTotal+=ord.total||0;}
     if(!newCommByPerson[ord.who])newCommByPerson[ord.who]=0;
     newCommByPerson[ord.who]+=(ord.commission||0);
   });
@@ -3539,6 +3601,10 @@ function saveEODOrderEdit(){
     matchingLog.amtReceived=newTotal;
     matchingLog.profit=o.profit;
     matchingLog.commission=o.commission;
+    matchingLog.payMethod=newPM;
+    matchingLog.payMethodLabel=PM.find(m=>m.id===newPM)?.label||newPM;
+    if(newPM==='split'){matchingLog.splitCash=o.splitCash;matchingLog.splitVirtual=o.splitVirtual;}
+    else{delete matchingLog.splitCash;delete matchingLog.splitVirtual;}
     if(o.note)matchingLog.note=o.note;
   }
   persist();
