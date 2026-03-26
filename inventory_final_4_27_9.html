@@ -514,6 +514,21 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       <div class="opm-btn" onclick="selOP('venmo')" id="opm-venmo"><div class="opm-icon">💙</div><div class="opm-label">Venmo</div></div>
       <div class="opm-btn" onclick="selOP('applepay')" id="opm-applepay"><div class="opm-icon">🍎</div><div class="opm-label">Apple Pay</div></div>
       <div class="opm-btn" onclick="selOP('nopay')" id="opm-nopay"><div class="opm-icon">🚫</div><div class="opm-label">No Pay</div></div>
+      <div class="opm-btn" onclick="selOP('split')" id="opm-split"><div class="opm-icon">💵💚</div><div class="opm-label">Cash+CashApp</div></div>
+    </div>
+    <div id="ord-split-fields" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
+      <div style="font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Split Payment Breakdown</div>
+      <div style="display:flex;gap:10px;margin-bottom:8px;">
+        <div style="flex:1;">
+          <label style="font-size:11px;color:var(--text2);margin-bottom:4px;display:block;">💵 Cash Amount</label>
+          <input type="number" id="ord-split-cash" placeholder="$0.00" min="0" step="0.01" oninput="updateSplitTotal('ord')" style="width:100%;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--green);font-family:var(--mono);font-size:15px;outline:none;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:11px;color:var(--text2);margin-bottom:4px;display:block;">💚 CashApp Amount</label>
+          <input type="number" id="ord-split-virtual" placeholder="$0.00" min="0" step="0.01" oninput="updateSplitTotal('ord')" style="width:100%;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px;color:#a89cff;font-family:var(--mono);font-size:15px;outline:none;">
+        </div>
+      </div>
+      <div id="ord-split-summary" style="font-size:12px;color:var(--text3);font-family:var(--mono);text-align:center;padding:6px;background:var(--bg4);border-radius:8px;"></div>
     </div>
     <div class="comm-prev" id="comm-prev"><div class="cp-title">Order Breakdown</div><div id="comm-lines"></div></div>
     <!-- order notes -->
@@ -562,6 +577,21 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       <div class="pm-btn" onclick="selPay('venmo')" id="pm-venmo"><div class="pm-icon">💙</div><div class="pm-label">Venmo</div></div>
       <div class="pm-btn" onclick="selPay('applepay')" id="pm-applepay"><div class="pm-icon">🍎</div><div class="pm-label">Apple Pay</div></div>
       <div class="pm-btn" onclick="selPay('nopay')" id="pm-nopay"><div class="pm-icon">🚫</div><div class="pm-label">No Pay</div></div>
+      <div class="pm-btn" onclick="selPay('split')" id="pm-split"><div class="pm-icon">💵💚</div><div class="pm-label">Cash+CashApp</div></div>
+    </div>
+    <div id="sell-split-fields" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin:8px 0;">
+      <div style="font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Split Payment</div>
+      <div style="display:flex;gap:8px;margin-bottom:6px;">
+        <div style="flex:1;">
+          <label style="font-size:10px;color:var(--text2);margin-bottom:3px;display:block;">💵 Cash</label>
+          <input type="number" id="sell-split-cash" placeholder="$0" min="0" step="0.01" oninput="updateSellSplitTotal()" style="width:100%;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:9px;color:var(--green);font-family:var(--mono);font-size:14px;outline:none;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:10px;color:var(--text2);margin-bottom:3px;display:block;">💚 CashApp</label>
+          <input type="number" id="sell-split-virtual" placeholder="$0" min="0" step="0.01" oninput="updateSellSplitTotal()" style="width:100%;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:9px;color:#a89cff;font-family:var(--mono);font-size:14px;outline:none;">
+        </div>
+      </div>
+      <div id="sell-split-summary" style="font-size:11px;color:var(--text3);font-family:var(--mono);text-align:center;"></div>
     </div>
     <div class="pay-amount-wrap"><label>Amount Received</label><input class="pay-amount-input" type="number" id="pay-amount" placeholder="$0.00" min="0" step="0.01" oninput="checkPayReady()" onkeydown="if(event.key==='Enter')confirmSale()"></div>
     <button class="pay-confirm-btn" id="pay-confirm-btn" onclick="confirmSale()" disabled>Confirm Sale</button>
@@ -681,13 +711,14 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
     <div class="field"><label>Category</label><select id="m-cat"></select></div>
     <div class="field"><label>Description <span style="color:var(--text3);font-size:11px;">(shows on menu)</span></label><textarea id="m-desc" placeholder="e.g. Indica dominant · heavy body high · earthy pine" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;resize:none;min-height:60px;line-height:1.5;" rows="2"></textarea></div>
     <div class="field">
-      <label>Photo <span style="color:var(--text3);font-size:11px;">(optional · shows on menu)</span></label>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
-        <button type="button" onclick="document.getElementById('m-img-file').click()" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text2);font-family:var(--sans);font-size:13px;cursor:pointer;text-align:left;">📷 Upload Photo</button>
-        <input type="file" id="m-img-file" accept="image/*" style="display:none" onchange="handleImgUpload(this,'m-img','m-img-preview')">
+      <label>Photos <span style="color:var(--text3);font-size:11px;">(optional · shows on menu · multiple allowed)</span></label>
+      <div id="m-photos-list"></div>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button type="button" onclick="document.getElementById('m-img-file').click()" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text2);font-family:var(--sans);font-size:13px;cursor:pointer;text-align:center;">📷 Upload Photo</button>
+        <input type="file" id="m-img-file" accept="image/*" style="display:none" onchange="handleMultiImgUpload(this,'m')">
+        <button type="button" onclick="addPhotoUrlRow('m')" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text2);font-family:var(--sans);font-size:13px;cursor:pointer;text-align:center;">🔗 Paste URL</button>
       </div>
-      <input type="text" id="m-img" placeholder="Or paste image URL..." style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;" oninput="updateImgPreview(this.value,'m-img-preview')">
-      <div id="m-img-preview" style="margin-top:8px;display:none;"><img style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--border);" alt="preview"></div>
+      <input type="hidden" id="m-img" value="">
     </div>
     <div class="field"><label>Amount Bought</label><input type="number" id="m-bought" placeholder="0" min="0" step="0.1"></div>
     <div class="field"><label>Amount Left (blank = same as bought)</label><input type="number" id="m-left" placeholder="Optional" step="0.1"></div>
@@ -735,13 +766,14 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
     <div class="field"><label>Item Name</label><input type="text" id="em-name"></div>
     <div class="field"><label>Description <span style="color:var(--text3);font-size:11px;">(shows on menu)</span></label><textarea id="em-desc" placeholder="e.g. Sativa dominant · uplifting · citrus flavor" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;resize:none;min-height:60px;line-height:1.5;" rows="2"></textarea></div>
     <div class="field">
-      <label>Photo <span style="color:var(--text3);font-size:11px;">(optional · shows on menu)</span></label>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
-        <button type="button" onclick="document.getElementById('em-img-file').click()" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text2);font-family:var(--sans);font-size:13px;cursor:pointer;text-align:left;">📷 Upload Photo</button>
-        <input type="file" id="em-img-file" accept="image/*" style="display:none" onchange="handleImgUpload(this,'em-img','em-img-preview')">
+      <label>Photos <span style="color:var(--text3);font-size:11px;">(optional · shows on menu · multiple allowed)</span></label>
+      <div id="em-photos-list"></div>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button type="button" onclick="document.getElementById('em-img-file').click()" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text2);font-family:var(--sans);font-size:13px;cursor:pointer;text-align:center;">📷 Upload Photo</button>
+        <input type="file" id="em-img-file" accept="image/*" style="display:none" onchange="handleMultiImgUpload(this,'em')">
+        <button type="button" onclick="addPhotoUrlRow('em')" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text2);font-family:var(--sans);font-size:13px;cursor:pointer;text-align:center;">🔗 Paste URL</button>
       </div>
-      <input type="text" id="em-img" placeholder="Or paste image URL..." style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;" oninput="updateImgPreview(this.value,'em-img-preview')">
-      <div id="em-img-preview" style="margin-top:8px;display:none;"><img style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--border);" alt="preview"></div>
+      <input type="hidden" id="em-img" value="">
     </div>
     <div class="field"><label>Amount Bought</label><input type="number" id="em-bought" step="0.1"></div>
     <div class="field"><label>Amount Left</label><input type="number" id="em-left" step="0.1"></div>
@@ -914,12 +946,23 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
     </div>
     <div class="field">
       <label>Payment Method</label>
-      <select id="add-eod-pay" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;">
+      <select id="add-eod-pay" onchange="toggleEODSplit()" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;">
         <option value="cash">💵 Cash</option>
         <option value="cashapp">📲 CashApp</option>
         <option value="venmo">📲 Venmo</option>
         <option value="applepay">📲 Apple Pay</option>
+        <option value="split">💵💚 Cash+CashApp</option>
       </select>
+      <div id="eod-split-fields" style="display:none;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:8px;">
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;"><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px;">💵 Cash</label>
+            <input type="number" id="eod-split-cash" placeholder="$0" min="0" step="0.01" oninput="updateEODSplitTotal()" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--green);font-family:var(--mono);font-size:14px;outline:none;">
+          </div>
+          <div style="flex:1;"><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px;">💚 CashApp</label>
+            <input type="number" id="eod-split-virtual" placeholder="$0" min="0" step="0.01" oninput="updateEODSplitTotal()" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px;color:#a89cff;font-family:var(--mono);font-size:14px;outline:none;">
+          </div>
+        </div>
+      </div>
     </div>
     <div class="field">
       <label>Time (optional)</label>
@@ -1022,7 +1065,7 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
 <script>
 const GP='251765',CS='251765';
 const VIRT=['cashapp','venmo','applepay'];
-const PM=[{id:'cash',label:'Cash',icon:'💵'},{id:'cashapp',label:'CashApp',icon:'💚'},{id:'venmo',label:'Venmo',icon:'💙'},{id:'applepay',label:'Apple Pay',icon:'🍎'},{id:'nopay',label:'No Pay',icon:'🚫'}];
+const PM=[{id:'cash',label:'Cash',icon:'💵'},{id:'cashapp',label:'CashApp',icon:'💚'},{id:'venmo',label:'Venmo',icon:'💙'},{id:'applepay',label:'Apple Pay',icon:'🍎'},{id:'nopay',label:'No Pay',icon:'🚫'},{id:'split',label:'Cash+CashApp',icon:'💵💚'}];
 const UC=['#3b82f6','#f46b6b','#c084fc'],WC=['w0','w1','w2'];
 function checkGate(){const v=document.getElementById('gate-inp').value.trim();if(v===GP){document.getElementById('site-gate').style.display='none';document.getElementById('calc-screen').style.display='flex';try{localStorage.setItem('gok','1');}catch(e){}}else{document.getElementById('gate-err').textContent='Wrong code. Try again.';document.getElementById('gate-inp').value='';document.getElementById('gate-inp').focus();}}
 (function(){try{if(localStorage.getItem('gok')==='1'){document.getElementById('site-gate').style.display='none';document.getElementById('calc-screen').style.display='flex';}}catch(e){}})();
@@ -1148,8 +1191,8 @@ function calcComm2(total,profit,staffName){
   }
   if(pct===0&&tiers.length>0)pct=tiers[tiers.length-1].pct;
   let comm=profit*(pct/100);
-  // floor: commission is at least $10 minimum per order, but only if there's actual profit
-  if(profit>0&&comm<cfg.commissionFloorMin)comm=cfg.commissionFloorMin;
+  // floor: commission is at least $10 minimum per order as long as there's a sale (total > 0)
+  if(total>0&&comm<cfg.commissionFloorMin)comm=cfg.commissionFloorMin;
   comm=Math.floor(comm);
   // deduct any owed debt from this commission — carries over if debt > commission
   let deducted=0;
@@ -1366,14 +1409,23 @@ function remOI(i){
   }
   orderItems.splice(i,1);renderOrdItems();calcComm();
 }
-function selOP(m){orderPayMethod=m;document.querySelectorAll('.opm-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('opm-'+m).classList.add('sel');if(m==='nopay'){document.getElementById('ord-total').value='0';document.getElementById('ord-extra').value='';document.getElementById('ord-short').value='';}calcComm();}
+function selOP(m){orderPayMethod=m;document.querySelectorAll('.opm-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('opm-'+m).classList.add('sel');if(m==='nopay'){document.getElementById('ord-total').value='0';document.getElementById('ord-extra').value='';document.getElementById('ord-short').value='';}const sf=document.getElementById('ord-split-fields');if(sf)sf.style.display=m==='split'?'block':'none';if(m==='split')updateSplitTotal('ord');calcComm();}
+function updateSplitTotal(prefix){
+  const cashAmt=parseFloat(document.getElementById(prefix+'-split-cash').value)||0;
+  const virtAmt=parseFloat(document.getElementById(prefix+'-split-virtual').value)||0;
+  const total=cashAmt+virtAmt;
+  const fee=5;
+  const summary=document.getElementById(prefix+'-split-summary');
+  if(summary)summary.innerHTML='Total: <span style="color:var(--green);font-weight:700;">'+fmtP(total)+'</span> (💵 '+fmtP(cashAmt)+' + 💚 '+fmtP(virtAmt)+') · <span style="color:var(--red);">$'+fee+' CashApp fee</span>';
+  if(prefix==='ord'){document.getElementById('ord-total').value=total;calcComm();}
+}
 function calcComm(){
   const total=parseFloat(document.getElementById('ord-total').value)||0;
   if(!total||!orderItems.length){document.getElementById('comm-prev').classList.remove('show');chkOrd();return;}
   const customerName=document.getElementById('ord-customer').value.trim();
   const credit=getCustomerCredit(customerName);
   const extra=parseFloat(document.getElementById('ord-extra').value)||0;
-  const vFee=orderPayMethod&&isV(orderPayMethod);
+  const vFee=orderPayMethod&&(isV(orderPayMethod)||orderPayMethod==='split');
   const creditApplied=Math.min(credit,total);
   const objs=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty}));
   // profit based on (total - extra - credit) since extra is just saved for next order
@@ -1414,7 +1466,13 @@ function confirmOrder(){
   const note=document.getElementById('ord-note').value.trim();
   const isNoPay=orderPayMethod==='nopay';
   if(!orderPayMethod||(!isNoPay&&total<=0)||!orderItems.length){showToast('Fill in all fields','err');return;}
-  const ml=PM.find(m=>m.id===orderPayMethod)?.label||orderPayMethod;
+  let ml=PM.find(m=>m.id===orderPayMethod)?.label||orderPayMethod;
+  let splitCash=0,splitVirtual=0;
+  if(orderPayMethod==='split'){
+    splitCash=parseFloat(document.getElementById('ord-split-cash').value)||0;
+    splitVirtual=parseFloat(document.getElementById('ord-split-virtual').value)||0;
+    ml='Cash+CashApp';
+  }
   // apply existing credit or clear existing debt
   const currentBal=customerCredits[customer.trim().toLowerCase()]||0;
   const creditApplied=Math.min(Math.max(0,currentBal),total);
@@ -1428,7 +1486,7 @@ function confirmOrder(){
   }
   const objs=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName}));
   objs.forEach(({item,qty})=>{if(item)item.left=Math.round((gl(item)-qty)*10)/10;});
-  const vFee2=isV(orderPayMethod);
+  const vFee2=isV(orderPayMethod)||orderPayMethod==='split';
   // profit ignores the extra — extra is just credit, not real order revenue
   const effectiveAmt=total-extra-creditApplied;
   const profit=calcProfit(objs.map(o=>({item:o.item,qty:o.qty})),effectiveAmt,vFee2);
@@ -1436,6 +1494,7 @@ function confirmOrder(){
   const isOwnerOrder=cu?.role==='owner';
   const{commission,deducted}=isOwnerOrder?{commission:0,deducted:0}:calcComm2(effectiveAmt,profit,cu.name);
   const e={type:'order',customer,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty})),total,payMethod:orderPayMethod,payMethodLabel:ml,amtReceived:total,profit,commission,creditApplied,extraCredit:extra,shortPaid:short,note,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
+  if(orderPayMethod==='split'){e.splitCash=splitCash;e.splitVirtual=splitVirtual;}
   log.unshift(e);persist();closeOrder();
   renderStats();renderItems();
   if(cu?.role==='owner')renderDash();else renderStaffLog();
@@ -1447,9 +1506,18 @@ function confirmOrder(){
   showToast(msg,'ok');
 }
 function sell(cat,idx){const item=(inv[cat]||[])[idx];if(isAddOnOnly(item)){showToast(item.name+' is add-on only — use Add Order instead','err');return;}const inp=document.getElementById('qi-'+cat+'-'+idx);const qty=parseFloat(inp.value);if(!qty||qty<=0){showToast('Enter a valid quantity','err');return;}const left=gl(item);if(qty>left){showToast('Only '+fmt(left)+' left','err');return;}pendingSale={cat,idx,qty,itemName:item.name};selMethod=null;inp.value='';document.querySelectorAll('.pm-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('pay-amount').value='';document.getElementById('pay-sub').textContent=qty+' x '+item.name;document.getElementById('pay-confirm-btn').disabled=true;document.getElementById('pay-overlay').classList.add('open');setTimeout(()=>document.getElementById('pay-amount').focus(),300);}
-function selPay(method){selMethod=method;document.querySelectorAll('.pm-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('pm-'+method).classList.add('sel');if(method==='nopay'){document.getElementById('pay-amount').value='0';}checkPayReady();}
+function selPay(method){selMethod=method;document.querySelectorAll('.pm-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('pm-'+method).classList.add('sel');const sf=document.getElementById('sell-split-fields');if(sf)sf.style.display=method==='split'?'block':'none';if(method==='nopay'){document.getElementById('pay-amount').value='0';}if(method==='split')updateSellSplitTotal();checkPayReady();}
+function updateSellSplitTotal(){
+  const cashAmt=parseFloat(document.getElementById('sell-split-cash').value)||0;
+  const virtAmt=parseFloat(document.getElementById('sell-split-virtual').value)||0;
+  const total=cashAmt+virtAmt;
+  document.getElementById('pay-amount').value=total;
+  const summary=document.getElementById('sell-split-summary');
+  if(summary)summary.innerHTML='Total: <span style="color:var(--green);font-weight:700;">'+fmtP(total)+'</span> · <span style="color:var(--red);">$5 CashApp fee</span>';
+  checkPayReady();
+}
 function checkPayReady(){const amt=parseFloat(document.getElementById('pay-amount').value);const noPay=selMethod==='nopay';document.getElementById('pay-confirm-btn').disabled=!(selMethod&&(noPay||(!isNaN(amt)&&amt>=0)));}
-function confirmSale(){if(!pendingSale||!selMethod)return;const amtReceived=parseFloat(document.getElementById('pay-amount').value)||0;const{cat,idx,qty,itemName}=pendingSale;const item=(inv[cat]||[])[idx];if(!item)return;item.left=Math.round((gl(item)-qty)*10)/10;const ml=PM.find(m=>m.id===selMethod)?.label||selMethod;const vFee3=isV(selMethod);const profit=calcProfit([{item,qty}],amtReceived,vFee3);const isOwnerSale=cu?.role==='owner';const{commission,deducted}=isOwnerSale?{commission:0,deducted:0}:calcComm2(amtReceived,profit,cu.name);const e={type:'sell',name:itemName,cat,amount:qty,payMethod:selMethod,payMethodLabel:ml,amtReceived,profit,commission,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};log.unshift(e);persist();document.getElementById('pay-overlay').classList.remove('open');pendingSale=null;selMethod=null;renderStats();renderItems();if(cu?.role==='owner')renderDash();else renderStaffLog();pushSheet(e);showToast(ml+' · '+fmtP(amtReceived),'ok');}
+function confirmSale(){if(!pendingSale||!selMethod)return;const amtReceived=parseFloat(document.getElementById('pay-amount').value)||0;const{cat,idx,qty,itemName}=pendingSale;const item=(inv[cat]||[])[idx];if(!item)return;item.left=Math.round((gl(item)-qty)*10)/10;let ml=PM.find(m=>m.id===selMethod)?.label||selMethod;const vFee3=isV(selMethod)||selMethod==='split';if(selMethod==='split')ml='Cash+CashApp';const profit=calcProfit([{item,qty}],amtReceived,vFee3);const isOwnerSale=cu?.role==='owner';const{commission,deducted}=isOwnerSale?{commission:0,deducted:0}:calcComm2(amtReceived,profit,cu.name);const e={type:'sell',name:itemName,cat,amount:qty,payMethod:selMethod,payMethodLabel:ml,amtReceived,profit,commission,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};if(selMethod==='split'){e.splitCash=parseFloat(document.getElementById('sell-split-cash').value)||0;e.splitVirtual=parseFloat(document.getElementById('sell-split-virtual').value)||0;}log.unshift(e);persist();document.getElementById('pay-overlay').classList.remove('open');pendingSale=null;selMethod=null;renderStats();renderItems();if(cu?.role==='owner')renderDash();else renderStaffLog();pushSheet(e);showToast(ml+' · '+fmtP(amtReceived),'ok');}
 function cancelSale(){pendingSale=null;selMethod=null;document.getElementById('pay-overlay').classList.remove('open');}
 function openCatModal(){renderCatList();document.getElementById('new-cat-inp').value='';document.getElementById('cat-modal').classList.add('open');}
 function renderCatList(){document.getElementById('cat-list').innerHTML=C().map(cat=>{const n=(inv[cat]||[]).length;return`<div class="cat-row-item"><div class="cat-row-name">${cat}</div><div class="cat-row-count">${n} item${n!==1?'s':''}</div><button class="cat-row-del" onclick="deleteCat('${cat}')">Remove</button></div>`;}).join('');}
@@ -1521,7 +1589,7 @@ if(e.type==='selfbuy'){
   const expand=`<div class="ae-expand"><div class="ex-row"><span class="ex-label">Sold By</span><span class="ex-val">${e.who}</span></div><div class="ex-row"><span class="ex-label">Payment</span><span class="ex-val">${e.payMethodLabel||'Cash'}</span></div><div class="ex-row"><span class="ex-label">Total</span><span class="ex-val">${fmtP(e.totalOwed||0)}</span></div><div class="ex-row"><span class="ex-label">Time</span><span class="ex-val">${e.date} ${e.time||''}</span></div><div class="ex-items"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Items:</div>${(e.items||[]).map(o=>`<div class="ex-item">${fmt(o.qty)}x ${o.itemName} — ${fmtP(o.cost)}</div>`).join('')}</div></div>`;
   return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot" style="background:var(--orange)"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.who} — self purchase</span></div><div class="ae-oi">${ois}</div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${expand}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.totalOwed||0)}</span></div></div></div>`;
 }
-if(e.type==='order'){const pc=isV(e.payMethod)?'virt':'cash';const ois=(e.orderItems||[]).map(o=>`${fmt(o.qty)}x ${o.itemName}`).join(', ');const creditBadge=e.creditApplied>0?`<span style="font-size:10px;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.25);border-radius:5px;padding:1px 6px;color:var(--green);font-family:var(--mono);">-${fmtP(e.creditApplied)} credit</span>`:'';
+if(e.type==='order'){const pc=(isV(e.payMethod)||e.payMethod==='split')?'virt':'cash';const ois=(e.orderItems||[]).map(o=>`${fmt(o.qty)}x ${o.itemName}`).join(', ');const creditBadge=e.creditApplied>0?`<span style="font-size:10px;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.25);border-radius:5px;padding:1px 6px;color:var(--green);font-family:var(--mono);">-${fmtP(e.creditApplied)} credit</span>`:'';
 const debtBadge=e.shortPaid>0?`<span style="font-size:10px;background:rgba(244,107,107,0.1);border:1px solid rgba(244,107,107,0.25);border-radius:5px;padding:1px 6px;color:var(--red);font-family:var(--mono);">⚠️ owes ${fmtP(e.shortPaid)}</span>`:'';const saveBadge=e.extraCredit>0?`<span style="font-size:10px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:5px;padding:1px 6px;color:var(--accent);font-family:var(--mono);">💳 +${fmtP(e.extraCredit)} saved</span>`:'';const logIdx=log.indexOf(e);
 const delBtn=cu?.role==='owner'?`<button onclick="event.stopPropagation();deleteLogEntry(${logIdx})" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:6px;padding:3px 8px;color:var(--red);font-size:10px;cursor:pointer;font-family:var(--sans);margin-top:4px;">🗑️ Delete</button>`:'';
 const expandRows=`<div class="ae-expand">
@@ -1536,13 +1604,14 @@ const expandRows=`<div class="ae-expand">
   ${e.creditApplied>0?`<div class="ex-row"><span class="ex-label">Credit Applied</span><span class="ex-val green">-${fmtP(e.creditApplied)}</span></div>`:''}
   ${e.extraCredit>0?`<div class="ex-row"><span class="ex-label">Extra Saved</span><span class="ex-val accent">+${fmtP(e.extraCredit)}</span></div>`:''}
   ${e.shortPaid>0?`<div class="ex-row"><span class="ex-label">Still Owes</span><span class="ex-val red">${fmtP(e.shortPaid)}</span></div>`:''}
-  ${isV(e.payMethod)?`<div class="ex-row"><span class="ex-label">Virtual Fee</span><span class="ex-val red">-$5</span></div>`:''}
+  ${isV(e.payMethod)||e.payMethod==='split'?`<div class="ex-row"><span class="ex-label">Virtual Fee</span><span class="ex-val red">-$5</span></div>`:''}
+  ${e.payMethod==='split'?`<div class="ex-row"><span class="ex-label">💵 Cash Portion</span><span class="ex-val green">${fmtP(e.splitCash||0)}</span></div><div class="ex-row"><span class="ex-label">💚 CashApp Portion</span><span class="ex-val" style="color:#a89cff;">${fmtP(e.splitVirtual||0)}</span></div>`:''}
   <div class="ex-row"><span class="ex-label">Time</span><span class="ex-val">${e.date} ${e.time||''}</span></div>
   ${e.note?`<div class="ex-row"><span class="ex-label">Note</span><span class="ex-val" style="color:var(--orange);font-weight:400;font-size:12px;">${e.note}</span></div>`:''}
   <div class="ex-items"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Items:</div>${(e.orderItems||[]).map(o=>`<div class="ex-item">${fmt(o.qty)}x ${o.itemName}</div>`).join('')}</div>
   ${isOwnerView?`<button onclick="event.stopPropagation();openEditLog(${logIdx})" style="width:100%;margin-top:10px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:8px;padding:10px;color:var(--accent);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">✏️ Edit This Entry</button>`:''}
 </div>`;
-return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot order"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.customer||'Customer'}</span><span class="ae-qbadge">${(e.orderItems||[]).length} items</span>${creditBadge}${saveBadge}${debtBadge}</div><div class="ae-oi">${ois}</div>${e.note?`<div style="margin-top:4px;font-size:11px;color:var(--orange);">📝 ${e.note}</div>`:''}<div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${expandRows}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.amtReceived||0)}</span></div>${showC&&e.commission!=null?`<div class="ae-comm">you: ${fmtP(e.commission)}</div>`:''}${delBtn}</div></div>`;}else if(e.type==='sell'){const pc=isV(e.payMethod)?'virt':'cash';const si=log.indexOf(e);const sDelBtn=cu?.role==='owner'?`<button onclick="event.stopPropagation();deleteLogEntry(${si})" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:6px;padding:3px 8px;color:var(--red);font-size:10px;cursor:pointer;font-family:var(--sans);margin-top:4px;">🗑️ Delete</button>`:'';
+return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot order"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.customer||'Customer'}</span><span class="ae-qbadge">${(e.orderItems||[]).length} items</span>${creditBadge}${saveBadge}${debtBadge}</div><div class="ae-oi">${ois}</div>${e.note?`<div style="margin-top:4px;font-size:11px;color:var(--orange);">📝 ${e.note}</div>`:''}<div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${expandRows}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.amtReceived||0)}</span></div>${showC&&e.commission!=null?`<div class="ae-comm">you: ${fmtP(e.commission)}</div>`:''}${delBtn}</div></div>`;}else if(e.type==='sell'){const pc=(isV(e.payMethod)||e.payMethod==='split')?'virt':'cash';const si=log.indexOf(e);const sDelBtn=cu?.role==='owner'?`<button onclick="event.stopPropagation();deleteLogEntry(${si})" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:6px;padding:3px 8px;color:var(--red);font-size:10px;cursor:pointer;font-family:var(--sans);margin-top:4px;">🗑️ Delete</button>`:'';
 const sellExpand=`<div class="ae-expand">
   <div class="ex-row"><span class="ex-label">Item</span><span class="ex-val">${e.name}</span></div>
   <div class="ex-row"><span class="ex-label">Quantity</span><span class="ex-val">${fmt(e.amount)}</span></div>
@@ -2020,6 +2089,73 @@ function updateImgPreview(url, previewId) {
   showImgPreview(url, previewId);
 }
 
+// ── MULTI-PHOTO MANAGEMENT ──
+let mPhotos=[]; // for add modal
+let emPhotos=[]; // for edit modal
+
+function getPhotosArr(prefix){ return prefix==='m'?mPhotos:emPhotos; }
+function setPhotosArr(prefix,arr){ if(prefix==='m')mPhotos=arr; else emPhotos=arr; }
+
+function renderPhotos(prefix){
+  const arr=getPhotosArr(prefix);
+  const el=document.getElementById(prefix+'-photos-list');
+  if(!el)return;
+  if(!arr.length){el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0;">No photos added yet</div>';return;}
+  el.innerHTML=arr.map((url,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px;">
+      <img src="${url}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;border:1px solid var(--border);" onerror="this.style.display='none'">
+      <div style="flex:1;font-size:11px;color:var(--text2);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Photo ${i+1}</div>
+      ${i>0?`<button onclick="movePhoto('${prefix}',${i},-1)" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:4px;">↑</button>`:''}
+      ${i<arr.length-1?`<button onclick="movePhoto('${prefix}',${i},1)" style="background:none;border:none;color:var(--text3);font-size:16px;cursor:pointer;padding:4px;">↓</button>`:''}
+      <button onclick="removePhoto('${prefix}',${i})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;padding:4px;">✕</button>
+    </div>`).join('');
+  // also sync to the hidden m-img / em-img field (first photo for backward compat)
+  const hiddenField=document.getElementById(prefix+'-img');
+  if(hiddenField)hiddenField.value=arr[0]||'';
+}
+
+function addPhotoUrl(prefix,url){
+  if(!url||!url.trim())return;
+  const arr=getPhotosArr(prefix);
+  arr.push(url.trim());
+  setPhotosArr(prefix,arr);
+  renderPhotos(prefix);
+}
+
+function addPhotoUrlRow(prefix){
+  const url=prompt('Paste image URL:');
+  if(url&&url.trim())addPhotoUrl(prefix,url.trim());
+}
+
+function removePhoto(prefix,idx){
+  const arr=getPhotosArr(prefix);
+  arr.splice(idx,1);
+  setPhotosArr(prefix,arr);
+  renderPhotos(prefix);
+}
+
+function movePhoto(prefix,idx,dir){
+  const arr=getPhotosArr(prefix);
+  const newIdx=idx+dir;
+  if(newIdx<0||newIdx>=arr.length)return;
+  [arr[idx],arr[newIdx]]=[arr[newIdx],arr[idx]];
+  setPhotosArr(prefix,arr);
+  renderPhotos(prefix);
+}
+
+function handleMultiImgUpload(input,prefix){
+  const file=input.files[0];
+  if(!file)return;
+  compressImage(file,600,0.75,function(dataUrl){
+    addPhotoUrl(prefix,dataUrl);
+  });
+  input.value='';
+}
+
+function getItemImages(prefix){
+  return getPhotosArr(prefix).filter(u=>u&&u.trim());
+}
+
 function addItem(){
   const name=document.getElementById('m-name').value.trim().toLowerCase();
   const cat=document.getElementById('m-cat').value;
@@ -2039,11 +2175,12 @@ function addItem(){
   // prices handled by getPriceTiers
   if(!inv[cat])inv[cat]=[];
   const desc=document.getElementById('m-desc')?.value.trim()||'';
-  const img=document.getElementById('m-img')?.value.trim()||'';
+  const images=getItemImages('m');
+  const img=images[0]||'';
   const menuPrices=getPriceTiers('m');
   const menuFlavors=getFlavors('m');
   inv[cat].push({name,bought,left,prices:menuPrices,flavors:menuFlavors,costTotal,costQty,costPerUnit,
-    desc,img,
+    desc,img,images,
     showStaffPrice:menuPrices.length>0,staffPriceType:'flat',
     staffFlat:menuPrices.length===1?menuPrices[0].price:0,
     staffUnit:0,staffUnitLabel:'per g'
@@ -2081,7 +2218,8 @@ function openAdd(cat){
   document.getElementById('m-name').value='';
   document.getElementById('m-bought').value='';
   if(document.getElementById('m-desc'))document.getElementById('m-desc').value='';
-  if(document.getElementById('m-img')){document.getElementById('m-img').value='';const p=document.getElementById('m-img-preview');if(p)p.style.display='none';const f=document.getElementById('m-img-file');if(f)f.value='';}
+  mPhotos=[];renderPhotos('m');
+  if(document.getElementById('m-img')){document.getElementById('m-img').value='';const f=document.getElementById('m-img-file');if(f)f.value='';}
   mPriceTiers=[];renderPriceTiers('m');
   mFlavors=[];renderFlavors('m');
   document.getElementById('m-left').value='';
@@ -2097,10 +2235,17 @@ function openEdit(cat,idx){
   const item=(inv[cat]||[])[idx];
   document.getElementById('em-name').value=item.name;
   if(document.getElementById('em-desc'))document.getElementById('em-desc').value=item.desc||'';
+  // load photos array (backward compat: if only item.img exists, use that)
+  if(Array.isArray(item.images)&&item.images.length){
+    emPhotos=item.images.slice();
+  }else if(item.img){
+    emPhotos=[item.img];
+  }else{
+    emPhotos=[];
+  }
+  renderPhotos('em');
   if(document.getElementById('em-img')){
     document.getElementById('em-img').value=item.img||'';
-    if(item.img){showImgPreview(item.img,'em-img-preview');}
-    else{const p=document.getElementById('em-img-preview');if(p)p.style.display='none';}
   }
   // Load price tiers
   emPriceTiers = Array.isArray(item.prices) ? item.prices.map(p=>({label:p.label,price:p.price,addOnOnly:!!p.addOnOnly})) : [];
@@ -2120,7 +2265,9 @@ function saveEdit(){
   const item=(inv[cat]||[])[idx];
   item.name=document.getElementById('em-name').value.trim().toLowerCase()||item.name;
   item.desc=document.getElementById('em-desc')?.value.trim()||item.desc||'';
-  item.img=document.getElementById('em-img')?.value.trim()||item.img||'';
+  const editImages=getItemImages('em');
+  item.images=editImages;
+  item.img=editImages[0]||document.getElementById('em-img')?.value.trim()||item.img||'';
   const newPrices=getPriceTiers('em');
   if(newPrices.length>0){
     item.prices=newPrices;
@@ -2654,20 +2801,20 @@ function processAutoDailyDebts(){
 function repairCommission(total,profit,who){
   const ownerNames=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
   if(ownerNames.includes(who))return 0;
-  if(!profit||profit<=0)return 0;
   const tiers=cfg.commissionTiers.slice().sort((a,b)=>a.min-b.min);
   let pct=0;
   for(const t of tiers){
     if(total>=t.min&&(t.max==null||total<=t.max)){pct=t.pct;break;}
   }
   if(pct===0&&tiers.length>0)pct=tiers[tiers.length-1].pct;
-  let comm=profit*(pct/100);
-  if(profit>0&&comm<(cfg.commissionFloorMin||10))comm=cfg.commissionFloorMin||10;
+  let comm=(profit>0)?profit*(pct/100):0;
+  // floor: commission is at least $10 minimum per order as long as there's a sale (total > 0)
+  if(total>0&&comm<(cfg.commissionFloorMin||10))comm=cfg.commissionFloorMin||10;
   return Math.floor(comm);
 }
 
 function repairAllCommissions(){
-  const repairKey='commRepairV9';
+  const repairKey='commRepairV10';
   if(localStorage.getItem(repairKey)==='done')return;
   let changed=false;
 
@@ -3351,6 +3498,19 @@ function addEODItemRow(){
   document.getElementById('add-eod-items-list').appendChild(row);
 }
 
+function toggleEODSplit(){
+  const pay=document.getElementById('add-eod-pay').value;
+  const sf=document.getElementById('eod-split-fields');
+  if(sf)sf.style.display=pay==='split'?'block':'none';
+  if(pay==='split')updateEODSplitTotal();
+  updateAddEODPreview();
+}
+function updateEODSplitTotal(){
+  const c=parseFloat(document.getElementById('eod-split-cash').value)||0;
+  const v=parseFloat(document.getElementById('eod-split-virtual').value)||0;
+  document.getElementById('add-eod-total').value=c+v;
+  updateAddEODPreview();
+}
 function updateAddEODPreview(){
   const total=parseFloat(document.getElementById('add-eod-total').value)||0;
   const who=document.getElementById('add-eod-who').value;
@@ -3363,7 +3523,7 @@ function updateAddEODPreview(){
     const found=itemLk[r.name];
     if(found)cost+=cpuItem(found)*(r.qty||0);
   });
-  const isVirtual=VIRT.includes(pay);
+  const isVirtual=VIRT.includes(pay)||pay==='split';
   const profit=Math.max(0,total-(isVirtual?5:0)-cost);
   const ownerNames=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
   const comm=ownerNames.includes(who)?0:repairCommission(total,profit,who);
@@ -3402,7 +3562,7 @@ function saveAddEODOrder(){
     const found=itemLk[(it.itemName||'').toLowerCase()];
     if(found)cost+=cpuItem(found)*(it.qty||0);
   });
-  const isVirtual=VIRT.includes(pay);
+  const isVirtual=VIRT.includes(pay)||pay==='split';
   const profit=Math.max(0,total-(isVirtual?5:0)-cost);
   const ownerNames=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
   const commission=ownerNames.includes(who)?0:repairCommission(total,profit,who);
@@ -3423,6 +3583,10 @@ function saveAddEODOrder(){
     payMethod:pay,time,note:note||undefined,
     items,date:r.date
   };
+  if(pay==='split'){
+    newOrder.splitCash=parseFloat(document.getElementById('eod-split-cash').value)||0;
+    newOrder.splitVirtual=parseFloat(document.getElementById('eod-split-virtual').value)||0;
+  }
 
   // add to EOD log
   if(!r.orders)r.orders=[];
@@ -3434,7 +3598,10 @@ function saveAddEODOrder(){
   cfg.users.forEach(u=>{newCommByPerson[u.name]=0;});
   r.orders.forEach(ord=>{
     grandTotal+=ord.total||0;
-    if(ord.payMethod&&(ord.payMethod.toLowerCase().includes('cashapp')||ord.payMethod.toLowerCase().includes('venmo')||ord.payMethod.toLowerCase().includes('zelle'))){
+    if(ord.payMethod==='split'){
+      cashTotal+=(ord.splitCash||0);
+      virtTotal+=(ord.splitVirtual||0);
+    }else if(ord.payMethod&&(ord.payMethod.toLowerCase().includes('cashapp')||ord.payMethod.toLowerCase().includes('venmo')||ord.payMethod.toLowerCase().includes('zelle'))){
       virtTotal+=ord.total||0;
     }else{cashTotal+=ord.total||0;}
     if(!newCommByPerson[ord.who])newCommByPerson[ord.who]=0;
@@ -3559,8 +3726,12 @@ function viewEODLog(i,filterPerson){
 
   // recalculate totals for filtered view using LIVE values
   const fTotal=filtered.reduce((s,o)=>s+(o.total||0),0);
-  const fCash=filtered.filter(o=>!o.payMethod||o.payMethod.toLowerCase().includes('cash')).reduce((s,o)=>s+(o.total||0),0);
-  const fVirt=fTotal-fCash;
+  let fCash=0,fVirt=0;
+  filtered.forEach(o=>{
+    if(o.payMethod==='split'){fCash+=(o.splitCash||0);fVirt+=(o.splitVirtual||0);}
+    else if(!o.payMethod||o.payMethod==='cash'||o.payMethod==='nopay'){fCash+=(o.total||0);}
+    else{fVirt+=(o.total||0);}
+  });
   const fProfit=filtered.reduce((s,o)=>s+(o._liveProfit||0),0);
   const fComm=filtered.reduce((s,o)=>s+(o._liveComm||0),0);
 
@@ -3727,7 +3898,8 @@ function viewEODLog(i,filterPerson){
           </div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
             ${o.time?`<span style="font-size:13px;color:var(--text2);font-family:var(--mono);">${o.time}</span>`:''}
-            <span style="font-size:13px;color:var(--text2);background:${o.payMethod==='No Pay'?'rgba(244,107,107,0.12)':o.payMethod&&o.payMethod.toLowerCase().includes('cash')?'rgba(62,207,142,0.12)':'rgba(108,99,255,0.12)'};border:1px solid ${o.payMethod==='No Pay'?'rgba(244,107,107,0.3)':o.payMethod&&o.payMethod.toLowerCase().includes('cash')?'rgba(62,207,142,0.3)':'rgba(108,99,255,0.3)'};border-radius:6px;padding:2px 8px;font-weight:600;color:${o.payMethod==='No Pay'?'var(--red)':o.payMethod&&o.payMethod.toLowerCase().includes('cash')?'var(--green)':'#a89cff'};">${o.payMethod||'Cash'}</span>
+            <span style="font-size:13px;color:var(--text2);background:${o.payMethod==='nopay'||o.payMethod==='No Pay'?'rgba(244,107,107,0.12)':o.payMethod==='split'?'linear-gradient(135deg,rgba(62,207,142,0.12),rgba(108,99,255,0.12))':o.payMethod&&o.payMethod==='cash'?'rgba(62,207,142,0.12)':'rgba(108,99,255,0.12)'};border:1px solid ${o.payMethod==='nopay'||o.payMethod==='No Pay'?'rgba(244,107,107,0.3)':o.payMethod==='split'?'rgba(108,99,255,0.3)':o.payMethod==='cash'?'rgba(62,207,142,0.3)':'rgba(108,99,255,0.3)'};border-radius:6px;padding:2px 8px;font-weight:600;color:${o.payMethod==='nopay'||o.payMethod==='No Pay'?'var(--red)':o.payMethod==='split'?'#a89cff':o.payMethod==='cash'?'var(--green)':'#a89cff'};">${o.payMethod==='split'?'💵💚 Cash+CashApp':(PM.find(m=>m.id===o.payMethod)?.label||o.payMethod||'Cash')}</span>
+            ${o.payMethod==='split'?`<span style="font-size:11px;color:var(--text3);font-family:var(--mono);">💵${fmtP(o.splitCash||0)} + 💚${fmtP(o.splitVirtual||0)}</span>`:''}
             ${o.creditApplied>0?`<span style="font-size:13px;color:var(--green);font-weight:600;">-${fmtP(o.creditApplied)} credit</span>`:''}
           </div>
           ${items?`<div style="font-size:14px;color:var(--text);font-family:var(--mono);margin-bottom:6px;line-height:1.6;">${items}</div>`:''}
