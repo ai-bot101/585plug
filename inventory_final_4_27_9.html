@@ -3249,7 +3249,7 @@ function buildEODRecord(dateStr){
       items:e.orderItems||(e.name?[{itemName:e.name,qty:e.amount}]:[]),
       total:e.amtReceived||0,
       profit:e.profit||0,
-      payMethod:e.payMethodLabel||'Cash',
+      payMethod:e.payMethod||'cash',
       commission:e.commission||0,
       creditApplied:e.creditApplied||0,
       note:e.note||'',
@@ -3728,8 +3728,9 @@ function viewEODLog(i,filterPerson){
   const fTotal=filtered.reduce((s,o)=>s+(o.total||0),0);
   let fCash=0,fVirt=0;
   filtered.forEach(o=>{
-    if(o.payMethod==='split'){fCash+=(o.splitCash||0);fVirt+=(o.splitVirtual||0);}
-    else if(!o.payMethod||o.payMethod==='cash'||o.payMethod==='nopay'){fCash+=(o.total||0);}
+    const pm=(o.payMethod||'cash').toLowerCase();
+    if(pm==='split'){fCash+=(o.splitCash||0);fVirt+=(o.splitVirtual||0);}
+    else if(!o.payMethod||pm==='cash'||pm==='nopay'||pm==='no pay'){fCash+=(o.total||0);}
     else{fVirt+=(o.total||0);}
   });
   const fProfit=filtered.reduce((s,o)=>s+(o._liveProfit||0),0);
@@ -3898,7 +3899,7 @@ function viewEODLog(i,filterPerson){
           </div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
             ${o.time?`<span style="font-size:13px;color:var(--text2);font-family:var(--mono);">${o.time}</span>`:''}
-            <span style="font-size:13px;color:var(--text2);background:${o.payMethod==='nopay'||o.payMethod==='No Pay'?'rgba(244,107,107,0.12)':o.payMethod==='split'?'linear-gradient(135deg,rgba(62,207,142,0.12),rgba(108,99,255,0.12))':o.payMethod&&o.payMethod==='cash'?'rgba(62,207,142,0.12)':'rgba(108,99,255,0.12)'};border:1px solid ${o.payMethod==='nopay'||o.payMethod==='No Pay'?'rgba(244,107,107,0.3)':o.payMethod==='split'?'rgba(108,99,255,0.3)':o.payMethod==='cash'?'rgba(62,207,142,0.3)':'rgba(108,99,255,0.3)'};border-radius:6px;padding:2px 8px;font-weight:600;color:${o.payMethod==='nopay'||o.payMethod==='No Pay'?'var(--red)':o.payMethod==='split'?'#a89cff':o.payMethod==='cash'?'var(--green)':'#a89cff'};">${o.payMethod==='split'?'💵💚 Cash+CashApp':(PM.find(m=>m.id===o.payMethod)?.label||o.payMethod||'Cash')}</span>
+            <span style="font-size:13px;color:var(--text2);background:${(()=>{const p=(o.payMethod||'cash').toLowerCase();return p==='nopay'||p==='no pay'?'rgba(244,107,107,0.12)':p==='split'?'linear-gradient(135deg,rgba(62,207,142,0.12),rgba(108,99,255,0.12))':p==='cash'?'rgba(62,207,142,0.12)':'rgba(108,99,255,0.12)';})()};border:1px solid ${(()=>{const p=(o.payMethod||'cash').toLowerCase();return p==='nopay'||p==='no pay'?'rgba(244,107,107,0.3)':p==='split'?'rgba(108,99,255,0.3)':p==='cash'?'rgba(62,207,142,0.3)':'rgba(108,99,255,0.3)';})()};border-radius:6px;padding:2px 8px;font-weight:600;color:${(()=>{const p=(o.payMethod||'cash').toLowerCase();return p==='nopay'||p==='no pay'?'var(--red)':p==='split'?'#a89cff':p==='cash'?'var(--green)':'#a89cff';})()};">${(()=>{const p=(o.payMethod||'cash').toLowerCase();return p==='split'?'💵💚 Cash+CashApp':(PM.find(m=>m.id===p)?.label||o.payMethod||'Cash');})()}</span>
             ${o.payMethod==='split'?`<span style="font-size:11px;color:var(--text3);font-family:var(--mono);">💵${fmtP(o.splitCash||0)} + 💚${fmtP(o.splitVirtual||0)}</span>`:''}
             ${o.creditApplied>0?`<span style="font-size:13px;color:var(--green);font-weight:600;">-${fmtP(o.creditApplied)} credit</span>`:''}
           </div>
