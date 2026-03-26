@@ -425,6 +425,8 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       <div id="staff-earn"></div>
       <div class="totals-banner" id="staff-totals"></div>
       <div class="dcard"><h3>Sales Log</h3><div class="act-log-scroll" id="staff-dact"></div></div>
+      <!-- COMMISSION HISTORY LOG -->
+      <div id="staff-comm-history" style="margin-top:18px;"></div>
     </div>
     <div id="dash-view" style="display:none">
       <!-- PENDING WEBSITE ORDERS -->
@@ -1629,7 +1631,98 @@ const sellExpand=`<div class="ae-expand">
 return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot sell"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name}</span><span class="ae-qbadge">x ${fmt(e.amount)}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${sellExpand}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.amtReceived||0)}</span></div>${showC&&e.commission!=null?`<div class="ae-comm">you: ${fmtP(e.commission)}</div>`:''}${sDelBtn}</div></div>`;}else{if(e.type==='restock'){const w=wcls(e.who);return`<div class="ae"><div class="adot" style="background:var(--green)"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name}</span><span class="ae-qbadge">+${fmt(e.amount)}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div></div><div class="ae-right"><span class="ae-badge add">📦 Restock</span></div></div>`;}
 const tm={add:'add',del:'del',edit:'edit'};const lm={add:'+ Added',del:'Deleted',edit:'Edited'};return`<div class="ae"><div class="adot ${e.type}"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name||''}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div></div><div class="ae-right"><span class="ae-badge ${tm[e.type]||'edit'}">${lm[e.type]||e.type}</span></div></div>`;}}
 function buildLog(entries,staffOnly,showC){if(!entries.length)return'<div class="empty">No activity this day</div>';const f=staffOnly?entries.filter(e=>e.type==='sell'||e.type==='order'||(e.type==='selfbuy'&&e.who===cu?.name)):entries;if(!f.length)return'<div class="empty">No sales this day</div>';return f.map(e=>logEntry(e,showC)).join('');}
-function renderStaffLog(){renderPendingOrders();const days=getDays(),today=tday();const dl=staffSelDay==='today'?today:staffSelDay;document.getElementById('staff-dtabs').innerHTML=days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setSD('${d}')">${it?'Today':d}</div>`;}).join('');const dayLog=log.filter(e=>e.date===dl);const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order');const ec=document.getElementById('staff-earn');const mn=cu?.name;const myDebt=getStaffDebt(mn);const isPaused=!!commissionPaused[mn];if(cfg.showEarnings){const ms=sells.filter(e=>e.who===mn&&e.type!=='selfbuy');const te=ms.reduce((s,e)=>s+(e.commission||0),0);const ts=ms.reduce((s,e)=>s+(e.amtReceived||0),0);ec.innerHTML=`<div class="earn-card"><div class="ec-title">Your Earnings Today</div><div class="ec-total">${fmtP(te)}</div><div class="ec-sub">from ${ms.length} sale${ms.length!==1?'s':''}</div><div class="ec-bk"><div class="ec-row"><span class="ec-rl">Your sales total</span><span class="ec-rv">${fmtP(ts)}</span></div><div class="ec-row"><span class="ec-rl">Your commission</span><span class="ec-rv">${fmtP(te)}</span></div>${myDebt>0?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">&#9888; Amount Owed to Owner</span><span class="ec-rv" style="color:var(--red);">-${fmtP(myDebt)}</span></div><div style="font-size:11px;color:var(--red);margin-top:4px;opacity:.8;">Will be deducted from your next payout</div>`:""}${isPaused?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">&#9940; Commission Paused</span><span class="ec-rv" style="color:var(--red);">$0 earned</span></div>`:"" }</div></div>`;}else{const notices=[];if(myDebt>0)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9888; You Owe</div><div style="font-size:28px;font-weight:700;font-family:var(--mono);color:var(--red);">${fmtP(myDebt)}</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Will be deducted from your next commission payout</div></div>`);if(isPaused)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9940; Commission Paused</div><div style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--red);">$0 per order</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Owner has paused your commission</div></div>`);ec.innerHTML=notices.join('');}document.getElementById('staff-totals').innerHTML=totBanner(sells,dl,dl===today);document.getElementById('staff-dact').innerHTML=buildLog(dayLog,true,cfg.showEarnings);}
+function renderStaffLog(){renderPendingOrders();const days=getDays(),today=tday();const dl=staffSelDay==='today'?today:staffSelDay;document.getElementById('staff-dtabs').innerHTML=days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setSD('${d}')">${it?'Today':d}</div>`;}).join('');const dayLog=log.filter(e=>e.date===dl);const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order');const ec=document.getElementById('staff-earn');const mn=cu?.name;const myDebt=getStaffDebt(mn);const isPaused=!!commissionPaused[mn];if(cfg.showEarnings){const ms=sells.filter(e=>e.who===mn&&e.type!=='selfbuy');const te=ms.reduce((s,e)=>s+(e.commission||0),0);const ts=ms.reduce((s,e)=>s+(e.amtReceived||0),0);ec.innerHTML=`<div class="earn-card"><div class="ec-title">Your Earnings Today</div><div class="ec-total">${fmtP(te)}</div><div class="ec-sub">from ${ms.length} sale${ms.length!==1?'s':''}</div><div class="ec-bk"><div class="ec-row"><span class="ec-rl">Your sales total</span><span class="ec-rv">${fmtP(ts)}</span></div><div class="ec-row"><span class="ec-rl">Your commission</span><span class="ec-rv">${fmtP(te)}</span></div>${myDebt>0?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">&#9888; Amount Owed to Owner</span><span class="ec-rv" style="color:var(--red);">-${fmtP(myDebt)}</span></div><div style="font-size:11px;color:var(--red);margin-top:4px;opacity:.8;">Will be deducted from your next payout</div>`:""}${isPaused?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">&#9940; Commission Paused</span><span class="ec-rv" style="color:var(--red);">$0 earned</span></div>`:"" }</div></div>`;}else{const notices=[];if(myDebt>0)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9888; You Owe</div><div style="font-size:28px;font-weight:700;font-family:var(--mono);color:var(--red);">${fmtP(myDebt)}</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Will be deducted from your next commission payout</div></div>`);if(isPaused)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9940; Commission Paused</div><div style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--red);">$0 per order</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Owner has paused your commission</div></div>`);ec.innerHTML=notices.join('');}document.getElementById('staff-totals').innerHTML=totBanner(sells,dl,dl===today);document.getElementById('staff-dact').innerHTML=buildLog(dayLog,true,cfg.showEarnings);renderStaffCommHistory();}
+let staffCommExpanded={};
+function renderStaffCommHistory(){
+  const el=document.getElementById('staff-comm-history');
+  if(!el||!cu)return;
+  const mn=cu.name;
+  const allSells=log.filter(e=>(e.type==='sell'||e.type==='order')&&e.who===mn);
+  const totalComm=allSells.reduce((s,e)=>s+(e.commission||0),0);
+  const totalSales=allSells.reduce((s,e)=>s+(e.amtReceived||0),0);
+  // group by date
+  const byDate={};
+  allSells.forEach(e=>{
+    if(!byDate[e.date])byDate[e.date]={orders:[],comm:0,sales:0};
+    byDate[e.date].orders.push(e);
+    byDate[e.date].comm+=(e.commission||0);
+    byDate[e.date].sales+=(e.amtReceived||0);
+  });
+  const dates=Object.keys(byDate).sort((a,b)=>new Date(b)-new Date(a));
+  const today=tday();
+  let html=`<div class="dcard" style="margin-top:0;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <h3 style="margin:0;">Commission History</h3>
+      <span style="font-size:10px;color:var(--text3);font-family:var(--mono);">${dates.length} day${dates.length!==1?'s':''}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+      <div style="background:rgba(244,162,74,0.08);border:1px solid rgba(244,162,74,0.25);border-radius:12px;padding:14px;text-align:center;">
+        <div style="font-size:9px;color:var(--orange);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total Commission</div>
+        <div style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--orange);">${fmtP(totalComm)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px;">${allSells.length} total orders</div>
+      </div>
+      <div style="background:rgba(62,207,142,0.08);border:1px solid rgba(62,207,142,0.25);border-radius:12px;padding:14px;text-align:center;">
+        <div style="font-size:9px;color:var(--green);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total Sales</div>
+        <div style="font-size:26px;font-weight:700;font-family:var(--mono);color:var(--green);">${fmtP(totalSales)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px;">all time</div>
+      </div>
+    </div>`;
+  if(!dates.length){
+    html+='<div class="empty">No sales yet</div></div>';
+    el.innerHTML=html;return;
+  }
+  html+='<div style="display:flex;flex-direction:column;gap:6px;">';
+  dates.forEach(d=>{
+    const dd=byDate[d];
+    const isToday=d===today;
+    const isOpen=!!staffCommExpanded[d];
+    html+=`<div style="background:var(--bg3);border:1px solid ${isToday?'rgba(62,207,142,0.3)':'var(--border)'};border-radius:12px;overflow:hidden;">
+      <div onclick="toggleStaffCommDay('${d}')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;user-select:none;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:14px;">${isOpen?'▼':'▶'}</span>
+          <div>
+            <div style="font-size:14px;font-weight:600;color:${isToday?'var(--green)':'var(--text)'};">${isToday?'Today':d}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">${dd.orders.length} order${dd.orders.length!==1?'s':''} · Sales: ${fmtP(dd.sales)}</div>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:18px;font-weight:700;font-family:var(--mono);color:var(--orange);">${fmtP(dd.comm)}</div>
+          <div style="font-size:9px;color:var(--text3);font-family:var(--mono);">COMMISSION</div>
+        </div>
+      </div>`;
+    if(isOpen){
+      html+='<div style="border-top:1px solid var(--border);padding:10px 14px;display:flex;flex-direction:column;gap:8px;">';
+      dd.orders.forEach(o=>{
+        const name=o.customer||o.name||'Quick Sell';
+        const pmL=(o.payMethod||'cash').toLowerCase();
+        const pmLabel=PM.find(m=>m.id===pmL)?.label||o.payMethodLabel||o.payMethod||'Cash';
+        const isCash=pmL==='cash'||pmL==='nopay';
+        const pmColor=pmL==='nopay'?'var(--red)':pmL==='split'?'#a89cff':isCash?'var(--green)':'#a89cff';
+        html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:3px;">
+              ${o.time?`<span style="font-size:11px;color:var(--text3);font-family:var(--mono);">${o.time}</span>`:''}
+              <span style="font-size:10px;color:${pmColor};background:${pmColor}15;border:1px solid ${pmColor}33;border-radius:5px;padding:1px 6px;font-weight:600;">${pmLabel}</span>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;margin-left:10px;">
+            <div style="font-size:15px;font-weight:700;font-family:var(--mono);color:var(--green);">${fmtP(o.amtReceived||0)}</div>
+            <div style="font-size:12px;font-weight:600;font-family:var(--mono);color:var(--orange);">+${fmtP(o.commission||0)}</div>
+          </div>
+        </div>`;
+      });
+      html+='</div>';
+    }
+    html+='</div>';
+  });
+  html+='</div></div>';
+  el.innerHTML=html;
+}
+function toggleStaffCommDay(d){
+  staffCommExpanded[d]=!staffCommExpanded[d];
+  renderStaffCommHistory();
+}
 function setSD(d){staffSelDay=d;renderStaffLog();}
 function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today'?today:selDay;document.getElementById('dtabs').innerHTML=`<div class="dtab ${selDay==='alltime'?'active':''}" onclick="setDay('alltime')" style="${selDay==='alltime'?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`+days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setDay('${d}')">${it?'Today':d}</div>`;}).join('');const isAllTime=selDay==='alltime';const dayLog=isAllTime?log:log.filter(e=>e.date===dl);const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order');document.getElementById('owner-totals').innerHTML=isAllTime?totBanner(sells,'All Time',false,true):totBanner(sells,dl,dl===today,true);const bd={};PM.forEach(m=>{bd[m.id]={total:0,count:0,label:m.label,icon:m.icon};});sells.forEach(e=>{const mid=e.payMethod||'cash';if(!bd[mid])bd[mid]={total:0,count:0,label:e.payMethodLabel||mid,icon:'💰'};bd[mid].total+=(e.amtReceived||0);bd[mid].count++;});document.getElementById('pay-breakdown').innerHTML=Object.entries(bd).map(([id,d])=>`<div class="pb-card"><div class="pb-icon">${d.icon}</div><div class="pb-method">${d.label}</div><div class="pb-total">${fmtP(d.total)}</div><div class="pb-count">${d.count} sale${d.count!==1?'s':''}</div></div>`).join('');document.getElementById('dact').innerHTML=isAllTime ? buildLog(log.slice(0,100),false,true) : buildLog(dayLog,false,true);
   renderCredits();
