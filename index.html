@@ -512,7 +512,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
 // ── CONFIG ──
 const OWNER_PHONE = '5854897355';
 const FB_URL = 'https://calculator-app-d6bb4-default-rtdb.firebaseio.com';
-const ACCESS_CODE = '585PLUG';
+const ACCESS_CODE_HASH = '00d3eb316573b4a1bf05d0fd4725eacfa50ef670b2104687dccb5af4d2b4c8ed';
 const VIRTUAL_FEE = 5;
 const VIRTUAL = ['cashapp','venmo','applepay'];
 
@@ -641,9 +641,10 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-function tryAccess() {
+async function tryAccess() {
   const val = document.getElementById('ag-code').value.trim().toUpperCase();
-  if (val === ACCESS_CODE) {
+  const h = await sha256(val);
+  if (h === ACCESS_CODE_HASH) {
     localStorage.setItem('585plug_v','1');
     document.getElementById('access-gate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
@@ -1365,7 +1366,8 @@ function sendOrder() {
 }
 
 // ── ADMIN ──
-const ADMIN_PW = '251765';
+async function sha256(str){const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');}
+const ADMIN_PW_HASH = 'ca1cb21ef8c7bf00826695014fa4505f3b62eb8d9c92bffebdfbcb0636e50dae';
 let adminUnlocked = false;
 
 function openAdminGate() {
@@ -1380,9 +1382,10 @@ function closeAdminGate() {
   document.getElementById('admin-gate').classList.remove('open');
 }
 
-function tryAdmin() {
+async function tryAdmin() {
   const pw = document.getElementById('adg-pw').value.trim();
-  if (pw === ADMIN_PW) {
+  const h = await sha256(pw);
+  if (h === ADMIN_PW_HASH) {
     adminUnlocked = true;
     closeAdminGate();
     openAdmin();
