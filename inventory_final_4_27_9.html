@@ -1000,6 +1000,24 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
       <input type="text" id="edit-log-note" placeholder="Optional note" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;">
     </div>
     <div class="field" style="margin-top:12px;">
+      <label>Payment Method</label>
+      <div id="edit-log-pm-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+    <div id="edit-log-split-fields" style="display:none;margin-top:8px;background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:12px;">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-family:var(--mono);">SPLIT: Cash + CashApp</div>
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1;">
+          <label style="font-size:11px;color:var(--green);">💵 Cash Amount</label>
+          <input type="number" id="edit-log-split-cash" min="0" step="0.01" oninput="updateEditLogSplit()" placeholder="$0.00" style="width:100%;background:var(--bg3);border:1px solid rgba(62,207,142,0.3);border-radius:8px;padding:8px 10px;color:var(--green);font-family:var(--mono);font-size:14px;outline:none;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:11px;color:#a89cff;">💚 CashApp Amount</label>
+          <input type="number" id="edit-log-split-virtual" min="0" step="0.01" oninput="updateEditLogSplit()" placeholder="$0.00" style="width:100%;background:var(--bg3);border:1px solid rgba(108,99,255,0.3);border-radius:8px;padding:8px 10px;color:#a89cff;font-family:var(--mono);font-size:14px;outline:none;">
+        </div>
+      </div>
+      <div id="edit-log-split-summary" style="margin-top:8px;font-size:12px;font-family:var(--mono);color:var(--text3);text-align:center;"></div>
+    </div>
+    <div class="field" style="margin-top:12px;">
       <label>Staff Commission ($) <span style="font-size:11px;color:var(--text3);font-weight:400;">— leave blank for auto-calc</span></label>
       <input type="number" id="edit-log-commission" min="0" step="0.01" oninput="updateLogEditPreview()" placeholder="Auto" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--orange);font-family:var(--mono);font-size:16px;outline:none;">
     </div>
@@ -1631,7 +1649,7 @@ const sellExpand=`<div class="ae-expand">
 return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot sell"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name}</span><span class="ae-qbadge">x ${fmt(e.amount)}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${sellExpand}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.amtReceived||0)}</span></div>${showC&&e.commission!=null?`<div class="ae-comm">you: ${fmtP(e.commission)}</div>`:''}${sDelBtn}</div></div>`;}else{if(e.type==='restock'){const w=wcls(e.who);return`<div class="ae"><div class="adot" style="background:var(--green)"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name}</span><span class="ae-qbadge">+${fmt(e.amount)}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div></div><div class="ae-right"><span class="ae-badge add">📦 Restock</span></div></div>`;}
 const tm={add:'add',del:'del',edit:'edit'};const lm={add:'+ Added',del:'Deleted',edit:'Edited'};return`<div class="ae"><div class="adot ${e.type}"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name||''}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div></div><div class="ae-right"><span class="ae-badge ${tm[e.type]||'edit'}">${lm[e.type]||e.type}</span></div></div>`;}}
 function buildLog(entries,staffOnly,showC){if(!entries.length)return'<div class="empty">No activity this day</div>';const f=staffOnly?entries.filter(e=>e.type==='sell'||e.type==='order'||(e.type==='selfbuy'&&e.who===cu?.name)):entries;if(!f.length)return'<div class="empty">No sales this day</div>';return f.map(e=>logEntry(e,showC)).join('');}
-function renderStaffLog(){renderPendingOrders();const days=getDays(),today=tday();const dl=staffSelDay==='today'?today:staffSelDay;document.getElementById('staff-dtabs').innerHTML=days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setSD('${d}')">${it?'Today':d}</div>`;}).join('');const dayLog=log.filter(e=>e.date===dl);const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order');const ec=document.getElementById('staff-earn');const mn=cu?.name;const myDebt=getStaffDebt(mn);const isPaused=!!commissionPaused[mn];if(cfg.showEarnings){const ms=sells.filter(e=>e.who===mn&&e.type!=='selfbuy');const te=ms.reduce((s,e)=>s+(e.commission||0),0);const ts=ms.reduce((s,e)=>s+(e.amtReceived||0),0);ec.innerHTML=`<div class="earn-card"><div class="ec-title">Your Earnings Today</div><div class="ec-total">${fmtP(te)}</div><div class="ec-sub">from ${ms.length} sale${ms.length!==1?'s':''}</div><div class="ec-bk"><div class="ec-row"><span class="ec-rl">Your sales total</span><span class="ec-rv">${fmtP(ts)}</span></div><div class="ec-row"><span class="ec-rl">Your commission</span><span class="ec-rv">${fmtP(te)}</span></div>${myDebt>0?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">&#9888; Amount Owed to Owner</span><span class="ec-rv" style="color:var(--red);">-${fmtP(myDebt)}</span></div><div style="font-size:11px;color:var(--red);margin-top:4px;opacity:.8;">Will be deducted from your next payout</div>`:""}${isPaused?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">&#9940; Commission Paused</span><span class="ec-rv" style="color:var(--red);">$0 earned</span></div>`:"" }</div></div>`;}else{const notices=[];if(myDebt>0)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9888; You Owe</div><div style="font-size:28px;font-weight:700;font-family:var(--mono);color:var(--red);">${fmtP(myDebt)}</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Will be deducted from your next commission payout</div></div>`);if(isPaused)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9940; Commission Paused</div><div style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--red);">$0 per order</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Owner has paused your commission</div></div>`);ec.innerHTML=notices.join('');}document.getElementById('staff-totals').innerHTML=totBanner(sells,dl,dl===today);document.getElementById('staff-dact').innerHTML=buildLog(dayLog,true,cfg.showEarnings);renderStaffCommHistory();}
+function renderStaffLog(){renderPendingOrders();const days=getDays(),today=tday();const isAllTime=staffSelDay==='alltime';const dl=isAllTime?'alltime':staffSelDay==='today'?today:staffSelDay;document.getElementById('staff-dtabs').innerHTML=`<div class="dtab ${isAllTime?'active':''}" onclick="setSD('alltime')" style="${isAllTime?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`+days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setSD('${d}')">${it?'Today':d}</div>`;}).join('');const dayLog=isAllTime?log:log.filter(e=>e.date===dl);const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order');const ec=document.getElementById('staff-earn');const mn=cu?.name;const myDebt=getStaffDebt(mn);const isPaused=!!commissionPaused[mn];if(cfg.showEarnings){const ms=isAllTime?log.filter(e=>(e.type==='sell'||e.type==='order')&&e.who===mn):sells.filter(e=>e.who===mn&&e.type!=='selfbuy');const te=ms.reduce((s,e)=>s+(e.commission||0),0);const ts=ms.reduce((s,e)=>s+(e.amtReceived||0),0);const earnLabel=isAllTime?'All-Time Earnings':'Your Earnings Today';const earnSub=isAllTime?`across ${[...new Set(ms.map(e=>e.date))].length} day${[...new Set(ms.map(e=>e.date))].length!==1?'s':''}`:(`from ${ms.length} sale${ms.length!==1?'s':''}`);ec.innerHTML=`<div class="earn-card"><div class="ec-title">${earnLabel}</div><div class="ec-total">${fmtP(te)}</div><div class="ec-sub">${earnSub}</div><div class="ec-bk"><div class="ec-row"><span class="ec-rl">${isAllTime?'All-time sales total':'Your sales total'}</span><span class="ec-rv">${fmtP(ts)}</span></div><div class="ec-row"><span class="ec-rl">${isAllTime?'All-time commission':'Your commission'}</span><span class="ec-rv">${fmtP(te)}</span></div><div class="ec-row"><span class="ec-rl">Total orders</span><span class="ec-rv">${ms.length}</span></div>${myDebt>0?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">&#9888; Amount Owed to Owner</span><span class="ec-rv" style="color:var(--red);">-${fmtP(myDebt)}</span></div><div style="font-size:11px;color:var(--red);margin-top:4px;opacity:.8;">Will be deducted from your next payout</div>`:""}${isPaused?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">&#9940; Commission Paused</span><span class="ec-rv" style="color:var(--red);">$0 earned</span></div>`:"" }</div></div>`;}else{const notices=[];if(myDebt>0)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9888; You Owe</div><div style="font-size:28px;font-weight:700;font-family:var(--mono);color:var(--red);">${fmtP(myDebt)}</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Will be deducted from your next commission payout</div></div>`);if(isPaused)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9940; Commission Paused</div><div style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--red);">$0 per order</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Owner has paused your commission</div></div>`);ec.innerHTML=notices.join('');}document.getElementById('staff-totals').innerHTML=isAllTime?totBanner(sells,'All Time',false):totBanner(sells,dl,dl===today);document.getElementById('staff-dact').innerHTML=isAllTime?buildLog(log.slice(0,100),true,cfg.showEarnings):buildLog(dayLog,true,cfg.showEarnings);renderStaffCommHistory();}
 let staffCommExpanded={};
 function renderStaffCommHistory(){
   const el=document.getElementById('staff-comm-history');
@@ -1875,6 +1893,17 @@ function openEditLog(idx){
   }else{itemsEl.innerHTML='';}
   document.getElementById('edit-log-total').value=e.amtReceived||0;
   document.getElementById('edit-log-note').value=e.note||'';
+  // pre-fill payment method
+  editLogPayMethod=(e.payMethod||'cash').toLowerCase();
+  const pmBtns=document.getElementById('edit-log-pm-btns');
+  pmBtns.innerHTML=PM.map(m=>`<div onclick="setEditLogPM('${m.id}')" id="elpm-${m.id}" style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--sans);border:2px solid var(--border);background:var(--bg3);color:var(--text2);display:flex;align-items:center;gap:5px;transition:all .15s;user-select:none;"><span>${m.icon}</span><span>${m.label}</span></div>`).join('');
+  setEditLogPM(editLogPayMethod,true);
+  // pre-fill split amounts
+  if(editLogPayMethod==='split'){
+    document.getElementById('edit-log-split-cash').value=e.splitCash||0;
+    document.getElementById('edit-log-split-virtual').value=e.splitVirtual||0;
+    updateEditLogSplit();
+  }
   // pre-fill commission: show current value, allow manual override
   const commInput=document.getElementById('edit-log-commission');
   if(e.commission!==undefined&&e.commission!==null){
@@ -1884,6 +1913,36 @@ function openEditLog(idx){
   }
   updateLogEditPreview();
   document.getElementById('edit-log-modal').classList.add('open');
+}
+let editLogPayMethod='cash';
+function setEditLogPM(id,init){
+  editLogPayMethod=id;
+  PM.forEach(m=>{
+    const btn=document.getElementById('elpm-'+m.id);
+    if(!btn)return;
+    const sel=m.id===id;
+    btn.style.borderColor=sel?'var(--accent)':'var(--border)';
+    btn.style.background=sel?'rgba(108,99,255,0.15)':'var(--bg3)';
+    btn.style.color=sel?'var(--accent)':'var(--text2)';
+  });
+  const sf=document.getElementById('edit-log-split-fields');
+  if(sf)sf.style.display=id==='split'?'block':'none';
+  if(!init){
+    if(id==='split'){
+      document.getElementById('edit-log-split-cash').value='';
+      document.getElementById('edit-log-split-virtual').value='';
+      document.getElementById('edit-log-split-summary').innerHTML='';
+    }
+    updateLogEditPreview();
+  }
+}
+function updateEditLogSplit(){
+  const cashAmt=parseFloat(document.getElementById('edit-log-split-cash').value)||0;
+  const virtAmt=parseFloat(document.getElementById('edit-log-split-virtual').value)||0;
+  const total=cashAmt+virtAmt;
+  document.getElementById('edit-log-split-summary').innerHTML='💵 '+fmtP(cashAmt)+' + 💚 '+fmtP(virtAmt)+' = '+fmtP(total);
+  document.getElementById('edit-log-total').value=total;
+  updateLogEditPreview();
 }
 function updateLogEditPreview(){
   if(editLogIdx===null)return;
@@ -1905,15 +1964,17 @@ function updateLogEditPreview(){
     const qty=parseFloat(document.querySelector('.log-item-qty')?.value)||0;
     if(found)cost+=cpuItem(found)*qty;
   }
-  const isVirtual=e.payMethod&&VIRT.includes(e.payMethod);
+  const pm=editLogPayMethod||'cash';
+  const isVirtual=VIRT.includes(pm)||pm==='split';
   const profit=Math.max(0,newTotal-(isVirtual?5:0)-cost);
   const commInput=document.getElementById('edit-log-commission');
   const manualComm=commInput&&commInput.value!==''?parseFloat(commInput.value):null;
   const autoComm=repairCommission(newTotal,profit,e.who);
   const comm=manualComm!==null?manualComm:autoComm;
   const isManual=manualComm!==null&&Math.abs(manualComm-autoComm)>0.01;
+  const pmLabel=PM.find(m=>m.id===pm)?.label||pm;
   const prev=document.getElementById('edit-log-preview');
-  prev.innerHTML=`Cost: ${fmtP(cost)} · Profit: <span style="color:var(--green)">${fmtP(profit)}</span> · Commission: <span style="color:var(--orange)">${fmtP(comm)}${isManual?' (manual)':''}</span> · Owner: <span style="color:var(--green)">${fmtP(profit-comm)}</span>`;
+  prev.innerHTML=`Cost: ${fmtP(cost)} · Profit: <span style="color:var(--green)">${fmtP(profit)}</span> · Commission: <span style="color:var(--orange)">${fmtP(comm)}${isManual?' (manual)':''}</span> · Pay: <span style="color:var(--accent)">${pmLabel}</span>`;
 }
 function saveLogEdit(){
   if(editLogIdx===null)return;
@@ -1938,6 +1999,17 @@ function saveLogEdit(){
   if(isOrder)e.total=newTotal;
   // update note
   e.note=document.getElementById('edit-log-note').value.trim();
+  // update payment method
+  const newPM=editLogPayMethod||'cash';
+  e.payMethod=newPM;
+  e.payMethodLabel=PM.find(m=>m.id===newPM)?.label||newPM;
+  if(newPM==='split'){
+    e.splitCash=parseFloat(document.getElementById('edit-log-split-cash').value)||0;
+    e.splitVirtual=parseFloat(document.getElementById('edit-log-split-virtual').value)||0;
+  }else{
+    delete e.splitCash;
+    delete e.splitVirtual;
+  }
   // recalculate profit using current costs
   let cost=0;
   const itemLk={};
@@ -1951,7 +2023,7 @@ function saveLogEdit(){
     const found=itemLk[(e.name||'').toLowerCase()];
     if(found)cost+=cpuItem(found)*(e.amount||0);
   }
-  const isVirtual=e.payMethod&&VIRT.includes(e.payMethod);
+  const isVirtual=VIRT.includes(newPM)||newPM==='split';
   e.profit=Math.max(0,newTotal-(isVirtual?5:0)-cost);
   // commission: use manual override if entered, otherwise auto-calc
   const ownerNames=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
@@ -1972,6 +2044,9 @@ function saveLogEdit(){
         o.total=newTotal;
         o.profit=e.profit;
         o.commission=e.commission;
+        o.payMethod=newPM;
+        if(newPM==='split'){o.splitCash=e.splitCash;o.splitVirtual=e.splitVirtual;}
+        else{delete o.splitCash;delete o.splitVirtual;}
         if(e.commissionManual)o.commissionManual=true; else delete o.commissionManual;
         o.note=e.note;
         if(isOrder&&e.orderItems)o.items=e.orderItems.map(oi=>({itemName:oi.itemName,qty:oi.qty}));
@@ -1979,11 +2054,19 @@ function saveLogEdit(){
       }
     });
     // recalc EOD totals
-    let gt=0;const ncbp={};
+    let gt=0,ct=0,vt=0;const ncbp={};
     cfg.users.forEach(u=>{ncbp[u.name]=0;});
     let tp=0;
-    r.orders.forEach(ord=>{gt+=ord.total||0;ncbp[ord.who]=(ncbp[ord.who]||0)+(ord.commission||0);tp+=(ord.profit||0);});
-    r.grandTotal=gt;r.totalProfit=tp;r.commByPerson=ncbp;
+    r.orders.forEach(ord=>{
+      gt+=ord.total||0;
+      ncbp[ord.who]=(ncbp[ord.who]||0)+(ord.commission||0);
+      tp+=(ord.profit||0);
+      const opm=(ord.payMethod||'cash').toLowerCase();
+      if(opm==='split'){ct+=(ord.splitCash||0);vt+=(ord.splitVirtual||0);}
+      else if(opm==='cash'||opm==='nopay'){ct+=(ord.total||0);}
+      else{vt+=(ord.total||0);}
+    });
+    r.grandTotal=gt;r.cashTotal=ct;r.virtTotal=vt;r.totalProfit=tp;r.commByPerson=ncbp;
     const sc=cfg.users.filter(u=>u.role==='staff').reduce((s,u)=>s+(ncbp[u.name]||0),0);
     r.staffComm=sc;r.ownerNet=Math.max(0,tp-sc);
   });
