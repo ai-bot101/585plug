@@ -2057,7 +2057,7 @@ function saveLogEdit(){
   eodLogs.forEach(r=>{
     if(!r.orders)return;
     r.orders.forEach(o=>{
-      if(o.who===e.who&&o.time===e.time&&r.date===e.date){
+      if(o.who===e.who&&o.time===e.time&&r.date===e.date&&(o.customer||'').toLowerCase()===(e.customer||e.name||'').toLowerCase()){
         if(isOrder)o.customer=e.customer;
         o.total=newTotal;
         o.profit=e.profit;
@@ -3590,7 +3590,8 @@ function saveEODOrderEdit(){
   r.ownerNet=Math.max(0,totalProfit-staffComm);
   r.txCount=r.orders.length;
   // also update the matching log entry if it exists
-  const matchingLog=log.find(e=>(e.type==='sell'||e.type==='order')&&e.who===o.who&&e.time===o.time&&e.date===r.date);
+  const oCust=(o.customer||'').toLowerCase();
+  const matchingLog=log.find(e=>(e.type==='sell'||e.type==='order')&&e.who===o.who&&e.time===o.time&&e.date===r.date&&(e.customer||e.name||'').toLowerCase()===oCust);
   if(matchingLog){
     if(matchingLog.orderItems){
       matchingLog.orderItems.forEach((oi,ii)=>{
@@ -3637,7 +3638,8 @@ function deleteEODOrder(logIdx,orderIdx){
   }
 
   // ── REMOVE MATCHING ACTIVITY LOG ENTRY ──
-  const matchIdx=log.findIndex(e=>(e.type==='sell'||e.type==='order')&&e.who===o.who&&e.time===o.time&&e.date===r.date);
+  const delCust=(o.customer||'').toLowerCase();
+  const matchIdx=log.findIndex(e=>(e.type==='sell'||e.type==='order')&&e.who===o.who&&e.time===o.time&&e.date===r.date&&(e.customer||e.name||'').toLowerCase()===delCust);
   if(matchIdx>=0){
     const entry=log[matchIdx];
     // If it was a website order, delete from Firebase too
