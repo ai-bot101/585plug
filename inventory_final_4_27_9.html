@@ -1278,6 +1278,29 @@ function saveItemCost(){
 function openOrderSheet(){orderItems=[];orderPayMethod=null;document.getElementById('ord-customer').value='';document.getElementById('ord-total').value='';document.getElementById('ord-extra').value='';document.getElementById('ord-short').value='';document.getElementById('ord-note').value='';document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');document.querySelectorAll('.opm-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('comm-prev').classList.remove('show');document.getElementById('credit-alert').style.display='none';document.getElementById('ord-confirm-btn').disabled=true;renderOrdItems();document.getElementById('order-overlay').classList.add('open');setTimeout(()=>document.getElementById('ord-customer').focus(),300);}
 function closeOrder(){document.getElementById('order-overlay').classList.remove('open');}
 function isAddOnOnly(item){return Array.isArray(item.prices)&&item.prices.length>0&&item.prices.every(p=>p.addOnOnly);}
+
+// Strain weight mapping: label → units to deduct from stock
+const LABEL_QTY_MAP = {
+  'eight':3.7,'eighth':3.7,'8th':3.7,
+  'quarter':7.2,'quarters':7.2,'q':7.2,
+  'half':14.2,'halfs':14.2,'halves':14.2,
+  'ounce':28.2,'ounces':28.2,'oz':28.2,'zip':28.2,
+  '2 ounce':56.2,'2 ounces':56.2,'2oz':56.2,'2 oz':56.2,
+  'qp':112.2,'quarter pound':112.2,
+  'hp':224.2,'half pound':224.2,
+  'pound':448,'lb':448,'p':448
+};
+function labelToQty(label) {
+  if (!label) return 1;
+  const l = label.trim().toLowerCase();
+  if (LABEL_QTY_MAP[l] !== undefined) return LABEL_QTY_MAP[l];
+  const numMatch = l.match(/^(\d+)/);
+  if (numMatch) return parseInt(numMatch[1]);
+  for (const [key, val] of Object.entries(LABEL_QTY_MAP)) {
+    if (l.includes(key)) return val;
+  }
+  return 1;
+}
 function searchItems(q){const res=document.getElementById('isr');if(!q.trim()){res.classList.remove('open');return;}const m=[];C().forEach(cat=>{(inv[cat]||[]).forEach((item,ri)=>{if(item.name.toLowerCase().includes(q.toLowerCase())&&gl(item)>0)m.push({cat,ri,item});});});if(!m.length){res.classList.remove('open');return;}res.innerHTML=m.slice(0,8).map(({cat,ri,item})=>{const ao=isAddOnOnly(item);const blocked=ao&&orderItems.length===0;const badge=ao?`<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>`:'';return`<div class="isr-item" onclick="${blocked?`showToast('Add another item first — this is add-on only','err')`:`addIO('${cat}',${ri})`}" style="${blocked?'opacity:0.5;':''}"><span style="text-transform:capitalize">${item.name}${badge}</span><span class="isr-left">${cat} · ${fmt(gl(item))} left${blocked?' · needs other items':''}</span></div>`;}).join('');res.classList.add('open');}
 function addIO(cat,ri){const item=(inv[cat]||[])[ri];if(!item)return;if(isAddOnOnly(item)&&orderItems.length===0){showToast(item.name+' is add-on only — add another item first','err');return;}if(orderItems.find(o=>o.cat===cat&&o.ri===ri)){showToast(item.name+' already in order','err');return;}orderItems.push({cat,ri,itemName:item.name,qty:1});document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');renderOrdItems();calcComm();}
 function renderOrdItems(){const list=document.getElementById('order-items-list');if(!orderItems.length){list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0 12px;">No items added yet — search above</div>';return;}list.innerHTML=orderItems.map((o,i)=>{const it=(inv[o.cat]||[])[o.ri];const ao=it&&isAddOnOnly(it);return`<div class="order-item-row"><div class="oir-name">${o.itemName}${ao?'<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>':''}</div><div class="oir-qty"><input type="number" value="${o.qty}" min="0.1" step="0.1" onchange="updOQ(${i},this.value)"></div><button class="oir-remove" onclick="remOI(${i})">x</button></div>`;}).join('');}
@@ -1579,8 +1602,7 @@ function deleteLogEntry(idx) {
       // Multi-item order
       entry.orderItems.forEach(oi => {
         const itemName = (oi.itemName||oi.name||'').toLowerCase();
-        const labelQty = oi.label ? parseInt(oi.label) : NaN;
-        const qty = !isNaN(labelQty) && labelQty > 0 ? labelQty : (oi.qty || 1);
+        const qty = labelToQty(oi.label);
         for (const c of C()) {
           const found = (inv[c]||[]).find(item => item.name === itemName);
           if (found) { found.left = Math.round((gl(found) + qty)*10)/10; break; }
@@ -2090,8 +2112,7 @@ function processWebsiteOrders(pendingOrders) {
         const logEntry = log[logIdx];
         (logEntry.orderItems||[]).forEach(oi => {
           const itemName = (oi.itemName||'').toLowerCase();
-          const labelQty = oi.label ? parseInt(oi.label) : NaN;
-          const qty = !isNaN(labelQty) && labelQty > 0 ? labelQty : (oi.qty || 1);
+          const qty = labelToQty(oi.label);
           for (const c of C()) {
             const found = (inv[c]||[]).find(item => item.name === itemName);
             if (found) { found.left = Math.round((gl(found) + qty)*10)/10; break; }
@@ -2227,8 +2248,7 @@ function confirmWebOrder(fbKey) {
     const cat = oi.cat || '';
     const itemName = (oi.itemName||oi.name||'').toLowerCase();
     // Parse real qty from label (e.g. "3" → 3, "3 for" → 3, "eighth" → 1)
-    const labelQty = oi.label ? parseInt(oi.label) : NaN;
-    const qty = !isNaN(labelQty) && labelQty > 0 ? labelQty : (oi.qty || 1);
+    const qty = labelToQty(oi.label);
     // Find the right category key (handle case mismatch)
     let realCat = cat;
     if (cat && !inv[cat]) {
@@ -2303,8 +2323,7 @@ function reverseConfirmedOrder(fbKey) {
   // Also try to get items from Firebase order data
   orderItems.forEach(oi => {
     const itemName = (oi.itemName||oi.name||'').toLowerCase();
-    const labelQty = oi.label ? parseInt(oi.label) : NaN;
-    const qty = !isNaN(labelQty) && labelQty > 0 ? labelQty : (oi.qty || 1);
+    const qty = labelToQty(oi.label);
     const cat = oi.cat || '';
 
     let realCat = cat;
