@@ -23,8 +23,23 @@ body{font-family:'Inter',sans-serif;background:var(--black);color:var(--white);m
 #lightbox-img-wrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:auto;-webkit-overflow-scrolling:touch;padding:60px 16px 16px;}
 #lightbox-img{max-width:100%;height:auto;border-radius:10px;object-fit:contain;touch-action:pinch-zoom;user-select:none;display:block;margin:auto;}
 #lightbox-close{position:fixed;top:12px;right:12px;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.2);border-radius:50%;width:44px;height:44px;color:#fff;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:9001;}
-.item-img-wrap{cursor:zoom-in;}
+.lb-arrow{position:fixed;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.25);border-radius:50%;width:48px;height:48px;color:#fff;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:9001;transition:background 0.2s;}
+.lb-arrow:hover{background:rgba(255,255,255,0.15);}
+#lb-prev{left:12px;}
+#lb-next{right:12px;}
+#lb-counter{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.6);font-family:Oswald,sans-serif;font-size:14px;z-index:9001;letter-spacing:2px;}
+.item-img-wrap{cursor:zoom-in;position:relative;}
 .item-img-wrap img{cursor:zoom-in;}
+/* ── CARD CAROUSEL ── */
+.card-carousel{position:relative;width:100%;overflow:hidden;}
+.card-carousel img.item-img{width:100%;display:block;}
+.carousel-arrow{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.45);border:none;border-radius:50%;width:32px;height:32px;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:3;transition:background 0.2s;}
+.carousel-arrow:hover{background:rgba(0,0,0,0.7);}
+.carousel-arrow.left{left:6px;}
+.carousel-arrow.right{right:6px;}
+.carousel-dots{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:5px;z-index:3;}
+.carousel-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.4);border:none;padding:0;cursor:pointer;transition:background 0.2s;}
+.carousel-dot.active{background:#fff;}
 
 /* ACCESS GATE */
 #access-gate{position:fixed;inset:0;background:var(--black);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;}
@@ -400,8 +415,23 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
         <button class="pm-btn" id="pm-cashapp" onclick="selPay('cashapp')">💚 CashApp</button>
         <button class="pm-btn" id="pm-venmo" onclick="selPay('venmo')">💙 Venmo</button>
         <button class="pm-btn" id="pm-applepay" onclick="selPay('applepay')">🍎 Apple Pay</button>
+        <button class="pm-btn" id="pm-split" onclick="selPay('split')" style="grid-column:span 2;">💵💚 Cash + CashApp</button>
       </div>
       <div class="virtual-fee-notice" id="vfee-notice">⚠️ $5 fee applies for virtual payments</div>
+      <div id="menu-split-fields" style="display:none;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;margin:8px 0;">
+        <div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;">Split Payment</div>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;">
+            <label style="font-size:10px;color:rgba(255,255,255,0.5);display:block;margin-bottom:3px;">💵 Cash</label>
+            <input type="number" id="menu-split-cash" placeholder="$0" min="0" step="0.01" oninput="updateMenuSplit()" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:#3ecf8e;font-family:Oswald,sans-serif;font-size:15px;outline:none;">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:10px;color:rgba(255,255,255,0.5);display:block;margin-bottom:3px;">💚 CashApp</label>
+            <input type="number" id="menu-split-virtual" placeholder="$0" min="0" step="0.01" oninput="updateMenuSplit()" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:#a89cff;font-family:Oswald,sans-serif;font-size:15px;outline:none;">
+          </div>
+        </div>
+        <div id="menu-split-summary" style="font-size:11px;color:rgba(255,255,255,0.4);font-family:Oswald,sans-serif;text-align:center;margin-top:6px;"></div>
+      </div>
       <div class="section-label" style="margin-top:4px;">Delivery or Pickup?</div>
       <div class="order-type-btns">
         <button class="ot-btn" id="ot-delivery" onclick="selOrderType('delivery')">🚗 Delivery</button>
@@ -493,23 +523,107 @@ let addrTimer = null;
 let addrResults = [];
 
 
-// ── LIGHTBOX ──
-function openLightbox(src, name) {
+// ── LIGHTBOX (multi-image) ──
+let lbImages=[];
+let lbIdx=0;
+
+function openLightbox(src, name, itemId) {
   const lb = document.getElementById('lightbox');
   const img = document.getElementById('lightbox-img');
   if (!lb || !img) return;
-  img.src = src;
+
+  // find the item's images array
+  const item = menuItems.find(m=>m.id===itemId);
+  if(item && item.images && item.images.length > 1){
+    lbImages = item.images;
+    // start at current carousel index if available
+    const carousel = document.querySelector('#carousel-'+itemId+' .item-img');
+    lbIdx = carousel ? parseInt(carousel.dataset.idx)||0 : 0;
+  } else {
+    lbImages = src ? [src] : (item && item.img ? [item.img] : []);
+    lbIdx = 0;
+  }
+
+  img.src = lbImages[lbIdx] || src;
   img.alt = name;
   lb.classList.add('open');
   document.body.style.overflow = 'hidden';
+  updateLbNav();
 }
+
+function updateLbNav(){
+  const multi = lbImages.length > 1;
+  document.getElementById('lb-prev').style.display = multi ? 'flex' : 'none';
+  document.getElementById('lb-next').style.display = multi ? 'flex' : 'none';
+  const counter = document.getElementById('lb-counter');
+  counter.style.display = multi ? 'block' : 'none';
+  if(multi) counter.textContent = (lbIdx+1) + ' / ' + lbImages.length;
+}
+
+function lbNav(dir){
+  if(lbImages.length<=1)return;
+  lbIdx = (lbIdx + dir + lbImages.length) % lbImages.length;
+  document.getElementById('lightbox-img').src = lbImages[lbIdx];
+  updateLbNav();
+}
+
 function closeLightbox() {
   const lb = document.getElementById('lightbox');
   if (lb) lb.classList.remove('open');
   document.body.style.overflow = '';
+  lbImages=[];lbIdx=0;
 }
-// Close on escape key
-document.addEventListener('keydown', e => { if(e.key==='Escape') closeLightbox(); });
+
+// Close on escape, arrow keys for navigation
+document.addEventListener('keydown', e => {
+  if(e.key==='Escape') closeLightbox();
+  if(e.key==='ArrowLeft') lbNav(-1);
+  if(e.key==='ArrowRight') lbNav(1);
+});
+
+// ── CARD CAROUSEL ──
+function carouselNav(itemId, dir){
+  const carousel = document.getElementById('carousel-'+itemId);
+  if(!carousel)return;
+  const img = carousel.querySelector('.item-img');
+  if(!img)return;
+  const imgs = JSON.parse(img.dataset.imgs||'[]');
+  if(imgs.length<=1)return;
+  let idx = parseInt(img.dataset.idx)||0;
+  idx = (idx + dir + imgs.length) % imgs.length;
+  img.src = imgs[idx];
+  img.dataset.idx = idx;
+  // update dots
+  carousel.querySelectorAll('.carousel-dot').forEach((d,i)=>{
+    d.classList.toggle('active', i===idx);
+  });
+}
+
+// ── SWIPE SUPPORT (lightbox) ──
+let lbTouchX=0;
+document.addEventListener('touchstart',e=>{
+  if(!document.getElementById('lightbox').classList.contains('open'))return;
+  lbTouchX=e.touches[0].clientX;
+},{passive:true});
+document.addEventListener('touchend',e=>{
+  if(!document.getElementById('lightbox').classList.contains('open'))return;
+  const dx=e.changedTouches[0].clientX-lbTouchX;
+  if(Math.abs(dx)>50){lbNav(dx<0?1:-1);}
+},{passive:true});
+
+function carouselGo(itemId, idx){
+  const carousel = document.getElementById('carousel-'+itemId);
+  if(!carousel)return;
+  const img = carousel.querySelector('.item-img');
+  if(!img)return;
+  const imgs = JSON.parse(img.dataset.imgs||'[]');
+  if(idx<0||idx>=imgs.length)return;
+  img.src = imgs[idx];
+  img.dataset.idx = idx;
+  carousel.querySelectorAll('.carousel-dot').forEach((d,i)=>{
+    d.classList.toggle('active', i===idx);
+  });
+}
 
 // ── ACCESS GATE ──
 window.addEventListener('DOMContentLoaded', () => {
@@ -571,7 +685,8 @@ function processData(data) {
       const soldOut = left <= 0 && (item.bought || 0) > 0;
       const allAddOn = prices.length>0 && prices.every(p=>p.addOnOnly);
       const flavors = Array.isArray(item.flavors) ? item.flavors.filter(f=>f.name&&f.name.trim()) : [];
-      built.push({id:id++, name:item.name, cat:cat.toUpperCase(), desc:item.desc||'', img:item.img||'', prices, soldOut, allAddOn, flavors});
+      const images = Array.isArray(item.images)&&item.images.length ? item.images : (item.img ? [item.img] : []);
+      built.push({id:id++, name:item.name, cat:cat.toUpperCase(), desc:item.desc||'', img:item.img||'', images, prices, soldOut, allAddOn, flavors});
     });
   });
   menuItems = built;
@@ -671,9 +786,20 @@ function renderMenu() {
 function renderCard(item) {
   const selIdx = selectedPrices[item.id] ?? null;
   const inCart = cart.some(c => c.itemId===item.id && c.priceIdx===selIdx);
-  const imgHtml = item.img
-    ? `<img class="item-img" src="${item.img}" alt="${item.name}" style="cursor:zoom-in" onclick="openLightbox(this.src,this.alt)" onerror="this.style.display='none'">`
-    : `<div class="img-placeholder"><span>🍁</span><p>${item.cat}</p></div>`;
+  let imgHtml;
+  if(item.images&&item.images.length>1){
+    // multi-photo carousel
+    imgHtml=`<div class="card-carousel" id="carousel-${item.id}">
+      <img class="item-img" src="${item.images[0]}" alt="${item.name}" data-imgs='${JSON.stringify(item.images)}' data-idx="0" onclick="openLightbox(null,'${item.name.replace(/'/g,"\\'")}',${item.id})" onerror="this.style.display='none'">
+      <button class="carousel-arrow left" onclick="event.stopPropagation();carouselNav(${item.id},-1)">‹</button>
+      <button class="carousel-arrow right" onclick="event.stopPropagation();carouselNav(${item.id},1)">›</button>
+      <div class="carousel-dots">${item.images.map((_,i)=>`<span class="carousel-dot${i===0?' active':''}" onclick="event.stopPropagation();carouselGo(${item.id},${i})"></span>`).join('')}</div>
+    </div>`;
+  }else if(item.img){
+    imgHtml=`<img class="item-img" src="${item.img}" alt="${item.name}" style="cursor:zoom-in" onclick="openLightbox(this.src,'${item.name.replace(/'/g,"\\'")}',${item.id})" onerror="this.style.display='none'">`;
+  }else{
+    imgHtml=`<div class="img-placeholder"><span>🍁</span><p>${item.cat}</p></div>`;
+  }
 
   const hasOtherItems = cart.some(c => { const ci=menuItems.find(m=>m.id===c.itemId); return ci && !ci.allAddOn; });
   const priceRows = item.prices && item.prices.length
@@ -946,7 +1072,7 @@ function updateCartCount() {
 }
 
 function getSub() { return cart.reduce((s,c) => s+c.price, 0); }
-function getFee() { return payMethod && VIRTUAL.includes(payMethod) ? VIRTUAL_FEE : 0; }
+function getFee() { return payMethod && (VIRTUAL.includes(payMethod)||payMethod==='split') ? VIRTUAL_FEE : 0; }
 function getTotal() { return getSub() + getFee(); }
 
 // ── CART DRAWER ──
@@ -991,7 +1117,16 @@ function selPay(method) {
   document.querySelectorAll('.pm-btn').forEach(b => b.classList.remove('sel'));
   document.getElementById('pm-'+method).classList.add('sel');
   const vn = document.getElementById('vfee-notice');
-  if (vn) vn.style.display = VIRTUAL.includes(method) ? 'block' : 'none';
+  if (vn) vn.style.display = (VIRTUAL.includes(method)||method==='split') ? 'block' : 'none';
+  const sf = document.getElementById('menu-split-fields');
+  if (sf) sf.style.display = method==='split' ? 'block' : 'none';
+  renderCart();
+}
+function updateMenuSplit(){
+  const c=parseFloat(document.getElementById('menu-split-cash').value)||0;
+  const v=parseFloat(document.getElementById('menu-split-virtual').value)||0;
+  const sum=document.getElementById('menu-split-summary');
+  if(sum)sum.innerHTML='Total: $'+(c+v)+' · <span style="color:#f46b6b;">$5 CashApp fee included</span>';
   renderCart();
 }
 
@@ -1094,7 +1229,7 @@ function submitPhone() {
 
 // ── SEND ORDER ──
 function sendOrder() {
-  const pmLabels = {cash:'💵 Cash',cashapp:'💚 CashApp',venmo:'💙 Venmo',applepay:'🍎 Apple Pay'};
+  const pmLabels = {cash:'💵 Cash',cashapp:'💚 CashApp',venmo:'💙 Venmo',applepay:'🍎 Apple Pay',split:'💵💚 Cash+CashApp'};
   const pm = pmLabels[payMethod] || payMethod;
   const sub = getSub();
   const fee = getFee();
@@ -1105,12 +1240,19 @@ function sendOrder() {
     return line;
   }).join('\n');
   const feeNote = fee > 0 ? 'VIRTUAL FEE: +$'+fee+'\n' : '';
+  let splitNote = '';
+  let splitCash=0, splitVirtual=0;
+  if(payMethod==='split'){
+    splitCash=parseFloat(document.getElementById('menu-split-cash').value)||0;
+    splitVirtual=parseFloat(document.getElementById('menu-split-virtual').value)||0;
+    splitNote='SPLIT: 💵 $'+splitCash+' cash + 💚 $'+splitVirtual+' CashApp\n';
+  }
   const addr = document.getElementById('addr-inp')?.value.trim() || '';
   const delivLine = orderType === 'pickup' ? 'TYPE: 🏪 PICKUP' : 'TYPE: 🚗 DELIVERY\nADDRESS: '+addr;
   const phone = '('+customerPhone.slice(0,3)+') '+customerPhone.slice(3,6)+'-'+customerPhone.slice(6);
 
   const msg = '🍁 585 PLUG ORDER 🍁\n——————————————\n'+itemLines+'\n——————————————\n'
-    +'SUBTOTAL: $'+sub+'\n'+feeNote+'TOTAL: $'+total+'\nPAYMENT: '+pm+'\n'+delivLine+'\nCUSTOMER #: '+phone+'\n——————————————\nSent from the585plug.shop';
+    +'SUBTOTAL: $'+sub+'\n'+feeNote+splitNote+'TOTAL: $'+total+'\nPAYMENT: '+pm+'\n'+delivLine+'\nCUSTOMER #: '+phone+'\n——————————————\nSent from the585plug.shop';
 
   // Save to Firebase as pending order for inventory app to confirm
   const pendingOrder = {
@@ -1121,7 +1263,9 @@ function sendOrder() {
     date: new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}),
     time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
     timestamp: Date.now(),
-    confirmed: false, cancelled: false
+    confirmed: false, cancelled: false,
+    splitCash: payMethod==='split'?splitCash:undefined,
+    splitVirtual: payMethod==='split'?splitVirtual:undefined
   };
 
   const orderKey = 'order_' + Date.now();
@@ -1279,6 +1423,9 @@ function showToast(msg, type='') {
 <!-- LIGHTBOX -->
 <div id="lightbox">
   <button id="lightbox-close" onclick="closeLightbox()">✕</button>
+  <button class="lb-arrow" id="lb-prev" onclick="lbNav(-1)" style="display:none;">‹</button>
+  <button class="lb-arrow" id="lb-next" onclick="lbNav(1)" style="display:none;">›</button>
+  <div id="lb-counter" style="display:none;"></div>
   <div id="lightbox-img-wrap" onclick="if(event.target===this)closeLightbox()">
     <img id="lightbox-img" src="#" alt="">
   </div>
