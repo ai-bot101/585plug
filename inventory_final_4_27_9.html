@@ -1188,6 +1188,20 @@ function tstr(){return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'
 function fmt(n){if(n===null||n===undefined)return'--';return(Math.round(n*10)/10).toString().replace(/\.0$/,'');}
 function fmtP(n){return'$'+parseFloat(n||0).toFixed(2).replace(/\.00$/,'');}
 function isV(m){return VIRT.includes(m);}
+function calcCashVirt(sells){
+  let cash=0,virt=0,cCount=0,vCount=0;
+  sells.forEach(e=>{
+    const pm=(e.payMethod||'cash').toLowerCase();
+    if(pm==='split'){
+      cash+=(e.splitCash||0);virt+=(e.splitVirtual||0);cCount++;vCount++;
+    }else if(VIRT.includes(pm)){
+      virt+=(e.amtReceived||e.total||0);vCount++;
+    }else{
+      cash+=(e.amtReceived||e.total||0);cCount++;
+    }
+  });
+  return{cash,virt,cCount,vCount};
+}
 function uIdx(name){return cfg.users.findIndex(u=>u.name===name);}
 function wcls(name){const i=uIdx(name);return i>=0?WC[i]:'w0';}
 function persist(){
@@ -1581,10 +1595,9 @@ const aoTag=isAddOnOnly(item)?'<span style="font-size:8px;background:rgba(108,99
 html+=`<div class="icard ${so2?'gone':''}">${pa}<div class="card-status">${so2?'<span class="tag sold">SOLD OUT</span>':isLow?'<span class="tag low">LOW</span>':''}</div><div class="iname">${item.name}${aoTag}${staffPriceTag}</div>${costDisplay}<div class="nums"><div class="nb"><div class="nl">Left</div><div class="nv hi">${fmt(left)}</div></div><div class="nb"><div class="nl">Bought</div><div class="nv">${fmt(bought)||'--'}</div></div>${bought?`<div class="nb"><div class="nl">Sold</div><div class="nv">${fmt(Math.max(0,bought-left))}</div></div>`:''}</div>${bought?`<div class="pbar"><div class="pfill ${fc}" style="width:${pct}%"></div></div>`:''}${own?`<div class="sell-row"><input class="qi" type="number" placeholder="Quick qty" min="0.1" step="0.1" id="qi-${cat}-${ri}" onkeydown="if(event.key==='Enter')sell('${cat}',${ri})"><button class="sbtn2" onclick="sell('${cat}',${ri})" ${so2?'disabled':''}>Sell</button></div>`:''}${own?`<div class="oc"><button class="ebtn" onclick="openEdit('${cat}',${ri})">Edit</button><button class="ebtn" onclick="openRestock('${cat}',${ri})" style="background:rgba(62,207,142,0.08);border-color:rgba(62,207,142,0.2);color:var(--green);">Restock</button><button class="dbtn" onclick="delItem('${cat}',${ri})">Delete</button></div>`:''}</div>`;});if(own)html+=`<div class="addcard" onclick="openAdd('${cat}')">+ Add item to ${cat}</div>`;html+='</div>';}area.innerHTML=html||'<div class="empty">No items yet</div>';}
 function totBanner(sells,dl,isT,showProfit){
   const g=sells.reduce((s,e)=>s+(e.amtReceived||0),0);
-  const ct=sells.filter(e=>!isV(e.payMethod)).reduce((s,e)=>s+(e.amtReceived||0),0);
-  const vt=sells.filter(e=>isV(e.payMethod)).reduce((s,e)=>s+(e.amtReceived||0),0);
+  const cv=calcCashVirt(sells);
   const lbl=isT?'Today':'On '+dl;
-  let html=`<div class="tot-card grand"><div class="tot-label">Total Received ${lbl}</div><div class="tot-val gv">${fmtP(g)}</div><div class="tot-sub">${sells.length} transaction${sells.length!==1?'s':''}</div></div><div class="tot-card"><div class="tot-label">Cash</div><div class="tot-val cv">${fmtP(ct)}</div><div class="tot-sub">${sells.filter(e=>!isV(e.payMethod)).length} sales</div></div><div class="tot-card"><div class="tot-label">Virtual</div><div class="tot-val vv">${fmtP(vt)}</div><div class="tot-sub">${sells.filter(e=>isV(e.payMethod)).length} sales</div></div>`;
+  let html=`<div class="tot-card grand"><div class="tot-label">Total Received ${lbl}</div><div class="tot-val gv">${fmtP(g)}</div><div class="tot-sub">${sells.length} transaction${sells.length!==1?'s':''}</div></div><div class="tot-card"><div class="tot-label">Cash</div><div class="tot-val cv">${fmtP(cv.cash)}</div><div class="tot-sub">${cv.cCount} sales</div></div><div class="tot-card"><div class="tot-label">Virtual</div><div class="tot-val vv">${fmtP(cv.virt)}</div><div class="tot-sub">${cv.vCount} sales</div></div>`;
   if(showProfit){
     // total profit = sum of all profits logged
     const totalProfit=sells.reduce((s,e)=>s+(e.profit||0),0);
@@ -3098,28 +3111,64 @@ function repairAllCommissions(){
 }
 
 function repairEODtoLog(){
-  const rk='eodLogSyncV1';
+  const rk='eodLogSyncV3';
   if(localStorage.getItem(rk)==='done')return;
   let fixed=0;
+  // normalize all log payMethod values to lowercase IDs
+  log.forEach(e=>{
+    if(e.payMethod&&e.payMethod!==e.payMethod.toLowerCase()){
+      const pmL=e.payMethod.toLowerCase();
+      const byLabel=PM.find(m=>m.label&&m.label.toLowerCase()===pmL);
+      const byId=PM.find(m=>m.id===pmL);
+      e.payMethod=byId?byId.id:(byLabel?byLabel.id:pmL);
+      fixed++;
+    }
+  });
+  // sync EOD orders → matching log entries
   eodLogs.forEach(r=>{
     if(!r.orders)return;
+    // normalize EOD order payMethods too
+    r.orders.forEach(o=>{
+      if(o.payMethod&&o.payMethod!==o.payMethod.toLowerCase()){
+        const pmL=o.payMethod.toLowerCase();
+        const byLabel=PM.find(m=>m.label&&m.label.toLowerCase()===pmL);
+        const byId=PM.find(m=>m.id===pmL);
+        o.payMethod=byId?byId.id:(byLabel?byLabel.id:pmL);
+        fixed++;
+      }
+    });
     r.orders.forEach(o=>{
       const oCust=(o.customer||'').toLowerCase();
-      const match=log.find(e=>(e.type==='sell'||e.type==='order')&&e.who===o.who&&e.time===o.time&&e.date===r.date&&(e.customer||e.name||'').toLowerCase()===oCust);
+      // try matching with customer name first, then fallback to time-only
+      let match=log.find(e=>(e.type==='sell'||e.type==='order')&&e.who===o.who&&e.time===o.time&&e.date===r.date&&(e.customer||e.name||'').toLowerCase()===oCust);
+      if(!match&&oCust){
+        // fallback: match by customer name + date + who (without time)
+        match=log.find(e=>(e.type==='sell'||e.type==='order')&&e.who===o.who&&e.date===r.date&&(e.customer||e.name||'').toLowerCase()===oCust);
+      }
       if(match){
         if(match.amtReceived!==(o.total||0)){match.amtReceived=o.total||0;if(match.type==='order')match.total=o.total||0;fixed++;}
         if(o.payMethod){match.payMethod=o.payMethod;match.payMethodLabel=PM.find(m=>m.id===o.payMethod)?.label||o.payMethod;}
         if(o.payMethod==='split'){match.splitCash=o.splitCash||0;match.splitVirtual=o.splitVirtual||0;}
         else{delete match.splitCash;delete match.splitVirtual;}
-        match.profit=o.profit||0;
-        match.commission=o.commission||0;
+        if(o.profit!==undefined)match.profit=o.profit;
+        if(o.commission!==undefined)match.commission=o.commission;
         if(o.commissionManual)match.commissionManual=true;
       }
     });
+    // recalc EOD aggregates
+    const cv=calcCashVirt(r.orders.map(o=>({payMethod:o.payMethod,amtReceived:o.total,splitCash:o.splitCash,splitVirtual:o.splitVirtual})));
+    r.cashTotal=cv.cash;r.virtTotal=cv.virt;
+    r.grandTotal=r.orders.reduce((s,o)=>s+(o.total||0),0);
+    const ncbp={};cfg.users.forEach(u=>{ncbp[u.name]=0;});
+    let tp=0;
+    r.orders.forEach(o=>{tp+=(o.profit||0);ncbp[o.who]=(ncbp[o.who]||0)+(o.commission||0);});
+    r.totalProfit=tp;r.commByPerson=ncbp;
+    const sc=cfg.users.filter(u=>u.role==='staff').reduce((s,u)=>s+(ncbp[u.name]||0),0);
+    r.staffComm=sc;r.ownerNet=Math.max(0,tp-sc);
   });
   if(fixed>0){
     persist();
-    console.log('EOD→Log sync repair: fixed '+fixed+' entries');
+    console.log('EOD↔Log sync repair V3: fixed '+fixed+' entries');
   }
   localStorage.setItem(rk,'done');
 }
@@ -3420,8 +3469,9 @@ function buildEODRecord(dateStr){
   const dayLog=log.filter(e=>e.date===dl);
   const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order');
   const grandTotal=sells.reduce((s,e)=>s+(e.amtReceived||0),0);
-  const cashTotal=sells.filter(e=>!isV(e.payMethod)).reduce((s,e)=>s+(e.amtReceived||0),0);
-  const virtTotal=sells.filter(e=>isV(e.payMethod)).reduce((s,e)=>s+(e.amtReceived||0),0);
+  const eodCV=calcCashVirt(sells);
+  const cashTotal=eodCV.cash;
+  const virtTotal=eodCV.virt;
 
   // commission per person (all 3 users)
   const commByPerson={};
@@ -4329,8 +4379,9 @@ function openEOD(){
   const dayLog=log.filter(e=>e.date===today);
   const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order');
   const grandTotal=sells.reduce((s,e)=>s+(e.amtReceived||0),0);
-  const cashTotal=sells.filter(e=>!isV(e.payMethod)).reduce((s,e)=>s+(e.amtReceived||0),0);
-  const virtTotal=sells.filter(e=>isV(e.payMethod)).reduce((s,e)=>s+(e.amtReceived||0),0);
+  const eodPCV=calcCashVirt(sells);
+  const cashTotal=eodPCV.cash;
+  const virtTotal=eodPCV.virt;
   const totalProfit=sells.reduce((s,e)=>s+(e.profit||0),0);
 
   // commission per person
@@ -4507,8 +4558,8 @@ function submitCashRecon(){
 
   // calculate expected cash for today by this staff member
   const today=tday();
-  const myLog=log.filter(e=>e.date===today&&e.who===cu?.name&&(e.type==='sell'||e.type==='order')&&!isV(e.payMethod));
-  const expected=myLog.reduce((s,e)=>s+(e.amtReceived||0),0);
+  const myLog=log.filter(e=>e.date===today&&e.who===cu?.name&&(e.type==='sell'||e.type==='order'));
+  const expected=calcCashVirt(myLog).cash;
   const diff=Math.round((counted-expected)*100)/100;
 
   // save recon record
