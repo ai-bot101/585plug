@@ -74,8 +74,37 @@ html.no-scroll{overflow:hidden !important;}
 .op-copy-btn{width:100%;background:var(--green);border:none;border-radius:10px;padding:14px;color:#000;font-family:'Bebas Neue',sans-serif;font-size:20px;cursor:pointer;letter-spacing:2px;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;font-weight:700;}
 .op-copy-btn:hover{filter:brightness(1.1);}
 .op-copy-btn.copied{background:#1a5c1a;color:#fff;}
+.op-btn-row{display:flex;gap:8px;margin-bottom:8px;}
+.op-copy-btn{flex:1;}
+.op-text-btn{flex:1;background:var(--red);border:none;border-radius:10px;padding:14px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:20px;cursor:pointer;letter-spacing:2px;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;}
+.op-text-btn:hover{background:var(--red3);}
 .op-done-btn{width:100%;background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:11px;color:var(--white3);font-family:'Oswald',sans-serif;font-size:13px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .15s;}
 .op-done-btn:hover{border-color:var(--red);color:var(--white2);}
+
+/* ORDER HISTORY */
+#order-history{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
+#order-history.open{display:flex;}
+.oh-card{background:var(--black2);border:1px solid var(--border2);border-radius:18px;padding:24px 20px;width:100%;max-width:420px;max-height:85vh;display:flex;flex-direction:column;}
+.oh-title{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--red);letter-spacing:2px;margin-bottom:4px;text-align:center;}
+.oh-sub{font-size:12px;color:var(--white3);line-height:1.6;margin-bottom:14px;text-align:center;font-family:'Oswald',sans-serif;}
+.oh-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.oh-item{background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;cursor:pointer;transition:border-color .15s;}
+.oh-item:hover{border-color:var(--red);}
+.oh-item-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.oh-item-date{font-family:monospace;font-size:11px;color:var(--white3);}
+.oh-item-total{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--red);letter-spacing:1px;}
+.oh-item-summary{font-family:'Oswald',sans-serif;font-size:12px;color:var(--white2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.oh-item-actions{display:flex;gap:6px;margin-top:8px;}
+.oh-copy{flex:1;background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.3);border-radius:8px;padding:8px;color:var(--green);font-family:'Oswald',sans-serif;font-size:11px;font-weight:600;cursor:pointer;text-align:center;text-transform:uppercase;letter-spacing:1px;transition:all .15s;}
+.oh-copy:hover{background:rgba(62,207,142,0.2);}
+.oh-copy.copied{background:#1a5c1a;color:#fff;border-color:#1a5c1a;}
+.oh-text{flex:1;background:rgba(204,31,31,0.1);border:1px solid rgba(204,31,31,0.3);border-radius:8px;padding:8px;color:var(--red);font-family:'Oswald',sans-serif;font-size:11px;font-weight:600;cursor:pointer;text-align:center;text-transform:uppercase;letter-spacing:1px;transition:all .15s;}
+.oh-text:hover{background:rgba(204,31,31,0.2);}
+.oh-empty{text-align:center;padding:40px 20px;color:var(--white3);font-family:'Oswald',sans-serif;font-size:14px;}
+.oh-close{width:100%;background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:11px;color:var(--white3);font-family:'Oswald',sans-serif;font-size:13px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;margin-top:14px;transition:all .15s;}
+.oh-close:hover{border-color:var(--red);color:var(--white2);}
+.orders-btn{background:var(--black3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--white3);font-family:'Oswald',sans-serif;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;flex-shrink:0;transition:all .2s;}
+.orders-btn:hover{border-color:var(--red);color:var(--white2);}
 
 /* APP */
 #app{display:none;}
@@ -372,8 +401,21 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
     <div class="op-msg-wrap">
       <div class="op-msg" id="op-msg-text"></div>
     </div>
-    <button class="op-copy-btn" id="op-copy-btn" onclick="copyOrderMsg()">📋 Copy Order</button>
+    <div class="op-btn-row">
+      <button class="op-copy-btn" id="op-copy-btn" onclick="copyOrderMsg()">📋 Copy</button>
+      <button class="op-text-btn" onclick="textOrder()">💬 Text</button>
+    </div>
     <button class="op-done-btn" onclick="closeOrderPreview()">Done</button>
+  </div>
+</div>
+
+<!-- ORDER HISTORY -->
+<div id="order-history">
+  <div class="oh-card">
+    <div class="oh-title">Your Orders</div>
+    <div class="oh-sub">Tap an order to copy or text it</div>
+    <div class="oh-list" id="oh-list"></div>
+    <button class="oh-close" onclick="closeOrderHistory()">Close</button>
   </div>
 </div>
 
@@ -407,6 +449,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
         </div>
       </div>
       <button onclick="openAdminGate()" style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white3);font-size:14px;cursor:pointer;opacity:0.4;transition:opacity .2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.4'" title="Admin">⚙️</button>
+      <button class="orders-btn" id="orders-btn" onclick="openOrderHistory()" style="display:none;">📜 Orders</button>
       <button class="cart-btn" onclick="openCart()">
         🛒 Cart <div class="cart-count" id="cart-count">0</div>
       </button>
@@ -1459,8 +1502,16 @@ function _fallbackCopy(btn) {
   showToast('Order copied to clipboard! 📋','green');
 }
 
+function textOrder() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const sep = isIOS ? '&' : '?';
+  window.location.href = 'sms:' + OWNER_PHONE + sep + 'body=' + encodeURIComponent(_orderMsg);
+}
+
 function closeOrderPreview() {
   document.getElementById('order-preview').classList.remove('open');
+  // Save order to history before resetting
+  _saveOrderHistory(_orderMsg);
   // Reset cart after closing
   cart=[];payMethod=null;orderType=null;selectedPrices={};
   updateCartCount();renderCart();renderMenu();closeCart();
@@ -1471,6 +1522,97 @@ function closeOrderPreview() {
   const vn=document.getElementById('vfee-notice');if(vn)vn.style.display='none';
   showToast('Order placed! Text it to us 📲','green');
 }
+
+// ── ORDER HISTORY ──
+function _getOrderHistory() {
+  try { return JSON.parse(localStorage.getItem('585_orders') || '[]'); } catch(e) { return []; }
+}
+function _saveOrderHistory(msg) {
+  const orders = _getOrderHistory();
+  orders.unshift({
+    msg: msg,
+    date: new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}),
+    time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
+    timestamp: Date.now()
+  });
+  // Keep last 20 orders max
+  if (orders.length > 20) orders.length = 20;
+  localStorage.setItem('585_orders', JSON.stringify(orders));
+  _updateOrdersBtn();
+}
+function _updateOrdersBtn() {
+  const btn = document.getElementById('orders-btn');
+  if (!btn) return;
+  const orders = _getOrderHistory();
+  btn.style.display = orders.length > 0 ? 'flex' : 'none';
+}
+function openOrderHistory() {
+  const orders = _getOrderHistory();
+  const list = document.getElementById('oh-list');
+  if (!orders.length) {
+    list.innerHTML = '<div class="oh-empty">📭 No orders yet</div>';
+  } else {
+    list.innerHTML = orders.map((o, i) => {
+      // Extract a short summary from the message
+      const lines = o.msg.split('\n').filter(l => l.startsWith('•'));
+      const summary = lines.map(l => l.trim()).join(', ') || 'Order';
+      const totalMatch = o.msg.match(/TOTAL:\s*\$(\d+)/);
+      const total = totalMatch ? '$' + totalMatch[1] : '';
+      return `<div class="oh-item">
+        <div class="oh-item-head">
+          <span class="oh-item-date">${o.date} ${o.time}</span>
+          <span class="oh-item-total">${total}</span>
+        </div>
+        <div class="oh-item-summary">${summary}</div>
+        <div class="oh-item-actions">
+          <button class="oh-copy" id="oh-copy-${i}" onclick="copyHistoryOrder(${i}, this)">📋 Copy</button>
+          <button class="oh-text" onclick="textHistoryOrder(${i})">💬 Text</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('order-history').classList.add('open');
+}
+function closeOrderHistory() {
+  document.getElementById('order-history').classList.remove('open');
+}
+function copyHistoryOrder(idx, btn) {
+  const orders = _getOrderHistory();
+  if (!orders[idx]) return;
+  const msg = orders[idx].msg;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(msg).then(() => {
+      btn.innerHTML = '✅ Copied';
+      btn.classList.add('copied');
+      showToast('Order copied! 📋','green');
+      setTimeout(() => { btn.innerHTML = '📋 Copy'; btn.classList.remove('copied'); }, 2000);
+    }).catch(() => _fallbackHistoryCopy(msg, btn));
+  } else {
+    _fallbackHistoryCopy(msg, btn);
+  }
+}
+function _fallbackHistoryCopy(msg, btn) {
+  const ta = document.createElement('textarea');
+  ta.value = msg;
+  ta.style.cssText = 'position:fixed;left:-9999px;';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  btn.innerHTML = '✅ Copied';
+  btn.classList.add('copied');
+  showToast('Order copied! 📋','green');
+  setTimeout(() => { btn.innerHTML = '📋 Copy'; btn.classList.remove('copied'); }, 2000);
+}
+function textHistoryOrder(idx) {
+  const orders = _getOrderHistory();
+  if (!orders[idx]) return;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const sep = isIOS ? '&' : '?';
+  window.location.href = 'sms:' + OWNER_PHONE + sep + 'body=' + encodeURIComponent(orders[idx].msg);
+}
+// Show orders button on load if there's history
+document.addEventListener('DOMContentLoaded', _updateOrdersBtn);
 
 // ── ADMIN ──
 async function sha256(str){const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));return[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');}
