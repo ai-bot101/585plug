@@ -80,6 +80,22 @@ html.no-scroll{overflow:hidden !important;}
 .op-done-btn{width:100%;background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:11px;color:var(--white3);font-family:'Oswald',sans-serif;font-size:13px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .15s;}
 .op-done-btn:hover{border-color:var(--red);color:var(--white2);}
 
+/* SEND REMINDER POPUP */
+#send-reminder{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:550;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);padding:16px;}
+#send-reminder.open{display:flex;}
+.sr-card{background:var(--black2);border:1px solid var(--red);border-radius:18px;padding:28px 22px;width:100%;max-width:360px;text-align:center;box-shadow:0 0 40px rgba(204,31,31,0.2);}
+.sr-icon{font-size:44px;margin-bottom:10px;}
+.sr-title{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--red);letter-spacing:2px;margin-bottom:8px;}
+.sr-msg{font-family:'Oswald',sans-serif;font-size:14px;color:var(--white2);line-height:1.7;margin-bottom:16px;}
+.sr-msg strong{color:var(--white);font-weight:600;}
+.sr-phone{display:inline-flex;align-items:center;gap:8px;background:rgba(204,31,31,0.1);border:1px solid rgba(204,31,31,0.3);border-radius:10px;padding:12px 20px;margin-bottom:18px;}
+.sr-phone-num{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--red);letter-spacing:2px;}
+.sr-btn-row{display:flex;gap:8px;margin-bottom:10px;}
+.sr-text-btn{flex:1;background:var(--red);border:none;border-radius:10px;padding:13px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:18px;cursor:pointer;letter-spacing:2px;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .2s;}
+.sr-text-btn:hover{background:var(--red3);}
+.sr-got-it{flex:1;background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:13px;color:var(--white3);font-family:'Oswald',sans-serif;font-size:14px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .15s;}
+.sr-got-it:hover{border-color:var(--green);color:var(--green);}
+
 /* ORDER HISTORY */
 #order-history{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
 #order-history.open{display:flex;}
@@ -305,9 +321,14 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .ap-order-tag.type{border-color:rgba(108,99,255,0.3);color:#8b85ff;}
 .ap-order-tag.phone{border-color:rgba(244,162,74,0.3);color:var(--orange,#f4a24a);}
 .ap-empty{text-align:center;padding:40px 20px;color:var(--white3);font-family:'Oswald',sans-serif;}
-.ap-del-btn{background:rgba(204,31,31,0.1);border:1px solid rgba(204,31,31,0.3);border-radius:8px;padding:6px 12px;color:var(--red);font-family:'Oswald',sans-serif;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .15s;margin-top:10px;width:100%;}
+.ap-btn-row{display:flex;gap:6px;margin-top:10px;}
+.ap-del-btn{flex:1;background:rgba(204,31,31,0.1);border:1px solid rgba(204,31,31,0.3);border-radius:8px;padding:6px 12px;color:var(--red);font-family:'Oswald',sans-serif;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .15s;}
 .ap-del-btn:hover{background:rgba(204,31,31,0.2);border-color:var(--red);}
-.ap-order.cancelled{opacity:0.4;border-style:dashed;}
+.ap-restore-btn{flex:1;background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.3);border-radius:8px;padding:6px 12px;color:var(--green);font-family:'Oswald',sans-serif;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .15s;}
+.ap-restore-btn:hover{background:rgba(62,207,142,0.2);border-color:var(--green);}
+.ap-perm-del-btn{flex:1;background:rgba(244,162,74,0.1);border:1px solid rgba(244,162,74,0.3);border-radius:8px;padding:6px 12px;color:var(--orange,#f4a24a);font-family:'Oswald',sans-serif;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .15s;}
+.ap-perm-del-btn:hover{background:rgba(244,162,74,0.2);border-color:var(--orange,#f4a24a);}
+.ap-order.cancelled{opacity:0.5;border-style:dashed;}
 
 /* TOAST */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--black3);border:1px solid var(--border2);border-radius:10px;padding:12px 20px;font-family:'Oswald',sans-serif;font-size:14px;color:var(--white);z-index:999;transition:transform .3s;white-space:nowrap;}
@@ -405,6 +426,22 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
       <button class="op-text-btn" onclick="textOrder()">💬 Text</button>
     </div>
     <button class="op-done-btn" onclick="closeOrderPreview()">Done</button>
+  </div>
+</div>
+
+<!-- SEND REMINDER -->
+<div id="send-reminder">
+  <div class="sr-card">
+    <div class="sr-icon">📲</div>
+    <div class="sr-title">Almost Done!</div>
+    <div class="sr-msg">Your order <strong>won't go through</strong> until you text it to us. Copy your order and send it to:</div>
+    <div class="sr-phone">
+      <span class="sr-phone-num" id="sr-phone-num"></span>
+    </div>
+    <div class="sr-btn-row">
+      <button class="sr-text-btn" onclick="textOrderReminder()">💬 Open Texts</button>
+      <button class="sr-got-it" onclick="closeReminder()">Got it ✓</button>
+    </div>
   </div>
 </div>
 
@@ -1511,7 +1548,7 @@ function closeOrderPreview() {
   document.getElementById('order-preview').classList.remove('open');
   // Save order to history before resetting
   _saveOrderHistory(_orderMsg);
-  // Reset cart after closing
+  // Reset cart
   cart=[];payMethod=null;orderType=null;selectedPrices={};
   updateCartCount();renderCart();renderMenu();closeCart();
   document.querySelectorAll('.pm-btn').forEach(b=>b.classList.remove('sel'));
@@ -1519,7 +1556,24 @@ function closeOrderPreview() {
   const ai=document.getElementById('addr-inp');if(ai){ai.value='';ai.style.display='none';}
   const pm2=document.getElementById('pickup-msg');if(pm2)pm2.style.display='none';
   const vn=document.getElementById('vfee-notice');if(vn)vn.style.display='none';
-  showToast('Order placed! Text it to us 📲','green');
+  // Show send reminder popup
+  _showSendReminder();
+}
+
+function _showSendReminder() {
+  const phoneFormatted = '('+OWNER_PHONE.slice(0,3)+') '+OWNER_PHONE.slice(3,6)+'-'+OWNER_PHONE.slice(6);
+  document.getElementById('sr-phone-num').textContent = phoneFormatted;
+  document.getElementById('send-reminder').classList.add('open');
+}
+function textOrderReminder() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const sep = isIOS ? '&' : '?';
+  window.location.href = 'sms:' + OWNER_PHONE + sep + 'body=' + encodeURIComponent(_orderMsg);
+  // Close reminder after a short delay
+  setTimeout(() => { document.getElementById('send-reminder').classList.remove('open'); }, 500);
+}
+function closeReminder() {
+  document.getElementById('send-reminder').classList.remove('open');
 }
 
 // ── ORDER HISTORY ──
@@ -1693,8 +1747,11 @@ async function loadAdminOrders() {
         '<div class="ap-order-items">' + items + '</div>' +
         '<div class="ap-order-meta">' + tags + '</div>' +
         (isCancelled
-          ? '<button class="ap-del-btn" style="background:rgba(244,162,74,0.1);border-color:rgba(244,162,74,0.3);color:var(--orange,#f4a24a);" onclick="adminDeleteOrder(\'' + o.key + '\')">🗑 Delete Permanently</button>'
-          : '<button class="ap-del-btn" onclick="adminCancelOrder(\'' + o.key + '\')">✕ Cancel Order</button>'
+          ? '<div class="ap-btn-row">' +
+              '<button class="ap-restore-btn" onclick="adminRestoreOrder(\'' + o.key + '\')">↩ Restore</button>' +
+              '<button class="ap-perm-del-btn" onclick="adminDeleteOrder(\'' + o.key + '\')">🗑 Delete</button>' +
+            '</div>'
+          : '<div class="ap-btn-row"><button class="ap-del-btn" onclick="adminCancelOrder(\'' + o.key + '\')">✕ Cancel Order</button></div>'
         ) +
       '</div>';
     }).join('');
@@ -1713,6 +1770,17 @@ async function adminCancelOrder(key) {
     showToast('Order cancelled','red-t');
     loadAdminOrders();
   } catch(e) { showToast('Failed to cancel','red-t'); }
+}
+
+async function adminRestoreOrder(key) {
+  if (!confirm('Restore this order?')) return;
+  try {
+    await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + key + '/cancelled.json', {
+      method: 'PUT', headers:{'Content-Type':'application/json'}, body: 'false'
+    });
+    showToast('Order restored ✅','green');
+    loadAdminOrders();
+  } catch(e) { showToast('Failed to restore','red-t'); }
 }
 
 async function adminDeleteOrder(key) {
