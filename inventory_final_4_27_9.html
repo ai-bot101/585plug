@@ -2601,8 +2601,23 @@ function processWebsiteOrders(pendingOrders) {
     }
     if (order.confirmed || order.cancelled) return;
     if (!pendingWebOrders[fbKey]) {
-      pendingWebOrders[fbKey] = {...order, fbKey};
+      pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now()};
       newCount++;
+      // Immediately deduct stock — put items on pending hold
+      (order.orderItems||[]).forEach(oi=>{
+        const itemName=(oi.itemName||oi.name||'').toLowerCase();
+        const qty=labelToQty(oi.label);
+        const cat=oi.cat||'';
+        let realCat=cat;
+        if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
+        if(!realCat||!inv[realCat]){
+          for(const c of C()){const found=(inv[c]||[]).find(item=>item.name===itemName);if(found){found.left=Math.max(0,Math.round((gl(found)-qty)*10)/10);break;}}
+        }else{
+          const found=(inv[realCat]||[]).find(item=>item.name===itemName);
+          if(found)found.left=Math.max(0,Math.round((gl(found)-qty)*10)/10);
+        }
+      });
+      persist();renderStats();renderItems();
     }
   });
   // Remove orders that were deleted from Firebase
@@ -2662,14 +2677,20 @@ function renderPendingOrders() {
       const payLabel = o.payMethodLabel || o.payMethod || 'Cash';
       const delivType = o.orderType === 'pickup' ? '🏪 Pickup' : o.address ? '🚗 '+o.address : '🚗 Delivery';
       const phone = o.customerPhone ? '📱 '+o.customerPhone : '';
-      return `<div style="background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px;">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;">
+      const holdMins = o.heldAt ? Math.round((Date.now()-o.heldAt)/60000) : 0;
+      const holdLabel = holdMins < 1 ? 'Just now' : holdMins+'m ago';
+      const splitInfo = o.payMethod==='split'?`<br><span>💵 $${o.splitCash||0} cash + 💚 $${o.splitVirtual||0} CashApp</span>`:'';
+      return `<div style="background:var(--bg2);border:1px solid rgba(255,165,0,0.3);border-radius:10px;padding:14px;margin-bottom:10px;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:0;right:0;background:linear-gradient(135deg,rgba(255,165,0,0.2),rgba(255,120,0,0.1));border-bottom-left-radius:10px;padding:4px 12px;">
+          <span style="font-size:10px;font-weight:700;color:#ffa500;font-family:var(--mono);letter-spacing:1px;">⏳ HELD · ${holdLabel}</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;margin-top:4px;">
           <div style="flex:1;">
             <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;">${items||'No items'}</div>
             <div style="font-size:11px;color:var(--text3);line-height:1.8;">
               ${phone ? `<span>${phone}</span><br>` : ''}
               <span>${delivType}</span><br>
-              <span>💳 ${payLabel}</span>
+              <span>💳 ${payLabel}</span>${splitInfo}
             </div>
           </div>
           <div style="text-align:right;flex-shrink:0;">
@@ -2677,9 +2698,12 @@ function renderPendingOrders() {
             <div style="font-size:10px;color:var(--text3);margin-top:2px;">${o.date||''} · ${o.time||''}</div>
           </div>
         </div>
+        <div style="background:rgba(255,165,0,0.06);border:1px solid rgba(255,165,0,0.15);border-radius:6px;padding:6px 10px;margin-bottom:10px;">
+          <div style="font-size:10px;color:#ffa500;font-family:var(--mono);letter-spacing:0.5px;">📦 INVENTORY ON HOLD — stock deducted until confirmed or cancelled</div>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <button onclick="confirmWebOrder('${o.fbKey}')" style="background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.3);border-radius:8px;padding:10px;color:var(--green);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">✅ Confirm Order</button>
-          <button onclick="cancelWebOrder('${o.fbKey}')" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:10px;color:var(--red);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">❌ Cancel</button>
+          <button onclick="confirmWebOrder('${o.fbKey}')" style="background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.3);border-radius:8px;padding:10px;color:var(--green);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">✅ Confirm</button>
+          <button onclick="cancelWebOrder('${o.fbKey}')" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:10px;color:var(--red);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">❌ Cancel · Restore</button>
         </div>
       </div>`;
     }).join('')}
@@ -2715,29 +2739,7 @@ function confirmWebOrder(fbKey) {
     webOrderKey: fbKey
   };
 
-  // Deduct stock for each item
-  (order.orderItems||[]).forEach(oi => {
-    const cat = oi.cat || '';
-    const itemName = (oi.itemName||oi.name||'').toLowerCase();
-    // Parse real qty from label (e.g. "3" → 3, "3 for" → 3, "eighth" → 1)
-    const qty = labelToQty(oi.label);
-    // Find the right category key (handle case mismatch)
-    let realCat = cat;
-    if (cat && !inv[cat]) {
-      const match = C().find(c => c.toLowerCase() === cat.toLowerCase());
-      if (match) realCat = match;
-    }
-    if (!realCat || !inv[realCat]) {
-      // Try to find item by name across all categories
-      for (const c of C()) {
-        const found = (inv[c]||[]).find(item => item.name === itemName);
-        if (found) { found.left = Math.max(0, Math.round((gl(found) - qty)*10)/10); break; }
-      }
-    } else {
-      const found = (inv[realCat]||[]).find(item => item.name === itemName);
-      if (found) found.left = Math.max(0, Math.round((gl(found) - qty)*10)/10);
-    }
-  });
+  // Stock already deducted on arrival (pending hold) — no need to deduct again
 
   log.unshift(e);
   delete pendingWebOrders[fbKey];
@@ -2772,6 +2774,21 @@ function cancelWebOrder(fbKey) {
   cancelledOrders.unshift(cancelEntry);
   if (cancelledOrders.length > 200) cancelledOrders = cancelledOrders.slice(0, 200);
 
+  // Restore stock — items were held on arrival
+  (order.orderItems||[]).forEach(oi=>{
+    const itemName=(oi.itemName||oi.name||'').toLowerCase();
+    const qty=labelToQty(oi.label);
+    const cat=oi.cat||'';
+    let realCat=cat;
+    if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
+    if(!realCat||!inv[realCat]){
+      for(const c of C()){const found=(inv[c]||[]).find(item=>item.name===itemName);if(found){found.left=Math.round((gl(found)+qty)*10)/10;break;}}
+    }else{
+      const found=(inv[realCat]||[]).find(item=>item.name===itemName);
+      if(found)found.left=Math.round((gl(found)+qty)*10)/10;
+    }
+  });
+
   delete pendingWebOrders[fbKey];
 
   // Delete from Firebase pending_orders so it disappears from menu admin too
@@ -2780,7 +2797,8 @@ function cancelWebOrder(fbKey) {
   persist();
   renderPendingOrders();
   renderCancelledOrders();
-  showToast('Order cancelled — saved to log', 'err');
+  renderStats();renderItems();
+  showToast('Order cancelled — stock restored 🔄', 'err');
 }
 
 function reverseConfirmedOrder(fbKey) {
