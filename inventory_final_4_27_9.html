@@ -1330,6 +1330,7 @@ async function tryLogin(){
   if(own)processAutoDailyDebts();
   // One-time repair of all commission values
   if(own)repairAllCommissions();
+  repairEODtoLog();
   // Force a fresh pull on login to guarantee sync regardless of timestamp
   fbLastTimestamp=0;
   startAutoSync();}
@@ -3094,6 +3095,33 @@ function repairAllCommissions(){
     console.log('Commission repair V9 complete — all profit/commission recalculated from current inventory costs');
   }
   localStorage.setItem(repairKey,'done');
+}
+
+function repairEODtoLog(){
+  const rk='eodLogSyncV1';
+  if(localStorage.getItem(rk)==='done')return;
+  let fixed=0;
+  eodLogs.forEach(r=>{
+    if(!r.orders)return;
+    r.orders.forEach(o=>{
+      const oCust=(o.customer||'').toLowerCase();
+      const match=log.find(e=>(e.type==='sell'||e.type==='order')&&e.who===o.who&&e.time===o.time&&e.date===r.date&&(e.customer||e.name||'').toLowerCase()===oCust);
+      if(match){
+        if(match.amtReceived!==(o.total||0)){match.amtReceived=o.total||0;if(match.type==='order')match.total=o.total||0;fixed++;}
+        if(o.payMethod){match.payMethod=o.payMethod;match.payMethodLabel=PM.find(m=>m.id===o.payMethod)?.label||o.payMethod;}
+        if(o.payMethod==='split'){match.splitCash=o.splitCash||0;match.splitVirtual=o.splitVirtual||0;}
+        else{delete match.splitCash;delete match.splitVirtual;}
+        match.profit=o.profit||0;
+        match.commission=o.commission||0;
+        if(o.commissionManual)match.commissionManual=true;
+      }
+    });
+  });
+  if(fixed>0){
+    persist();
+    console.log('EOD→Log sync repair: fixed '+fixed+' entries');
+  }
+  localStorage.setItem(rk,'done');
 }
 
 function startAutoSync(){
