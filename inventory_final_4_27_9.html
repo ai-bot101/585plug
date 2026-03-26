@@ -3963,11 +3963,11 @@ function saveAddEODOrder(){
 
 function saveEODLog(){
   const dl=selDay==='today'?tday():selDay;
-  // check if already saved for this date, overwrite
-  const existing=eodLogs.findIndex(l=>l.date===dl);
   const record=buildEODRecord(dl);
-  if(existing>=0){eodLogs[existing]=record;}
-  else{eodLogs.unshift(record);}
+  // unique snapshot ID so each save creates its own log
+  record.snapshotId=Date.now();
+  record.savedAt=new Date().toLocaleString();
+  eodLogs.unshift(record);
   persist();
   renderEODLogsList();
   renderLoginLog();
@@ -3985,10 +3985,14 @@ function renderEODLogsList(){
     return;
   }
   if(cnt)cnt.textContent=eodLogs.length+' saved';
+  // group logs: check for multiple snapshots per date
+  const dateCounts={};
+  eodLogs.forEach(l=>{dateCounts[l.date]=(dateCounts[l.date]||0)+1;});
   el.innerHTML=eodLogs.map((log,i)=>{
     const commTotal=Object.values(log.commByPerson||{}).reduce((s,v)=>s+v,0);
     const cashIssues=(log.cashReconResults||[]).filter(r=>r.diff!==0);
     const hasFailedLogins=(log.failedLoginAttempts||[]).length>0;
+    const multi=dateCounts[log.date]>1;
     return`<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);">
       <div style="flex:1;">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
