@@ -1568,14 +1568,48 @@ function clearCredit(key){
 
 
 function deleteLogEntry(idx) {
-  if (!confirm('Delete this log entry? This cannot be undone.')) return;
   if (idx < 0 || idx >= log.length) return;
+  const entry = log[idx];
+  const isSale = entry.type === 'sell' || entry.type === 'order';
+  if (!confirm(isSale ? 'Delete this order and restore stock?' : 'Delete this log entry?')) return;
+
+  // Restore stock for sales/orders
+  if (isSale) {
+    if (entry.orderItems && entry.orderItems.length) {
+      // Multi-item order
+      entry.orderItems.forEach(oi => {
+        const itemName = (oi.itemName||oi.name||'').toLowerCase();
+        const labelQty = oi.label ? parseInt(oi.label) : NaN;
+        const qty = !isNaN(labelQty) && labelQty > 0 ? labelQty : (oi.qty || 1);
+        for (const c of C()) {
+          const found = (inv[c]||[]).find(item => item.name === itemName);
+          if (found) { found.left = Math.round((gl(found) + qty)*10)/10; break; }
+        }
+      });
+    } else if (entry.name) {
+      // Single item sell
+      const itemName = entry.name.toLowerCase();
+      const qty = entry.amount || entry.qty || 1;
+      for (const c of C()) {
+        const found = (inv[c]||[]).find(item => item.name === itemName);
+        if (found) { found.left = Math.round((gl(found) + qty)*10)/10; break; }
+      }
+    }
+    // If it was a website order, mark cancelled in Firebase
+    if (entry.webOrderKey) {
+      fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({['pending_orders/'+entry.webOrderKey+'/cancelled']: true})
+      }).catch(()=>{});
+    }
+  }
+
   log.splice(idx, 1);
   persist();
   renderStats();
+  renderItems();
   if (cu?.role === 'owner') renderDash();
   else renderStaffLog();
-  showToast('Entry deleted', 'err');
+  showToast(isSale ? 'Order deleted — stock restored ✅' : 'Entry deleted', isSale ? 'ok' : 'err');
 }
 
 let editLogIdx=null;
