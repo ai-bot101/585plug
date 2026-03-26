@@ -916,6 +916,10 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
       <input type="number" id="edit-eod-total" min="0" step="0.01" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--sans);font-size:16px;outline:none;">
     </div>
     <div class="field" style="margin-top:12px;">
+      <label>Sold By</label>
+      <div id="edit-eod-who-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+    <div class="field" style="margin-top:12px;">
       <label>Payment Method</label>
       <div id="edit-eod-pm-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
     </div>
@@ -1017,6 +1021,10 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
     <div class="field">
       <label>Note</label>
       <input type="text" id="edit-log-note" placeholder="Optional note" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;">
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Sold By</label>
+      <div id="edit-log-who-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
     </div>
     <div class="field" style="margin-top:12px;">
       <label>Payment Method</label>
@@ -1930,6 +1938,11 @@ function openEditLog(idx){
   }else{itemsEl.innerHTML='';}
   document.getElementById('edit-log-total').value=e.amtReceived||0;
   document.getElementById('edit-log-note').value=e.note||'';
+  // pre-fill staff (who)
+  editLogWho=e.who||cfg.users[0].name;
+  const whoBtns=document.getElementById('edit-log-who-btns');
+  whoBtns.innerHTML=cfg.users.map((u,ui)=>`<div onclick="setEditLogWho('${u.name}')" id="elwho-${ui}" style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--sans);border:2px solid var(--border);background:var(--bg3);color:var(--text2);display:flex;align-items:center;gap:5px;transition:all .15s;user-select:none;"><span>${u.role==='owner'?'👑':'👤'}</span><span>${u.name}</span></div>`).join('');
+  setEditLogWho(editLogWho,true);
   // pre-fill payment method
   editLogPayMethod=(e.payMethod||'cash').toLowerCase();
   const pmBtns=document.getElementById('edit-log-pm-btns');
@@ -1950,6 +1963,19 @@ function openEditLog(idx){
   }
   updateLogEditPreview();
   document.getElementById('edit-log-modal').classList.add('open');
+}
+let editLogWho='';
+function setEditLogWho(name,init){
+  editLogWho=name;
+  cfg.users.forEach((u,ui)=>{
+    const btn=document.getElementById('elwho-'+ui);
+    if(!btn)return;
+    const sel=u.name===name;
+    btn.style.borderColor=sel?'var(--accent)':'var(--border)';
+    btn.style.background=sel?'rgba(108,99,255,0.15)':'var(--bg3)';
+    btn.style.color=sel?'var(--accent)':'var(--text2)';
+  });
+  if(!init)updateLogEditPreview();
 }
 let editLogPayMethod='cash';
 function setEditLogPM(id,init){
@@ -2017,6 +2043,9 @@ function saveLogEdit(){
   if(editLogIdx===null)return;
   const e=log[editLogIdx];
   const isOrder=e.type==='order';
+  // update who (staff)
+  const oldWho=e.who;
+  e.who=editLogWho||e.who;
   // update customer/name
   const newName=document.getElementById('edit-log-customer').value.trim();
   if(isOrder)e.customer=newName||'Customer';
@@ -2076,8 +2105,9 @@ function saveLogEdit(){
   eodLogs.forEach(r=>{
     if(!r.orders)return;
     r.orders.forEach(o=>{
-      if(o.who===e.who&&o.time===e.time&&r.date===e.date&&(o.customer||'').toLowerCase()===(e.customer||e.name||'').toLowerCase()){
+      if((o.who===e.who||o.who===oldWho)&&o.time===e.time&&r.date===e.date&&(o.customer||'').toLowerCase()===(e.customer||e.name||'').toLowerCase()){
         if(isOrder)o.customer=e.customer;
+        o.who=e.who;
         o.total=newTotal;
         o.profit=e.profit;
         o.commission=e.commission;
@@ -3576,6 +3606,11 @@ function openEditEODOrder(logIdx,orderIdx){
   `).join('');
   document.getElementById('edit-eod-total').value=o.total||0;
   document.getElementById('edit-eod-note').value=o.note||'';
+  // staff (who)
+  editEODWho=o.who||cfg.users[0].name;
+  const eodWhoBtns=document.getElementById('edit-eod-who-btns');
+  eodWhoBtns.innerHTML=cfg.users.map((u,ui)=>`<div onclick="setEditEODWho('${u.name}')" id="eewho-${ui}" style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--sans);border:2px solid var(--border);background:var(--bg3);color:var(--text2);display:flex;align-items:center;gap:5px;transition:all .15s;user-select:none;"><span>${u.role==='owner'?'👑':'👤'}</span><span>${u.name}</span></div>`).join('');
+  setEditEODWho(editEODWho,true);
   // payment method
   editEODPayMethod=(o.payMethod||'cash').toLowerCase();
   const pmBtns=document.getElementById('edit-eod-pm-btns');
@@ -3589,6 +3624,18 @@ function openEditEODOrder(logIdx,orderIdx){
   document.getElementById('edit-eod-order-modal').classList.add('open');
 }
 
+let editEODWho='';
+function setEditEODWho(name,init){
+  editEODWho=name;
+  cfg.users.forEach((u,ui)=>{
+    const btn=document.getElementById('eewho-'+ui);
+    if(!btn)return;
+    const sel=u.name===name;
+    btn.style.borderColor=sel?'var(--accent)':'var(--border)';
+    btn.style.background=sel?'rgba(108,99,255,0.15)':'var(--bg3)';
+    btn.style.color=sel?'var(--accent)':'var(--text2)';
+  });
+}
 let editEODPayMethod='cash';
 function setEditEODPM(id,init){
   editEODPayMethod=id;
@@ -3626,6 +3673,9 @@ function saveEODOrderEdit(){
       o.items[ii].qty=parseFloat(inp.value)||0;
     }
   });
+  // update who (staff)
+  const oldEODWho=o.who;
+  o.who=editEODWho||o.who;
   // update total
   const newTotal=parseFloat(document.getElementById('edit-eod-total').value)||0;
   const oldTotal=o.total||0;
@@ -3689,7 +3739,7 @@ function saveEODOrderEdit(){
   r.txCount=r.orders.length;
   // also update the matching log entry if it exists
   const oCust=(o.customer||'').toLowerCase();
-  const matchingLog=log.find(e=>(e.type==='sell'||e.type==='order')&&e.who===o.who&&e.time===o.time&&e.date===r.date&&(e.customer||e.name||'').toLowerCase()===oCust);
+  const matchingLog=log.find(e=>(e.type==='sell'||e.type==='order')&&(e.who===oldEODWho||e.who===o.who)&&e.time===o.time&&e.date===r.date&&(e.customer||e.name||'').toLowerCase()===oCust);
   if(matchingLog){
     if(matchingLog.orderItems){
       matchingLog.orderItems.forEach((oi,ii)=>{
@@ -3700,6 +3750,7 @@ function saveEODOrderEdit(){
     matchingLog.amtReceived=newTotal;
     matchingLog.profit=o.profit;
     matchingLog.commission=o.commission;
+    matchingLog.who=o.who;
     matchingLog.payMethod=newPM;
     matchingLog.payMethodLabel=PM.find(m=>m.id===newPM)?.label||newPM;
     if(newPM==='split'){matchingLog.splitCash=o.splitCash;matchingLog.splitVirtual=o.splitVirtual;}
