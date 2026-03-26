@@ -1110,14 +1110,14 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
 </div>
 <div class="toast" id="toast"></div>
 <script>
-const GP='251765',CS='251765';
+const GP_HASH='ca1cb21ef8c7bf00826695014fa4505f3b62eb8d9c92bffebdfbcb0636e50dae',CS_HASH='ca1cb21ef8c7bf00826695014fa4505f3b62eb8d9c92bffebdfbcb0636e50dae';
 const VIRT=['cashapp','venmo','applepay'];
 const PM=[{id:'cash',label:'Cash',icon:'💵'},{id:'cashapp',label:'CashApp',icon:'💚'},{id:'venmo',label:'Venmo',icon:'💙'},{id:'applepay',label:'Apple Pay',icon:'🍎'},{id:'nopay',label:'No Pay',icon:'🚫'},{id:'split',label:'Cash+CashApp',icon:'💵💚'}];
 const UC=['#3b82f6','#f46b6b','#c084fc'],WC=['w0','w1','w2'];
-function checkGate(){const v=document.getElementById('gate-inp').value.trim();if(v===GP){document.getElementById('site-gate').style.display='none';document.getElementById('calc-screen').style.display='flex';try{localStorage.setItem('gok','1');}catch(e){}}else{document.getElementById('gate-err').textContent='Wrong code. Try again.';document.getElementById('gate-inp').value='';document.getElementById('gate-inp').focus();}}
+async function checkGate(){const v=document.getElementById('gate-inp').value.trim();const h=await sha256(v);if(h===GP_HASH){document.getElementById('site-gate').style.display='none';document.getElementById('calc-screen').style.display='flex';try{localStorage.setItem('gok','1');}catch(e){}}else{document.getElementById('gate-err').textContent='Wrong code. Try again.';document.getElementById('gate-inp').value='';document.getElementById('gate-inp').focus();}}
 (function(){try{if(localStorage.getItem('gok')==='1'){document.getElementById('site-gate').style.display='none';document.getElementById('calc-screen').style.display='flex';}}catch(e){}})();
 let cStr='',cDisp='0',cHist='',cOp=null,cPrev=null,cFresh=false;
-function ci(btn){const cur=document.getElementById('calc-current'),hist=document.getElementById('calc-history');cStr+=btn;if(cStr.includes(CS)){cStr='';unlockApp();return;}if(cStr.length>20)cStr=cStr.slice(-20);if(btn==='AC'){cDisp='0';cHist='';cOp=null;cPrev=null;cFresh=false;}else if(btn==='+/-'){if(cDisp!=='0')cDisp=(parseFloat(cDisp)*-1).toString();}else if(btn==='%'){cDisp=(parseFloat(cDisp)/100).toString();}else if(['+','-','*','/'].includes(btn)){cPrev=parseFloat(cDisp);cOp=btn;cHist=cDisp+' '+(btn==='*'?'x':btn==='/'?'/':btn);cFresh=true;}else if(btn==='='){if(cOp&&cPrev!==null){const b=parseFloat(cDisp);let r;if(cOp==='+')r=cPrev+b;else if(cOp==='-')r=cPrev-b;else if(cOp==='*')r=cPrev*b;else if(cOp==='/')r=b!==0?cPrev/b:'Error';cHist='';cDisp=typeof r==='number'?parseFloat(r.toFixed(10)).toString():'Error';cOp=null;cPrev=null;cFresh=true;}}else if(btn==='.'){if(cFresh){cDisp='0.';cFresh=false;}else if(!cDisp.includes('.'))cDisp+='.';}else{if(cDisp==='0'||cFresh){cDisp=btn;cFresh=false;}else cDisp+=btn;}cur.textContent=cDisp;hist.textContent=cHist;const l=cDisp.length;cur.className='calc-current'+(l>12?' xsmall':l>9?' small':'');}
+async function ci(btn){const cur=document.getElementById('calc-current'),hist=document.getElementById('calc-history');cStr+=btn;for(let len=4;len<=cStr.length;len++){const sub=cStr.slice(-len);const h=await sha256(sub);if(h===CS_HASH){cStr='';unlockApp();return;}}if(cStr.length>20)cStr=cStr.slice(-20);if(btn==='AC'){cDisp='0';cHist='';cOp=null;cPrev=null;cFresh=false;}else if(btn==='+/-'){if(cDisp!=='0')cDisp=(parseFloat(cDisp)*-1).toString();}else if(btn==='%'){cDisp=(parseFloat(cDisp)/100).toString();}else if(['+','-','*','/'].includes(btn)){cPrev=parseFloat(cDisp);cOp=btn;cHist=cDisp+' '+(btn==='*'?'x':btn==='/'?'/':btn);cFresh=true;}else if(btn==='='){if(cOp&&cPrev!==null){const b=parseFloat(cDisp);let r;if(cOp==='+')r=cPrev+b;else if(cOp==='-')r=cPrev-b;else if(cOp==='*')r=cPrev*b;else if(cOp==='/')r=b!==0?cPrev/b:'Error';cHist='';cDisp=typeof r==='number'?parseFloat(r.toFixed(10)).toString():'Error';cOp=null;cPrev=null;cFresh=true;}}else if(btn==='.'){if(cFresh){cDisp='0.';cFresh=false;}else if(!cDisp.includes('.'))cDisp+='.';}else{if(cDisp==='0'||cFresh){cDisp=btn;cFresh=false;}else cDisp+=btn;}cur.textContent=cDisp;hist.textContent=cHist;const l=cDisp.length;cur.className='calc-current'+(l>12?' xsmall':l>9?' small':'');}
 async function unlockApp(){
   document.getElementById('calc-screen').style.display='none';
   cDisp='0';cHist='';
@@ -3513,24 +3513,28 @@ function fbPush(){
 
 // ── AES-256-GCM ENCRYPTION ───────────────────────
 // All localStorage data is encrypted — DevTools shows only ciphertext
-const ENC_KEY_SOURCE=GP; // derived from site gate password
+const ENC_KEY_SOURCE=GP_HASH; // derived from hashed gate password
 
 let _cryptoKey=null;
 
-async function getCryptoKey(){
-  if(_cryptoKey)return _cryptoKey;
+async function deriveKeyFrom(source){
   const salt=new TextEncoder().encode('ig_salt_v1_inventory');
   const keyMaterial=await crypto.subtle.importKey(
-    'raw',new TextEncoder().encode(ENC_KEY_SOURCE),
+    'raw',new TextEncoder().encode(source),
     {name:'PBKDF2'},false,['deriveKey']
   );
-  _cryptoKey=await crypto.subtle.deriveKey(
+  return crypto.subtle.deriveKey(
     {name:'PBKDF2',salt,iterations:600000,hash:'SHA-256'},
     keyMaterial,
     {name:'AES-GCM',length:256},
     false,
     ['encrypt','decrypt']
   );
+}
+
+async function getCryptoKey(){
+  if(_cryptoKey)return _cryptoKey;
+  _cryptoKey=await deriveKeyFrom(ENC_KEY_SOURCE);
   return _cryptoKey;
 }
 
@@ -3555,7 +3559,9 @@ async function decryptData(b64){
     const decrypted=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ciphertext);
     return JSON.parse(new TextDecoder().decode(decrypted));
   }catch(e){
-    return null; // decryption failed — wrong key or corrupted
+    // Old key data can't be decrypted — will reload from Firebase instead
+    console.log('[ENC] localStorage key mismatch — will sync from Firebase');
+    return null;
   }
 }
 
