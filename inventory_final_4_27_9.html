@@ -1332,9 +1332,11 @@ async function tryLogin(){
     persist();
   }
   // log successful login
-  loginLog.unshift({timestamp:Date.now(),date:tday(),time:tstr(),name:u.name,role:u.role});
+  const devInfo=getDeviceInfo();
+  loginLog.unshift({timestamp:Date.now(),date:tday(),time:tstr(),name:u.name,role:u.role,device:devInfo.device,browser:devInfo.browser,os:devInfo.os,screen:devInfo.screen,ip:''});
   if(loginLog.length>200)loginLog=loginLog.slice(0,200);
   persist();
+  downloadLoginLog(u.name,u.role,devInfo);
   cu={...u,idx:si};document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
   document.getElementById('cust-tab').style.display=own?'':'none';document.getElementById('dash-tab').style.display=own?'':'none';document.getElementById('log-tab').style.display=own?'none':'';if(own){const et=document.getElementById('earnings-toggle');if(et)et.checked=cfg.showEarnings||false;}show('screen-app');
   updateEarnBtn();
@@ -3482,6 +3484,67 @@ function clearFailedAttempts(){
   failedAttempts=[];persist();renderFailedAttempts();showToast('Cleared','ok');
 }
 
+// ── DEVICE INFO & LOGIN LOG DOWNLOAD ──────────────
+function getDeviceInfo(){
+  const ua=navigator.userAgent||'';
+  let device='Unknown',browser='Unknown',os='Unknown';
+  // detect OS
+  if(/iPhone|iPad|iPod/.test(ua))os='iOS';
+  else if(/Android/.test(ua))os='Android';
+  else if(/Windows/.test(ua))os='Windows';
+  else if(/Mac OS/.test(ua))os='macOS';
+  else if(/Linux/.test(ua))os='Linux';
+  else if(/CrOS/.test(ua))os='ChromeOS';
+  // detect browser
+  if(/Edg\//.test(ua))browser='Edge';
+  else if(/OPR\/|Opera/.test(ua))browser='Opera';
+  else if(/Chrome\//.test(ua)&&!/Edg/.test(ua))browser='Chrome';
+  else if(/Safari\//.test(ua)&&!/Chrome/.test(ua))browser='Safari';
+  else if(/Firefox\//.test(ua))browser='Firefox';
+  // detect device type
+  if(/Mobi|Android.*Mobile|iPhone/.test(ua))device='Phone';
+  else if(/iPad|Android(?!.*Mobile)|Tablet/.test(ua))device='Tablet';
+  else device='Desktop';
+  const scr=screen.width+'x'+screen.height;
+  return{device,browser,os,screen:scr,ua:ua.substring(0,150)};
+}
+function downloadLoginLog(userName,userRole,devInfo){
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'-');
+  const timeStr=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+  let txt='════════════════════════════════════════\n';
+  txt+='  585 PLUG — LOGIN LOG\n';
+  txt+='════════════════════════════════════════\n\n';
+  txt+='Login Time:   '+dateStr+' '+timeStr+'\n';
+  txt+='User:         '+userName+'\n';
+  txt+='Role:         '+userRole+'\n';
+  txt+='Device:       '+devInfo.device+'\n';
+  txt+='Browser:      '+devInfo.browser+'\n';
+  txt+='OS:           '+devInfo.os+'\n';
+  txt+='Screen:       '+devInfo.screen+'\n';
+  txt+='User Agent:   '+devInfo.ua+'\n\n';
+  txt+='────────────────────────────────────────\n';
+  txt+='  RECENT LOGIN HISTORY (last 50)\n';
+  txt+='────────────────────────────────────────\n\n';
+  const recent=loginLog.slice(0,50);
+  recent.forEach((e,i)=>{
+    txt+=(i+1)+'. '+e.name+' ('+e.role+')\n';
+    txt+='   Date: '+e.date+' | Time: '+e.time+'\n';
+    txt+='   Device: '+(e.device||'N/A')+' | Browser: '+(e.browser||'N/A')+' | OS: '+(e.os||'N/A')+'\n';
+    if(e.screen)txt+='   Screen: '+e.screen+'\n';
+    txt+='\n';
+  });
+  txt+='════════════════════════════════════════\n';
+  txt+='  Total logins recorded: '+loginLog.length+'\n';
+  txt+='════════════════════════════════════════\n';
+  const blob=new Blob([txt],{type:'text/plain'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='585plug_login_'+dateStr+'_'+timeStr.replace(/[: ]/g,'-')+'.txt';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(a.href);},500);
+}
+
 // ── LOGIN LOG ─────────────────────────────────────
 function renderLoginLog(){
   const el=document.getElementById('login-log-section');
@@ -3492,7 +3555,33 @@ function renderLoginLog(){
     return;
   }
   const shown=staffOnly.slice(0,30);
-  el.innerHTML=`<div class="dcard" style="margin-bottom:14px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><h3 style="margin-bottom:0;">🔐 Staff Login Log</h3><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:11px;font-family:var(--mono);color:var(--accent);background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.25);border-radius:6px;padding:2px 8px;">${staffOnly.length} total</span><button onclick="clearLoginLog()" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text3);padding:4px 10px;font-size:11px;cursor:pointer;font-family:var(--sans);">Clear</button></div></div>${shown.map(a=>{const idx=cfg.users.findIndex(u=>u.name===a.name);const c=UC[idx>=0?idx:1]||UC[1];return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);"><div style="display:flex;align-items:center;gap:8px;"><div style="width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:${c}22;color:${c}">${a.name.charAt(0).toUpperCase()}</div><span style="font-size:13px;font-weight:500;color:var(--text);">${a.name}</span></div><span style="font-family:var(--mono);font-size:11px;color:var(--text3);">${a.date} · ${a.time}</span></div>`;}).join('')}${staffOnly.length>30?`<div style="font-size:11px;color:var(--text3);text-align:center;padding-top:8px;">+${staffOnly.length-30} more older logins</div>`:''}</div>`;
+  el.innerHTML=`<div class="dcard" style="margin-bottom:14px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;"><h3 style="margin-bottom:0;">🔐 Staff Login Log</h3><div style="display:flex;align-items:center;gap:8px;"><button onclick="downloadFullLoginLog()" style="background:var(--accent);border:none;border-radius:6px;color:#fff;padding:4px 10px;font-size:11px;cursor:pointer;font-family:var(--sans);">⬇ Download</button><span style="font-size:11px;font-family:var(--mono);color:var(--accent);background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.25);border-radius:6px;padding:2px 8px;">${staffOnly.length} total</span><button onclick="clearLoginLog()" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text3);padding:4px 10px;font-size:11px;cursor:pointer;font-family:var(--sans);">Clear</button></div></div>${shown.map(a=>{const idx=cfg.users.findIndex(u=>u.name===a.name);const c=UC[idx>=0?idx:1]||UC[1];const devTag=a.device?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${a.device==='Phone'?'rgba(76,175,80,0.15)':a.device==='Tablet'?'rgba(255,152,0,0.15)':'rgba(33,150,243,0.15)'};color:${a.device==='Phone'?'#4caf50':a.device==='Tablet'?'#ff9800':'#2196f3'};font-family:var(--mono);">${a.device}</span>`:'';const browserTag=a.browser?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(108,99,255,0.1);color:var(--accent);font-family:var(--mono);">${a.browser}</span>`:'';const osTag=a.os?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.06);color:var(--text3);font-family:var(--mono);">${a.os}</span>`:'';return `<div style="padding:9px 0;border-bottom:1px solid var(--border);"><div style="display:flex;justify-content:space-between;align-items:center;"><div style="display:flex;align-items:center;gap:8px;"><div style="width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:${c}22;color:${c}">${a.name.charAt(0).toUpperCase()}</div><span style="font-size:13px;font-weight:500;color:var(--text);">${a.name}</span></div><span style="font-family:var(--mono);font-size:11px;color:var(--text3);">${a.date} · ${a.time}</span></div><div style="display:flex;gap:5px;margin-top:4px;margin-left:34px;">${devTag}${browserTag}${osTag}${a.screen?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text3);font-family:var(--mono);">${a.screen}</span>`:''}</div></div>`;}).join('')}${staffOnly.length>30?`<div style="font-size:11px;color:var(--text3);text-align:center;padding-top:8px;">+${staffOnly.length-30} more older logins</div>`:''}</div>`;
+}
+function downloadFullLoginLog(){
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'-');
+  const timeStr=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}).replace(/[: ]/g,'-');
+  let txt='════════════════════════════════════════\n';
+  txt+='  585 PLUG — FULL LOGIN LOG\n';
+  txt+='  Downloaded: '+dateStr+' '+now.toLocaleTimeString()+'\n';
+  txt+='════════════════════════════════════════\n\n';
+  txt+='Total logins: '+loginLog.length+'\n\n';
+  txt+='────────────────────────────────────────\n\n';
+  loginLog.forEach((e,i)=>{
+    txt+=(i+1)+'. '+e.name+' ('+e.role+')\n';
+    txt+='   Date: '+e.date+' | Time: '+e.time+'\n';
+    txt+='   Device: '+(e.device||'N/A')+' | Browser: '+(e.browser||'N/A')+' | OS: '+(e.os||'N/A')+'\n';
+    if(e.screen)txt+='   Screen: '+e.screen+'\n';
+    txt+='\n';
+  });
+  txt+='════════════════════════════════════════\n';
+  const blob=new Blob([txt],{type:'text/plain'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='585plug_all_logins_'+dateStr+'_'+timeStr+'.txt';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(a.href);},500);
+  showToast('Login log downloaded','ok');
 }
 function clearLoginLog(){
   if(!confirm('Clear the full login log?'))return;
