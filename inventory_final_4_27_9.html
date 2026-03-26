@@ -3180,6 +3180,84 @@ function saveEODOrderEdit(){
   editEODState=null;
 }
 
+function deleteEODOrder(logIdx,orderIdx){
+  const r=eodLogs[logIdx];
+  if(!r||!r.orders||!r.orders[orderIdx])return;
+  const o=r.orders[orderIdx];
+  const label=(o.customer||'Quick Sell')+' — '+fmtP(o.total);
+  if(!confirm('Delete "'+label+'" and restore stock?'))return;
+
+  // ── RESTORE STOCK ──
+  if(o.items&&o.items.length){
+    o.items.forEach(it=>{
+      const itemName=(it.itemName||'').toLowerCase();
+      const qty=it.qty||0;
+      if(!itemName||!qty)return;
+      for(const c of C()){
+        const found=(inv[c]||[]).find(item=>item.name&&item.name.toLowerCase()===itemName);
+        if(found){ found.left=Math.round((gl(found)+qty)*10)/10; break; }
+      }
+    });
+  }
+
+  // ── REMOVE MATCHING ACTIVITY LOG ENTRY ──
+  const matchIdx=log.findIndex(e=>(e.type==='sell'||e.type==='order')&&e.who===o.who&&e.time===o.time&&e.date===r.date);
+  if(matchIdx>=0){
+    const entry=log[matchIdx];
+    // If it was a website order, delete from Firebase too
+    if(entry.webOrderKey){
+      fetch(FB_URL+'/pending_orders/'+entry.webOrderKey+'.json',{method:'DELETE'}).catch(()=>{});
+    }
+    log.splice(matchIdx,1);
+  }
+
+  // ── REMOVE ORDER FROM EOD ──
+  r.orders.splice(orderIdx,1);
+
+  // ── RECALCULATE EOD TOTALS ──
+  let grandTotal=0,cashTotal=0,virtTotal=0;
+  const newCommByPerson={};
+  cfg.users.forEach(u=>{newCommByPerson[u.name]=0;});
+  r.orders.forEach(ord=>{
+    grandTotal+=ord.total||0;
+    if(ord.payMethod&&(ord.payMethod.toLowerCase().includes('cashapp')||ord.payMethod.toLowerCase().includes('venmo')||ord.payMethod.toLowerCase().includes('zelle'))){
+      virtTotal+=ord.total||0;
+    }else{
+      cashTotal+=ord.total||0;
+    }
+    if(!newCommByPerson[ord.who])newCommByPerson[ord.who]=0;
+    newCommByPerson[ord.who]+=(ord.commission||0);
+  });
+  r.grandTotal=grandTotal;
+  r.cashTotal=cashTotal;
+  r.virtTotal=virtTotal;
+  r.commByPerson=newCommByPerson;
+  r.totalProfit=r.orders.reduce((s,ord)=>s+(ord.profit||0),0);
+  const staffComm=cfg.users.filter(u=>u.role==='staff').reduce((s,u)=>s+(newCommByPerson[u.name]||0),0);
+  r.staffComm=staffComm;
+  r.ownerNet=Math.max(0,r.totalProfit-staffComm);
+  r.txCount=r.orders.length;
+
+  // if no orders left, optionally remove the whole EOD log
+  if(r.orders.length===0){
+    if(confirm('No orders left in this log. Delete the whole day log?')){
+      eodLogs.splice(logIdx,1);
+      persist();renderItems();renderEODLogsList();
+      if(cu?.role==='owner')renderDash(); else renderStaffLog();
+      showToast('Day log deleted — stock restored ✅','ok');
+      closeOv('view-eod-modal');
+      return;
+    }
+  }
+
+  persist();
+  renderItems();
+  viewEODLog(logIdx);
+  renderEODLogsList();
+  if(cu?.role==='owner')renderDash(); else renderStaffLog();
+  showToast('Order deleted — stock restored ✅','ok');
+}
+
 function saveEODLog(){
   const dl=selDay==='today'?tday():selDay;
   // check if already saved for this date, overwrite
@@ -3450,7 +3528,10 @@ function viewEODLog(i,filterPerson){
               <div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-family:var(--mono);">ITEMS</div>
               ${(o.items||[]).map(it=>`<div style="font-size:14px;color:var(--text);padding:4px 0;font-family:var(--mono);">${fmt(it.qty)}x ${it.itemName}</div>`).join('')}
             </div>`:''}
-            <button onclick="event.stopPropagation();openEditEODOrder(${i},${oi})" style="width:100%;margin-top:12px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:8px;padding:10px;color:var(--accent);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;">✏️ Edit This Order</button>
+            <div style="display:flex;gap:8px;margin-top:12px;">
+              <button onclick="event.stopPropagation();openEditEODOrder(${i},${oi})" style="flex:1;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:8px;padding:10px;color:var(--accent);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;">✏️ Edit</button>
+              <button onclick="event.stopPropagation();deleteEODOrder(${i},${oi})" style="flex:1;background:rgba(244,107,107,0.12);border:1px solid rgba(244,107,107,0.3);border-radius:8px;padding:10px;color:var(--red);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;">🗑️ Delete</button>
+            </div>
           </div>
           <div style="text-align:center;margin-top:6px;"><span style="font-size:11px;color:var(--text3);">tap for details ▾</span></div>
         </div>`;
