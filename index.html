@@ -80,6 +80,31 @@ html.no-scroll{overflow:hidden !important;}
 .op-done-btn{width:100%;background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:11px;color:var(--white3);font-family:'Oswald',sans-serif;font-size:13px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .15s;}
 .op-done-btn:hover{border-color:var(--red);color:var(--white2);}
 
+/* ORDER CONFIRMATION */
+#order-confirm{position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:450;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
+#order-confirm.open{display:flex;}
+.oc-card{background:var(--black2);border:1px solid var(--border2);border-radius:18px;padding:24px 20px;width:100%;max-width:400px;max-height:85vh;display:flex;flex-direction:column;}
+.oc-title{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--white);letter-spacing:2px;text-align:center;margin-bottom:4px;}
+.oc-sub{font-family:'Oswald',sans-serif;font-size:12px;color:var(--white3);text-align:center;margin-bottom:14px;}
+.oc-items{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:14px;}
+.oc-item{display:flex;align-items:center;justify-content:space-between;background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px;}
+.oc-item-info{flex:1;}
+.oc-item-name{font-family:'Oswald',sans-serif;font-size:14px;font-weight:600;color:var(--white);text-transform:capitalize;}
+.oc-item-detail{font-size:11px;color:var(--white3);font-family:'Oswald',sans-serif;margin-top:2px;}
+.oc-item-flavors{font-size:10px;color:var(--orange,#f4a24a);font-family:'Oswald',sans-serif;margin-top:2px;}
+.oc-item-price{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--red);letter-spacing:1px;flex-shrink:0;margin-left:10px;}
+.oc-summary{background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px;}
+.oc-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;}
+.oc-row-label{font-family:'Oswald',sans-serif;font-size:12px;color:var(--white3);text-transform:uppercase;letter-spacing:1px;}
+.oc-row-val{font-family:'Oswald',sans-serif;font-size:13px;color:var(--white2);}
+.oc-row.total{border-top:1px solid var(--border);padding-top:8px;margin-top:4px;}
+.oc-row.total .oc-row-label{color:var(--white);font-size:14px;font-weight:600;}
+.oc-row.total .oc-row-val{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--red);letter-spacing:1px;}
+.oc-edit-btn{width:100%;background:var(--black3);border:1px solid var(--border);border-radius:10px;padding:11px;color:var(--white3);font-family:'Oswald',sans-serif;font-size:13px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .15s;margin-bottom:8px;}
+.oc-edit-btn:hover{border-color:var(--red);color:var(--white2);}
+.oc-send-btn{width:100%;background:var(--red);border:none;border-radius:10px;padding:14px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:20px;cursor:pointer;letter-spacing:2px;transition:background .2s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.oc-send-btn:hover{background:var(--red3);}
+
 /* SEND REMINDER POPUP */
 #send-reminder{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:550;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);padding:16px;}
 #send-reminder.open{display:flex;}
@@ -410,6 +435,18 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
 </div>
 
 <!-- ORDER PREVIEW MODAL -->
+<!-- ORDER CONFIRMATION -->
+<div id="order-confirm">
+  <div class="oc-card">
+    <div class="oc-title">Review Your Order</div>
+    <div class="oc-sub">Make sure everything looks right before sending</div>
+    <div class="oc-items" id="oc-items"></div>
+    <div class="oc-summary" id="oc-summary"></div>
+    <button class="oc-edit-btn" onclick="closeConfirm()">← Edit Order</button>
+    <button class="oc-send-btn" onclick="confirmAndSend()">✅ Confirm & Send Order</button>
+  </div>
+</div>
+
 <div id="order-preview">
   <div class="op-card">
     <div class="op-title">Your Order</div>
@@ -577,7 +614,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
         oninput="addrSearch(this.value);checkoutReady()" autocomplete="off">
       <div class="addr-dropdown" id="addr-dropdown"></div>
       <div class="pickup-msg" id="pickup-msg">📍 You'll pick up at the agreed location. We'll confirm details when you send your order.</div>
-      <button class="checkout-btn" id="checkout-btn" onclick="sendOrder()" disabled>
+      <button class="checkout-btn" id="checkout-btn" onclick="showConfirm()" disabled>
         📱 Send Order via Text
       </button>
     </div>
@@ -612,6 +649,15 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
     <div class="ap-stat"><div class="ap-stat-val" id="ap-total-orders">0</div><div class="ap-stat-label">Orders</div></div>
     <div class="ap-stat"><div class="ap-stat-val" id="ap-total-revenue">$0</div><div class="ap-stat-label">Revenue</div></div>
     <div class="ap-stat"><div class="ap-stat-val" id="ap-today-orders">0</div><div class="ap-stat-label">Today</div></div>
+  </div>
+  <!-- SALES SUMMARY -->
+  <div id="ap-sales-summary" style="padding:0 16px 8px;">
+    <div style="display:flex;gap:6px;margin-bottom:10px;">
+      <button class="ap-tab" id="ap-tab-day" onclick="setSalesTab('day')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border2);background:rgba(204,31,31,0.1);border-color:var(--red);color:var(--white);font-family:Oswald,sans-serif;font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;">Today</button>
+      <button class="ap-tab" id="ap-tab-week" onclick="setSalesTab('week')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border2);background:var(--black3);color:var(--white3);font-family:Oswald,sans-serif;font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;">This Week</button>
+      <button class="ap-tab" id="ap-tab-all" onclick="setSalesTab('all')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border2);background:var(--black3);color:var(--white3);font-family:Oswald,sans-serif;font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;">All Time</button>
+    </div>
+    <div id="ap-sales-detail" style="background:var(--black2);border:1px solid var(--border);border-radius:10px;padding:12px;"></div>
   </div>
   <div class="ap-list" id="ap-list">
     <div class="ap-empty">Loading orders...</div>
@@ -1455,6 +1501,40 @@ function submitPhone() {
   sendOrder();
 }
 
+// ── ORDER CONFIRMATION ──
+function showConfirm() {
+  if (!cart.length || !payMethod || !orderType) return;
+  const pmLabels = {cash:'💵 Cash',cashapp:'💚 CashApp',venmo:'💙 Venmo',applepay:'🍎 Apple Pay',split:'💵💚 Cash+CashApp'};
+  // Render items
+  const itemsHtml = cart.map(c => {
+    return '<div class="oc-item"><div class="oc-item-info">' +
+      '<div class="oc-item-name">' + c.name + '</div>' +
+      '<div class="oc-item-detail">' + c.label + ' · ' + c.cat + '</div>' +
+      (c.flavorText ? '<div class="oc-item-flavors">🍬 ' + c.flavorText + '</div>' : '') +
+      '</div><div class="oc-item-price">$' + c.price + '</div></div>';
+  }).join('');
+  document.getElementById('oc-items').innerHTML = itemsHtml;
+  // Render summary
+  const sub = getSub();
+  const fee = getFee();
+  const total = sub + fee;
+  const addr = document.getElementById('addr-inp')?.value.trim() || '';
+  let summaryHtml = '<div class="oc-row"><span class="oc-row-label">Payment</span><span class="oc-row-val">' + (pmLabels[payMethod]||payMethod) + '</span></div>';
+  summaryHtml += '<div class="oc-row"><span class="oc-row-label">' + (orderType==='pickup'?'🏪 Pickup':'🚗 Delivery') + '</span><span class="oc-row-val">' + (orderType==='delivery'?addr:'Agreed location') + '</span></div>';
+  if (fee > 0) summaryHtml += '<div class="oc-row"><span class="oc-row-label">Virtual Fee</span><span class="oc-row-val" style="color:var(--red);">+$' + fee + '</span></div>';
+  summaryHtml += '<div class="oc-row"><span class="oc-row-label">Subtotal</span><span class="oc-row-val">$' + sub + '</span></div>';
+  summaryHtml += '<div class="oc-row total"><span class="oc-row-label">Total</span><span class="oc-row-val">$' + total + '</span></div>';
+  document.getElementById('oc-summary').innerHTML = summaryHtml;
+  document.getElementById('order-confirm').classList.add('open');
+}
+function closeConfirm() {
+  document.getElementById('order-confirm').classList.remove('open');
+}
+function confirmAndSend() {
+  document.getElementById('order-confirm').classList.remove('open');
+  sendOrder();
+}
+
 // ── SEND ORDER ──
 let _orderMsg = '';
 
@@ -1691,6 +1771,7 @@ async function tryAdmin() {
     adminUnlocked = true;
     closeAdminGate();
     openAdmin();
+    startOrderNotifications();
   } else {
     document.getElementById('adg-err').textContent = 'Wrong password';
     document.getElementById('adg-pw').value = '';
@@ -1792,14 +1873,88 @@ async function adminDeleteOrder(key) {
   } catch(e) { showToast('Failed to delete','red-t'); }
 }
 
+let _adminOrders = [];
+let _salesTab = 'day';
+
 function updateAdminStats(orders) {
+  _adminOrders = orders.filter(o => !o.cancelled);
   const today = new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'});
-  const todayOrders = orders.filter(o => o.date === today);
-  const totalRevenue = orders.reduce((s,o) => s + (o.total||0), 0);
+  const todayOrders = orders.filter(o => o.date === today && !o.cancelled);
+  const totalRevenue = _adminOrders.reduce((s,o) => s + (o.total||0), 0);
 
   document.getElementById('ap-total-orders').textContent = orders.length;
   document.getElementById('ap-total-revenue').textContent = '$' + totalRevenue;
   document.getElementById('ap-today-orders').textContent = todayOrders.length;
+  renderSalesSummary();
+}
+
+function setSalesTab(tab) {
+  _salesTab = tab;
+  ['day','week','all'].forEach(t => {
+    const btn = document.getElementById('ap-tab-'+t);
+    if (t === tab) { btn.style.background='rgba(204,31,31,0.1)'; btn.style.borderColor='var(--red)'; btn.style.color='var(--white)'; }
+    else { btn.style.background='var(--black3)'; btn.style.borderColor='var(--border2)'; btn.style.color='var(--white3)'; }
+  });
+  renderSalesSummary();
+}
+
+function renderSalesSummary() {
+  const el = document.getElementById('ap-sales-detail');
+  if (!el) return;
+  const now = new Date();
+  const today = now.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'});
+  const weekAgo = new Date(now.getTime() - 7*24*60*60*1000).getTime();
+
+  let filtered;
+  if (_salesTab === 'day') filtered = _adminOrders.filter(o => o.date === today);
+  else if (_salesTab === 'week') filtered = _adminOrders.filter(o => (o.timestamp||0) >= weekAgo);
+  else filtered = _adminOrders;
+
+  if (!filtered.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--white3);font-family:Oswald,sans-serif;font-size:13px;padding:10px;">No orders for this period</div>';
+    return;
+  }
+
+  const revenue = filtered.reduce((s,o) => s+(o.total||0), 0);
+  const avgOrder = Math.round(revenue / filtered.length);
+  // Top items
+  const itemCounts = {};
+  filtered.forEach(o => (o.orderItems||[]).forEach(it => {
+    const name = it.itemName||'?';
+    itemCounts[name] = (itemCounts[name]||0) + 1;
+  }));
+  const topItems = Object.entries(itemCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  // Payment breakdown
+  const payCounts = {};
+  filtered.forEach(o => { const p=o.payMethodLabel||o.payMethod||'?'; payCounts[p]=(payCounts[p]||0)+1; });
+  // Delivery vs pickup
+  const deliveries = filtered.filter(o=>o.orderType==='delivery').length;
+  const pickups = filtered.filter(o=>o.orderType==='pickup').length;
+
+  let html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">';
+  html += '<div style="text-align:center;"><div style="font-family:Bebas Neue,sans-serif;font-size:22px;color:var(--green);letter-spacing:1px;">$'+revenue+'</div><div style="font-family:Oswald,sans-serif;font-size:10px;color:var(--white3);text-transform:uppercase;letter-spacing:1px;">Revenue</div></div>';
+  html += '<div style="text-align:center;"><div style="font-family:Bebas Neue,sans-serif;font-size:22px;color:var(--white);letter-spacing:1px;">'+filtered.length+'</div><div style="font-family:Oswald,sans-serif;font-size:10px;color:var(--white3);text-transform:uppercase;letter-spacing:1px;">Orders</div></div>';
+  html += '<div style="text-align:center;"><div style="font-family:Bebas Neue,sans-serif;font-size:22px;color:var(--white);letter-spacing:1px;">$'+avgOrder+'</div><div style="font-family:Oswald,sans-serif;font-size:10px;color:var(--white3);text-transform:uppercase;letter-spacing:1px;">Avg Order</div></div>';
+  html += '</div>';
+
+  if (topItems.length) {
+    html += '<div style="font-family:Oswald,sans-serif;font-size:11px;color:var(--white3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">🔥 Top Items</div>';
+    topItems.forEach(([name,count]) => {
+      const pct = Math.round(count/filtered.length*100);
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+      html += '<div style="flex:1;font-family:Oswald,sans-serif;font-size:12px;color:var(--white2);text-transform:capitalize;">'+name+'</div>';
+      html += '<div style="width:80px;height:6px;background:var(--black);border-radius:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:var(--red);border-radius:3px;"></div></div>';
+      html += '<div style="font-family:monospace;font-size:10px;color:var(--white3);width:20px;text-align:right;">'+count+'</div>';
+      html += '</div>';
+    });
+  }
+
+  html += '<div style="display:flex;gap:8px;margin-top:10px;">';
+  html += '<div style="flex:1;text-align:center;background:var(--black3);border-radius:6px;padding:6px;font-family:Oswald,sans-serif;font-size:11px;"><span style="color:var(--white);">🚗 '+deliveries+'</span> <span style="color:var(--white3);">delivery</span></div>';
+  html += '<div style="flex:1;text-align:center;background:var(--black3);border-radius:6px;padding:6px;font-family:Oswald,sans-serif;font-size:11px;"><span style="color:var(--white);">🏪 '+pickups+'</span> <span style="color:var(--white3);">pickup</span></div>';
+  html += '</div>';
+
+  el.innerHTML = html;
 }
 
 // ── TOAST ──
@@ -1809,6 +1964,63 @@ function showToast(msg, type='') {
   t.className = 'toast show' + (type?' '+type:'');
   clearTimeout(window._tt);
   window._tt = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── PUSH NOTIFICATIONS (admin only) ──
+let _notifListener = null;
+let _lastNotifTimestamp = Date.now();
+
+function startOrderNotifications() {
+  // Request notification permission
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+  // Avoid duplicate listeners
+  if (_notifListener) return;
+  _notifListener = true;
+  _lastNotifTimestamp = Date.now();
+
+  // Poll Firebase every 15 seconds for new orders
+  setInterval(async () => {
+    if (!adminUnlocked) return;
+    try {
+      const res = await fetch(FB_URL + '/inv_d6bb4/pending_orders.json?orderBy="timestamp"&startAt=' + (_lastNotifTimestamp + 1));
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data) return;
+      const newOrders = Object.values(data).filter(o => (o.timestamp||0) > _lastNotifTimestamp && !o.cancelled);
+      newOrders.forEach(o => {
+        _lastNotifTimestamp = Math.max(_lastNotifTimestamp, o.timestamp||0);
+        const items = (o.orderItems||[]).map(i => i.itemName).join(', ');
+        const total = '$' + (o.total||0);
+        // Browser notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('🍁 New Order — ' + total, {
+            body: items + '\n' + (o.payMethodLabel||'') + ' · ' + (o.orderType==='pickup'?'Pickup':'Delivery'),
+            icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🍁</text></svg>',
+            tag: 'order-' + o.timestamp,
+            requireInteraction: true
+          });
+        }
+        // Also show in-app toast
+        showToast('🍁 New order! ' + total + ' — ' + items, 'green');
+        // Play a subtle sound
+        try {
+          const ctx = new (window.AudioContext||window.webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.value = 880; gain.gain.value = 0.15;
+          osc.start(); osc.stop(ctx.currentTime + 0.15);
+          setTimeout(() => { const o2=ctx.createOscillator(); const g2=ctx.createGain(); o2.connect(g2); g2.connect(ctx.destination); o2.frequency.value=1100; g2.gain.value=0.15; o2.start(); o2.stop(ctx.currentTime+0.15); }, 180);
+        } catch(e){}
+      });
+      // Refresh admin panel if it's open
+      if (newOrders.length && document.getElementById('admin-panel').classList.contains('open')) {
+        loadAdminOrders();
+      }
+    } catch(e) {}
+  }, 15000);
 }
 </script>
 
