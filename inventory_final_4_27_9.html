@@ -907,6 +907,10 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
       <label>Note</label>
       <input type="text" id="edit-log-note" placeholder="Optional note" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;">
     </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Staff Commission ($) <span style="font-size:11px;color:var(--text3);font-weight:400;">— leave blank for auto-calc</span></label>
+      <input type="number" id="edit-log-commission" min="0" step="0.01" oninput="updateLogEditPreview()" placeholder="Auto" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--orange);font-family:var(--mono);font-size:16px;outline:none;">
+    </div>
     <div id="edit-log-preview" style="margin-top:8px;padding:12px;background:var(--bg4);border:1px solid var(--border);border-radius:10px;font-family:var(--mono);font-size:12px;color:var(--text3);"></div>
     <div class="mact">
       <button class="mc" onclick="closeOv('edit-log-modal')">Cancel</button>
@@ -1662,6 +1666,13 @@ function openEditLog(idx){
   }else{itemsEl.innerHTML='';}
   document.getElementById('edit-log-total').value=e.amtReceived||0;
   document.getElementById('edit-log-note').value=e.note||'';
+  // pre-fill commission: show current value, allow manual override
+  const commInput=document.getElementById('edit-log-commission');
+  if(e.commission!==undefined&&e.commission!==null){
+    commInput.value=e.commission;
+  }else{
+    commInput.value='';
+  }
   updateLogEditPreview();
   document.getElementById('edit-log-modal').classList.add('open');
 }
@@ -1687,9 +1698,13 @@ function updateLogEditPreview(){
   }
   const isVirtual=e.payMethod&&VIRT.includes(e.payMethod);
   const profit=Math.max(0,newTotal-(isVirtual?5:0)-cost);
-  const comm=repairCommission(newTotal,profit,e.who);
+  const commInput=document.getElementById('edit-log-commission');
+  const manualComm=commInput&&commInput.value!==''?parseFloat(commInput.value):null;
+  const autoComm=repairCommission(newTotal,profit,e.who);
+  const comm=manualComm!==null?manualComm:autoComm;
+  const isManual=manualComm!==null&&Math.abs(manualComm-autoComm)>0.01;
   const prev=document.getElementById('edit-log-preview');
-  prev.innerHTML=`Cost: ${fmtP(cost)} · Profit: <span style="color:var(--green)">${fmtP(profit)}</span> · Commission: <span style="color:var(--orange)">${fmtP(comm)}</span> · Owner: <span style="color:var(--green)">${fmtP(profit-comm)}</span>`;
+  prev.innerHTML=`Cost: ${fmtP(cost)} · Profit: <span style="color:var(--green)">${fmtP(profit)}</span> · Commission: <span style="color:var(--orange)">${fmtP(comm)}${isManual?' (manual)':''}</span> · Owner: <span style="color:var(--green)">${fmtP(profit-comm)}</span>`;
 }
 function saveLogEdit(){
   if(editLogIdx===null)return;
@@ -1729,9 +1744,16 @@ function saveLogEdit(){
   }
   const isVirtual=e.payMethod&&VIRT.includes(e.payMethod);
   e.profit=Math.max(0,newTotal-(isVirtual?5:0)-cost);
-  // recalculate commission
+  // commission: use manual override if entered, otherwise auto-calc
   const ownerNames=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
-  e.commission=ownerNames.includes(e.who)?0:repairCommission(newTotal,e.profit,e.who);
+  const commOverride=document.getElementById('edit-log-commission');
+  if(commOverride&&commOverride.value!==''){
+    e.commission=parseFloat(commOverride.value)||0;
+    e.commissionManual=true; // flag so we know it was manually set
+  }else{
+    e.commission=ownerNames.includes(e.who)?0:repairCommission(newTotal,e.profit,e.who);
+    delete e.commissionManual;
+  }
   // also update matching EOD order if it exists
   eodLogs.forEach(r=>{
     if(!r.orders)return;
@@ -1741,6 +1763,7 @@ function saveLogEdit(){
         o.total=newTotal;
         o.profit=e.profit;
         o.commission=e.commission;
+        if(e.commissionManual)o.commissionManual=true; else delete o.commissionManual;
         o.note=e.note;
         if(isOrder&&e.orderItems)o.items=e.orderItems.map(oi=>({itemName:oi.itemName,qty:oi.qty}));
         else if(e.type==='sell')o.items=[{itemName:e.name,qty:e.amount}];
@@ -2627,10 +2650,12 @@ function repairAllCommissions(){
       e.profit=correctProfit;
       changed=true;
     }
-    const correctComm=repairCommission(amt,correctProfit,e.who);
-    if(e.commission!==correctComm){
-      e.commission=correctComm;
-      changed=true;
+    if(!e.commissionManual){
+      const correctComm=repairCommission(amt,correctProfit,e.who);
+      if(e.commission!==correctComm){
+        e.commission=correctComm;
+        changed=true;
+      }
     }
   });
 
@@ -3104,8 +3129,10 @@ function saveEODOrderEdit(){
   });
   const vFee=o.payMethod&&(o.payMethod.toLowerCase().includes('cashapp')||o.payMethod.toLowerCase().includes('venmo')||o.payMethod.toLowerCase().includes('zelle'))?5:0;
   o.profit=Math.max(0,newTotal-vFee-cost);
-  // recalculate commission
-  o.commission=repairCommission(newTotal,o.profit,o.who);
+  // recalculate commission (respect manual override)
+  if(!o.commissionManual){
+    o.commission=repairCommission(newTotal,o.profit,o.who);
+  }
   // recalculate EOD totals
   let grandTotal=0,cashTotal=0,virtTotal=0;
   const newCommByPerson={};
@@ -3234,7 +3261,7 @@ function viewEODLog(i,filterPerson){
     const isVirtual=o.payMethod&&(o.payMethod.toLowerCase().includes('cashapp')||o.payMethod.toLowerCase().includes('venmo')||o.payMethod.toLowerCase().includes('zelle'));
     const vFee=isVirtual?5:0;
     o._liveProfit=Math.max(0,(o.total||0)-vFee-cost);
-    o._liveComm=ownerNames.includes(o.who)?0:repairCommission(o.total||0,o._liveProfit,o.who);
+    o._liveComm=o.commissionManual?o.commission:(ownerNames.includes(o.who)?0:repairCommission(o.total||0,o._liveProfit,o.who));
   });
   const filtered=eodPersonFilter==='all'?allOrders:allOrders.filter(o=>o.who===eodPersonFilter);
 
