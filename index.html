@@ -434,6 +434,43 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
   </div>
 </div>
 
+<!-- ROUTE TIMES POPUP -->
+<div id="route-popup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:800;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px);">
+  <div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px 24px;max-width:340px;width:100%;text-align:center;">
+    <div style="font-size:28px;margin-bottom:6px;">🚗</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;color:#fff;margin-bottom:4px;">TODAY'S ROUTES</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:18px;font-family:'Inter',sans-serif;">We leave for deliveries at these times</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;">
+        <span style="font-family:'Oswald',sans-serif;font-size:15px;color:rgba(255,255,255,0.7);">Route 1</span>
+        <span style="font-family:'Oswald',sans-serif;font-size:16px;color:#3ecf8e;font-weight:600;">12:00 PM</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;">
+        <span style="font-family:'Oswald',sans-serif;font-size:15px;color:rgba(255,255,255,0.7);">Route 2</span>
+        <span style="font-family:'Oswald',sans-serif;font-size:16px;color:#3ecf8e;font-weight:600;">2:00 PM</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;">
+        <span style="font-family:'Oswald',sans-serif;font-size:15px;color:rgba(255,255,255,0.7);">Route 3</span>
+        <span style="font-family:'Oswald',sans-serif;font-size:16px;color:#3ecf8e;font-weight:600;">4:00 PM</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;">
+        <span style="font-family:'Oswald',sans-serif;font-size:15px;color:rgba(255,255,255,0.7);">Route 4</span>
+        <span style="font-family:'Oswald',sans-serif;font-size:16px;color:#3ecf8e;font-weight:600;">6:00 PM</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;">
+        <span style="font-family:'Oswald',sans-serif;font-size:15px;color:rgba(255,255,255,0.7);">Route 5</span>
+        <span style="font-family:'Oswald',sans-serif;font-size:16px;color:#3ecf8e;font-weight:600;">8:00 PM</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,77,77,0.15);border-radius:10px;">
+        <span style="font-family:'Oswald',sans-serif;font-size:15px;color:rgba(255,255,255,0.7);">Last Route</span>
+        <span style="font-family:'Oswald',sans-serif;font-size:16px;color:#ff4d4d;font-weight:600;">10:00 PM</span>
+      </div>
+    </div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:16px;font-family:'Inter',sans-serif;line-height:1.5;">Order before a route time to make that run</div>
+    <button onclick="document.getElementById('route-popup').style.display='none'" style="width:100%;padding:14px;background:var(--red);border:none;border-radius:10px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;cursor:pointer;">GOT IT</button>
+  </div>
+</div>
+
 <!-- ORDER PREVIEW MODAL -->
 <!-- ORDER CONFIRMATION -->
 <div id="order-confirm">
@@ -815,8 +852,17 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('access-gate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     startLiveSync();
+    showRoutePopup();
   }
 });
+
+function showRoutePopup(){
+  // Show once per session so it doesn't annoy returning visitors on every page load
+  if(sessionStorage.getItem('585_routes_seen'))return;
+  sessionStorage.setItem('585_routes_seen','1');
+  const rp=document.getElementById('route-popup');
+  if(rp)rp.style.display='flex';
+}
 
 async function tryAccess() {
   const val = document.getElementById('ag-code').value.trim().toUpperCase();
@@ -826,6 +872,7 @@ async function tryAccess() {
     document.getElementById('access-gate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     startLiveSync();
+    showRoutePopup();
   } else {
     document.getElementById('ag-err').textContent = 'Invalid code. Contact your plug.';
     document.getElementById('ag-code').value = '';
