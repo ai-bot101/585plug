@@ -1859,8 +1859,10 @@ async function loadAdminOrders() {
 async function adminCancelOrder(key) {
   if (!confirm('Cancel this order?')) return;
   try {
-    await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + key + '/cancelled.json', {
-      method: 'PUT', headers:{'Content-Type':'application/json'}, body: 'true'
+    // Set cancelled + reset _reversedByAdmin so inventory app will restore stock
+    await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + key + '.json', {
+      method: 'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ cancelled: true, _reversedByAdmin: false, _cancelledAt: Date.now() })
     });
     showToast('Order cancelled','red-t');
     loadAdminOrders();
@@ -1870,8 +1872,10 @@ async function adminCancelOrder(key) {
 async function adminRestoreOrder(key) {
   if (!confirm('Restore this order?')) return;
   try {
-    await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + key + '/cancelled.json', {
-      method: 'PUT', headers:{'Content-Type':'application/json'}, body: 'false'
+    // Restore order: clear cancelled flag + reset stock flags so inventory app re-holds stock
+    await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + key + '.json', {
+      method: 'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ cancelled: false, _reversedByAdmin: false, _stockDeducted: false, _restoredAt: Date.now() })
     });
     showToast('Order restored ✅','green');
     loadAdminOrders();
