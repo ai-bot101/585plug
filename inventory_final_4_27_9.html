@@ -1352,8 +1352,8 @@ async function tryLogin(){
   renderAll();updateSync();
   // Process auto daily debts on owner login
   if(own)processAutoDailyDebts();
-  // One-time repair of all commission values
-  if(own)repairAllCommissions();
+  // One-time repair of all commission values (runs on any login)
+  repairAllCommissions();
   repairPassHashes();
   repairEODtoLog();
   // Force a fresh pull on login to guarantee sync regardless of timestamp
@@ -3266,7 +3266,7 @@ function repairCommission(total,profit,who){
 }
 
 function repairAllCommissions(){
-  const repairKey='commRepairV11';
+  const repairKey='commRepairV12';
   if(localStorage.getItem(repairKey)==='done')return;
   let changed=false;
 
@@ -3352,7 +3352,7 @@ function repairAllCommissions(){
 
   if(changed){
     persist();
-    console.log('Commission repair V9 complete — all profit/commission recalculated from current inventory costs');
+    console.log('Commission repair V12 complete — profit/commission recalculated with correct item costs + label quantities');
   }
   localStorage.setItem(repairKey,'done');
 }
