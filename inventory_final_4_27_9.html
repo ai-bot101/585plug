@@ -2613,13 +2613,15 @@ let fbPushTimer=null;
 // This gives INSTANT updates the moment any device changes anything
 
 // ── WEBSITE ORDER AUTO-IMPORT ──
-let processedOrderIds = new Set();
+let processedOrderIds = new Set(); // tracks locally confirmed/cancelled fbKeys so SSE can't re-add them
 
 function processWebsiteOrders(pendingOrders) {
   if (!pendingOrders || typeof pendingOrders !== 'object') return;
   let newCount = 0;
   Object.entries(pendingOrders).forEach(([fbKey, order]) => {
     if (!order) return;
+    // Skip orders we already confirmed/cancelled locally (prevents race condition with SSE)
+    if (processedOrderIds.has(fbKey)) return;
     // Check if admin cancelled from the website menu
     if (order.cancelled && !order._reversedByAdmin) {
       // Check if it was a confirmed order (has a log entry)
@@ -2892,6 +2894,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
 
   log.unshift(e);
   delete pendingWebOrders[fbKey];
+  processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
 
   // Mark confirmed in Firebase
   fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
@@ -2948,6 +2951,7 @@ function cancelWebOrder(fbKey) {
   });
 
   delete pendingWebOrders[fbKey];
+  processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
 
   // Delete from Firebase pending_orders so it disappears from menu admin too
   fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
