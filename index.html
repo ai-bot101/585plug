@@ -680,44 +680,8 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
   </div>
 </div>
 
-<!-- ADMIN PANEL -->
-<div id="admin-panel">
-  <div class="ap-header">
-    <div class="ap-title">📋 Order Log</div>
-    <div style="display:flex;gap:8px;">
-      <button class="ap-close" onclick="loadAdminOrders()" style="background:rgba(62,207,142,0.1);border-color:rgba(62,207,142,0.2);color:var(--green);">↻ Refresh</button>
-      <button class="ap-close" onclick="closeAdmin()">✕ Close</button>
-    </div>
-  </div>
-  <div class="ap-stats">
-    <div class="ap-stat"><div class="ap-stat-val" id="ap-total-orders">0</div><div class="ap-stat-label">Orders</div></div>
-    <div class="ap-stat"><div class="ap-stat-val" id="ap-total-revenue">$0</div><div class="ap-stat-label">Revenue</div></div>
-    <div class="ap-stat"><div class="ap-stat-val" id="ap-today-orders">0</div><div class="ap-stat-label">Today</div></div>
-  </div>
-  <!-- ANNOUNCEMENT EDITOR -->
-  <div style="padding:0 16px 12px;">
-    <div style="background:var(--black2);border:1px solid var(--border);border-radius:10px;padding:14px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <div style="font-family:Oswald,sans-serif;font-size:12px;color:var(--white3);text-transform:uppercase;letter-spacing:1.5px;">📢 Menu Announcement</div>
-        <button onclick="clearAnnouncement()" style="background:rgba(244,107,107,0.1);border:1px solid rgba(244,107,107,0.2);border-radius:6px;padding:4px 10px;color:#ff4d4d;font-size:11px;cursor:pointer;font-family:Oswald,sans-serif;">Clear</button>
-      </div>
-      <textarea id="admin-announce-inp" placeholder="Type an announcement everyone will see at the top of the menu..." style="width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#fff;font-family:'Inter',sans-serif;font-size:13px;outline:none;resize:none;min-height:50px;line-height:1.5;" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
-      <button onclick="saveAnnouncement()" style="width:100%;margin-top:8px;padding:10px;background:rgba(204,31,31,0.15);border:1px solid rgba(204,31,31,0.4);border-radius:8px;color:#ff4d4d;font-family:'Oswald',sans-serif;font-size:14px;font-weight:500;cursor:pointer;letter-spacing:1px;">Post Announcement</button>
-    </div>
-  </div>
-  <!-- SALES SUMMARY -->
-  <div id="ap-sales-summary" style="padding:0 16px 8px;">
-    <div style="display:flex;gap:6px;margin-bottom:10px;">
-      <button class="ap-tab" id="ap-tab-day" onclick="setSalesTab('day')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border2);background:rgba(204,31,31,0.1);border-color:var(--red);color:var(--white);font-family:Oswald,sans-serif;font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;">Today</button>
-      <button class="ap-tab" id="ap-tab-week" onclick="setSalesTab('week')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border2);background:var(--black3);color:var(--white3);font-family:Oswald,sans-serif;font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;">This Week</button>
-      <button class="ap-tab" id="ap-tab-all" onclick="setSalesTab('all')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border2);background:var(--black3);color:var(--white3);font-family:Oswald,sans-serif;font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;">All Time</button>
-    </div>
-    <div id="ap-sales-detail" style="background:var(--black2);border:1px solid var(--border);border-radius:10px;padding:12px;"></div>
-  </div>
-  <div class="ap-list" id="ap-list">
-    <div class="ap-empty">Loading orders...</div>
-  </div>
-</div>
+<!-- ADMIN PANEL — content injected after auth -->
+<div id="admin-panel"></div>
 
 <div class="toast" id="toast"></div>
 
@@ -1867,7 +1831,44 @@ async function tryAdmin() {
 }
 
 function openAdmin() {
-  document.getElementById('admin-panel').classList.add('open');
+  if(!adminUnlocked)return;
+  const panel=document.getElementById('admin-panel');
+  // Inject admin HTML only after auth — never rendered client-side before password
+  if(!panel.dataset.loaded){
+    panel.innerHTML=`<div class="ap-header">
+      <div class="ap-title">📋 Order Log</div>
+      <div style="display:flex;gap:8px;">
+        <button class="ap-close" onclick="loadAdminOrders()" style="background:rgba(62,207,142,0.1);border-color:rgba(62,207,142,0.2);color:var(--green);">↻ Refresh</button>
+        <button class="ap-close" onclick="closeAdmin()">✕ Close</button>
+      </div>
+    </div>
+    <div class="ap-stats">
+      <div class="ap-stat"><div class="ap-stat-val" id="ap-total-orders">0</div><div class="ap-stat-label">Orders</div></div>
+      <div class="ap-stat"><div class="ap-stat-val" id="ap-total-revenue">$0</div><div class="ap-stat-label">Revenue</div></div>
+      <div class="ap-stat"><div class="ap-stat-val" id="ap-today-orders">0</div><div class="ap-stat-label">Today</div></div>
+    </div>
+    <div style="padding:0 16px 12px;">
+      <div style="background:var(--black2);border:1px solid var(--border);border-radius:10px;padding:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-family:Oswald,sans-serif;font-size:12px;color:var(--white3);text-transform:uppercase;letter-spacing:1.5px;">📢 Menu Announcement</div>
+          <button onclick="clearAnnouncement()" style="background:rgba(244,107,107,0.1);border:1px solid rgba(244,107,107,0.2);border-radius:6px;padding:4px 10px;color:#ff4d4d;font-size:11px;cursor:pointer;font-family:Oswald,sans-serif;">Clear</button>
+        </div>
+        <textarea id="admin-announce-inp" placeholder="Type an announcement everyone will see at the top of the menu..." style="width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#fff;font-family:'Inter',sans-serif;font-size:13px;outline:none;resize:none;min-height:50px;line-height:1.5;" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+        <button onclick="saveAnnouncement()" style="width:100%;margin-top:8px;padding:10px;background:rgba(204,31,31,0.15);border:1px solid rgba(204,31,31,0.4);border-radius:8px;color:#ff4d4d;font-family:'Oswald',sans-serif;font-size:14px;font-weight:500;cursor:pointer;letter-spacing:1px;">Post Announcement</button>
+      </div>
+    </div>
+    <div id="ap-sales-summary" style="padding:0 16px 8px;">
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <button class="ap-tab" id="ap-tab-day" onclick="setSalesTab('day')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border2);background:rgba(204,31,31,0.1);border-color:var(--red);color:var(--white);font-family:Oswald,sans-serif;font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;">Today</button>
+        <button class="ap-tab" id="ap-tab-week" onclick="setSalesTab('week')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border2);background:var(--black3);color:var(--white3);font-family:Oswald,sans-serif;font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;">This Week</button>
+        <button class="ap-tab" id="ap-tab-all" onclick="setSalesTab('all')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border2);background:var(--black3);color:var(--white3);font-family:Oswald,sans-serif;font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;">All Time</button>
+      </div>
+      <div id="ap-sales-detail" style="background:var(--black2);border:1px solid var(--border);border-radius:10px;padding:12px;"></div>
+    </div>
+    <div class="ap-list" id="ap-list"><div class="ap-empty">Loading orders...</div></div>`;
+    panel.dataset.loaded='1';
+  }
+  panel.classList.add('open');
   loadAdminOrders();
   loadAnnouncementAdmin();
 }
@@ -1893,6 +1894,7 @@ function loadAnnouncementAdmin(){
   if(inp&&txt)inp.value=txt.textContent||'';
 }
 async function saveAnnouncement(){
+  if(!adminUnlocked)return;
   const text=(document.getElementById('admin-announce-inp').value||'').trim();
   try{
     await fetch(FB_URL+'/inv_d6bb4/announcement.json',{
@@ -1905,6 +1907,7 @@ async function saveAnnouncement(){
   }catch(e){showToast('Failed to save','red-t');}
 }
 async function clearAnnouncement(){
+  if(!adminUnlocked)return;
   document.getElementById('admin-announce-inp').value='';
   try{
     await fetch(FB_URL+'/inv_d6bb4/announcement.json',{
@@ -1918,10 +1921,14 @@ async function clearAnnouncement(){
 }
 
 function closeAdmin() {
-  document.getElementById('admin-panel').classList.remove('open');
+  const panel=document.getElementById('admin-panel');
+  panel.classList.remove('open');
+  // Wipe content so order data doesn't sit in DOM after closing
+  setTimeout(()=>{panel.innerHTML='';panel.dataset.loaded='';},400);
 }
 
 async function loadAdminOrders() {
+  if(!adminUnlocked)return;
   const list = document.getElementById('ap-list');
   list.innerHTML = '<div class="ap-empty">Loading orders...</div>';
   try {
@@ -1976,6 +1983,7 @@ async function loadAdminOrders() {
 }
 
 async function adminCancelOrder(key) {
+  if(!adminUnlocked)return;
   if (!confirm('Cancel this order?')) return;
   try {
     // Set cancelled + reset _reversedByAdmin so inventory app will restore stock
@@ -1989,6 +1997,7 @@ async function adminCancelOrder(key) {
 }
 
 async function adminRestoreOrder(key) {
+  if(!adminUnlocked)return;
   if (!confirm('Restore this order?')) return;
   try {
     // Restore order: clear cancelled flag + reset stock flags so inventory app re-holds stock
@@ -2002,6 +2011,7 @@ async function adminRestoreOrder(key) {
 }
 
 async function adminDeleteOrder(key) {
+  if(!adminUnlocked)return;
   if (!confirm('Permanently delete this order? This cannot be undone.')) return;
   try {
     await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + key + '.json', { method: 'DELETE' });
