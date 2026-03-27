@@ -386,6 +386,7 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       <button class="nbtn ac" id="locktimebtn" onclick="openLockTimeModal()" style="display:none">⏰ Lock Time</button>
       <button class="nbtn" id="lockdaybtn" onclick="lockDayNow()" style="display:none;color:var(--orange);border-color:rgba(244,162,74,0.3);">🔒 Lock Day</button>
       <button class="nbtn" id="earnbtn" onclick="toggleEarningsQuick()" style="display:none" id="earnbtn">👁 Earnings</button>
+      <button class="nbtn" id="fixstockbtn" onclick="repairStock(true)" style="display:none;color:var(--green);border-color:rgba(62,207,142,0.3);">Fix Stock</button>
       <button class="nbtn" id="resetbtn" onclick="openResetModal()" style="display:none;color:var(--red);border-color:rgba(244,107,107,0.3);">⚠ Reset</button>
       <button class="nbtn ac" id="costbtn" onclick="openCostModal()" style="display:none">Costs</button>
       <button class="nbtn ac" id="tierbtn" onclick="openTierModal()" style="display:none">Commission</button>
@@ -1336,7 +1337,7 @@ async function tryLogin(){
   if(loginLog.length>200)loginLog=loginLog.slice(0,200);
   persist();
   // login log available via owner dashboard Download button
-  cu={...u,idx:si};document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
+  cu={...u,idx:si};document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn','fixstockbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
   document.getElementById('cust-tab').style.display=own?'':'none';document.getElementById('dash-tab').style.display=own?'':'none';document.getElementById('log-tab').style.display=own?'none':'';if(own){const et=document.getElementById('earnings-toggle');if(et)et.checked=cfg.showEarnings||false;}show('screen-app');
   updateEarnBtn();
   if(own)scheduleAutoLock();
@@ -1352,8 +1353,9 @@ async function tryLogin(){
   renderAll();updateSync();
   // Process auto daily debts on owner login
   if(own)processAutoDailyDebts();
-  // One-time repair of all commission values (runs on any login)
+  // Repair commissions + stock on every login
   repairAllCommissions();
+  repairStock(false);
   repairPassHashes();
   repairEODtoLog();
   // Force a fresh pull on login to guarantee sync regardless of timestamp
@@ -3359,6 +3361,65 @@ function repairAllCommissions(){
     renderAll();
     console.log('Commission repair complete — ' + log.length + ' entries checked, profit/commission recalculated with ' + itemCount + ' inventory items');
     showToast('Commissions recalculated ✅','ok');
+  }
+}
+
+// ── STOCK REPAIR: recalculate left from bought minus actual sales in log ──
+function repairStock(manual){
+  const soldMap = {}; // { itemNameLower: totalQtySold }
+
+  // Count all confirmed sales from log
+  log.forEach(e => {
+    if (e.type === 'sell') {
+      const key = (e.name||'').toLowerCase();
+      if (key) soldMap[key] = (soldMap[key]||0) + (e.amount||0);
+    } else if (e.type === 'order') {
+      (e.orderItems||[]).forEach(oi => {
+        const key = (oi.itemName||'').toLowerCase();
+        const qty = (oi.label && labelToQty(oi.label) > 1) ? labelToQty(oi.label) : (oi.qty||0);
+        if (key) soldMap[key] = (soldMap[key]||0) + qty;
+      });
+    } else if (e.type === 'selfbuy') {
+      (e.items||[]).forEach(it => {
+        const key = (it.itemName||it.name||'').toLowerCase();
+        if (key) soldMap[key] = (soldMap[key]||0) + (it.qty||0);
+      });
+    }
+  });
+
+  // Count pending (held) web orders — stock is deducted but not in the log yet
+  Object.values(pendingWebOrders).forEach(order => {
+    (order.orderItems||[]).forEach(oi => {
+      const key = (oi.itemName||oi.name||'').toLowerCase();
+      const qty = (oi.label && labelToQty(oi.label) > 1) ? labelToQty(oi.label) : (oi.qty||0);
+      if (key) soldMap[key] = (soldMap[key]||0) + qty;
+    });
+  });
+
+  let fixed = 0;
+  const fixes = [];
+  C().forEach(cat => {
+    (inv[cat]||[]).forEach(item => {
+      if (!item.name || !item.bought) return;
+      const key = item.name.toLowerCase();
+      const totalSold = soldMap[key] || 0;
+      const correctLeft = Math.round(Math.max(0, item.bought - totalSold) * 10) / 10;
+      const currentLeft = gl(item);
+      // Only fix if current stock is LOWER than it should be (double-deduction made it too low)
+      if (currentLeft < correctLeft - 0.05) {
+        fixes.push(item.name + ': ' + currentLeft + ' → ' + correctLeft);
+        item.left = correctLeft;
+        fixed++;
+      }
+    });
+  });
+
+  if (fixed > 0) {
+    persist(); renderStats(); renderItems();
+    console.log('Stock repair: fixed ' + fixed + ' items — ' + fixes.join(', '));
+    showToast('Stock fixed: ' + fixed + ' item' + (fixed>1?'s':'') + ' corrected ✅', 'ok');
+  } else if (manual) {
+    showToast('All stock levels look correct ✅', 'ok');
   }
 }
 
