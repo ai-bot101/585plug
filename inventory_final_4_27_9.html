@@ -1461,9 +1461,37 @@ function labelToQty(label) {
   }
   return 1;
 }
-function searchItems(q){const res=document.getElementById('isr');if(!q.trim()){res.classList.remove('open');return;}const m=[];C().forEach(cat=>{(inv[cat]||[]).forEach((item,ri)=>{if(item.name.toLowerCase().includes(q.toLowerCase())&&gl(item)>0)m.push({cat,ri,item});});});if(!m.length){res.classList.remove('open');return;}res.innerHTML=m.slice(0,8).map(({cat,ri,item})=>{const ao=isAddOnOnly(item);const blocked=ao&&orderItems.length===0;const badge=ao?`<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>`:'';return`<div class="isr-item" onclick="${blocked?`showToast('Add another item first — this is add-on only','err')`:`addIO('${cat}',${ri})`}" style="${blocked?'opacity:0.5;':''}"><span style="text-transform:capitalize">${item.name}${badge}</span><span class="isr-left">${cat} · ${fmt(gl(item))} left${blocked?' · needs other items':''}</span></div>`;}).join('');res.classList.add('open');}
-function addIO(cat,ri){const item=(inv[cat]||[])[ri];if(!item)return;if(isAddOnOnly(item)&&orderItems.length===0){showToast(item.name+' is add-on only — add another item first','err');return;}if(orderItems.find(o=>o.cat===cat&&o.ri===ri)){showToast(item.name+' already in order','err');return;}orderItems.push({cat,ri,itemName:item.name,qty:1});document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');renderOrdItems();calcComm();}
-function renderOrdItems(){const list=document.getElementById('order-items-list');if(!orderItems.length){list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0 12px;">No items added yet — search above</div>';return;}list.innerHTML=orderItems.map((o,i)=>{const it=(inv[o.cat]||[])[o.ri];const ao=it&&isAddOnOnly(it);return`<div class="order-item-row"><div class="oir-name">${o.itemName}${ao?'<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>':''}</div><div class="oir-qty"><input type="number" value="${o.qty}" min="0.1" step="0.1" onchange="updOQ(${i},this.value)"></div><button class="oir-remove" onclick="remOI(${i})">x</button></div>`;}).join('');}
+function searchItems(q){const res=document.getElementById('isr');if(!q.trim()){res.classList.remove('open');return;}const m=[];C().forEach(cat=>{(inv[cat]||[]).forEach((item,ri)=>{if(item.name.toLowerCase().includes(q.toLowerCase())&&gl(item)>0)m.push({cat,ri,item});});});if(!m.length){res.classList.remove('open');return;}res.innerHTML=m.slice(0,8).map(({cat,ri,item})=>{const ao=isAddOnOnly(item);const blocked=ao&&orderItems.length===0;const badge=ao?`<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>`:'';const fc=(item.flavors||[]).filter(f=>f.name&&f.stock>0).length;const flavHint=fc>0?' · 🍬 '+fc+' flavors':'';return`<div class="isr-item" onclick="${blocked?`showToast('Add another item first — this is add-on only','err')`:`addIO('${cat}',${ri})`}" style="${blocked?'opacity:0.5;':''}"><span style="text-transform:capitalize">${item.name}${badge}</span><span class="isr-left">${cat} · ${fmt(gl(item))} left${flavHint}${blocked?' · needs other items':''}</span></div>`;}).join('');res.classList.add('open');}
+function addIO(cat,ri){const item=(inv[cat]||[])[ri];if(!item)return;if(isAddOnOnly(item)&&orderItems.length===0){showToast(item.name+' is add-on only — add another item first','err');return;}if(orderItems.find(o=>o.cat===cat&&o.ri===ri&&!o.flavorText)){showToast(item.name+' already in order','err');return;}
+// If item has flavors with stock, show flavor picker
+const flavorsAvail=(item.flavors||[]).filter(f=>f.name&&f.stock>0);
+if(flavorsAvail.length>0){showFlavorPicker(cat,ri,item,flavorsAvail);return;}
+orderItems.push({cat,ri,itemName:item.name,qty:1,flavorText:''});document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');renderOrdItems();calcComm();}
+function showFlavorPicker(cat,ri,item,flavors){
+  const existing=document.getElementById('flavor-pick-modal');if(existing)existing.remove();
+  const d=document.createElement('div');d.id='flavor-pick-modal';
+  d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;';
+  d.innerHTML=`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:360px;width:100%;max-height:80vh;overflow-y:auto;">
+    <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">${item.name}</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px;">Pick a flavor</div>
+    <div id="fp-list">${flavors.map((f,i)=>`<div onclick="pickFlavor('${cat}',${ri},'${f.name.replace(/'/g,"\\'")}',${i})" style="display:flex;align-items:center;justify-content:space-between;padding:14px;margin-bottom:8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;cursor:pointer;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      <div><div style="font-size:14px;font-weight:600;color:var(--text);">${f.name}</div><div style="font-size:11px;color:var(--text3);">${f.stock} in stock</div></div>
+      <div style="font-size:18px;">→</div>
+    </div>`).join('')}</div>
+    <div onclick="pickFlavor('${cat}',${ri},'',−1)" style="text-align:center;padding:12px;margin-top:4px;color:var(--text3);font-size:12px;cursor:pointer;border:1px dashed var(--border);border-radius:10px;">No flavor / Skip</div>
+    <button onclick="document.getElementById('flavor-pick-modal').remove()" style="width:100%;margin-top:12px;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text3);font-size:13px;cursor:pointer;">Cancel</button>
+  </div>`;
+  document.body.appendChild(d);
+}
+function pickFlavor(cat,ri,flavorName,fi){
+  document.getElementById('flavor-pick-modal')?.remove();
+  const item=(inv[cat]||[])[ri];if(!item)return;
+  // Check if same item+flavor combo already in order
+  if(flavorName&&orderItems.find(o=>o.cat===cat&&o.ri===ri&&o.flavorText===flavorName)){showToast(item.name+' ('+flavorName+') already in order','err');return;}
+  orderItems.push({cat,ri,itemName:item.name,qty:1,flavorText:flavorName});
+  document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');renderOrdItems();calcComm();
+}
+function renderOrdItems(){const list=document.getElementById('order-items-list');if(!orderItems.length){list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0 12px;">No items added yet — search above</div>';return;}list.innerHTML=orderItems.map((o,i)=>{const it=(inv[o.cat]||[])[o.ri];const ao=it&&isAddOnOnly(it);const flav=o.flavorText?`<span style="font-size:10px;color:var(--accent);margin-left:6px;">🍬 ${o.flavorText}</span>`:'';return`<div class="order-item-row"><div class="oir-name">${o.itemName}${flav}${ao?'<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>':''}</div><div class="oir-qty"><input type="number" value="${o.qty}" min="0.1" step="0.1" onchange="updOQ(${i},this.value)"></div><button class="oir-remove" onclick="remOI(${i})">x</button></div>`;}).join('');}
 function updOQ(i,v){orderItems[i].qty=parseFloat(v)||0;calcComm();}
 function remOI(i){
   // check if removing this would leave only add-on-only items with no base item
@@ -1550,8 +1578,16 @@ function confirmOrder(){
     const key=customer.trim().toLowerCase();
     customerCredits[key]=(customerCredits[key]||0)-short;
   }
-  const objs=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName}));
-  objs.forEach(({item,qty})=>{if(item)item.left=Math.round((gl(item)-qty)*10)/10;});
+  const objs=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||''}));
+  objs.forEach(({item,qty,flavorText})=>{
+    if(!item)return;
+    item.left=Math.round((gl(item)-qty)*10)/10;
+    // deduct from flavor stock if a flavor was selected
+    if(flavorText&&Array.isArray(item.flavors)){
+      const fl=item.flavors.find(f=>f.name===flavorText);
+      if(fl)fl.stock=Math.max(0,fl.stock-qty);
+    }
+  });
   const vFee2=isV(orderPayMethod)||orderPayMethod==='split';
   // profit ignores the extra — extra is just credit, not real order revenue
   const effectiveAmt=total-extra-creditApplied;
@@ -1559,7 +1595,7 @@ function confirmOrder(){
   // owner adding their own order = no commission deducted, full profit is theirs
   const isOwnerOrder=cu?.role==='owner';
   const{commission,deducted}=isOwnerOrder?{commission:0,deducted:0}:calcComm2(effectiveAmt,profit,cu.name);
-  const e={type:'order',customer,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty})),total,payMethod:orderPayMethod,payMethodLabel:ml,amtReceived:total,profit,commission,creditApplied,extraCredit:extra,shortPaid:short,note,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
+  const e={type:'order',customer,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,flavorText:o.flavorText||''})),total,payMethod:orderPayMethod,payMethodLabel:ml,amtReceived:total,profit,commission,creditApplied,extraCredit:extra,shortPaid:short,note,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
   if(orderPayMethod==='split'){e.splitCash=splitCash;e.splitVirtual=splitVirtual;}
   log.unshift(e);persist();closeOrder();
   renderStats();renderItems();
@@ -1658,7 +1694,7 @@ if(e.type==='selfbuy'){
   const expand=`<div class="ae-expand"><div class="ex-row"><span class="ex-label">Sold By</span><span class="ex-val">${e.who}</span></div><div class="ex-row"><span class="ex-label">Payment</span><span class="ex-val">${e.payMethodLabel||'Cash'}</span></div><div class="ex-row"><span class="ex-label">Total</span><span class="ex-val">${fmtP(e.totalOwed||0)}</span></div><div class="ex-row"><span class="ex-label">Time</span><span class="ex-val">${e.date} ${e.time||''}</span></div><div class="ex-items"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Items:</div>${(e.items||[]).map(o=>`<div class="ex-item">${fmt(o.qty)}x ${o.itemName} — ${fmtP(o.cost)}</div>`).join('')}</div></div>`;
   return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot" style="background:var(--orange)"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.who} — self purchase</span></div><div class="ae-oi">${ois}</div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${expand}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.totalOwed||0)}</span></div></div></div>`;
 }
-if(e.type==='order'){const pc=(isV(e.payMethod)||e.payMethod==='split')?'virt':'cash';const ois=(e.orderItems||[]).map(o=>`${fmt(o.qty)}x ${o.itemName}${o.label?' ('+o.label+')':''}`).join(', ');const creditBadge=e.creditApplied>0?`<span style="font-size:10px;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.25);border-radius:5px;padding:1px 6px;color:var(--green);font-family:var(--mono);">-${fmtP(e.creditApplied)} credit</span>`:'';
+if(e.type==='order'){const pc=(isV(e.payMethod)||e.payMethod==='split')?'virt':'cash';const ois=(e.orderItems||[]).map(o=>`${fmt(o.qty)}x ${o.itemName}${o.flavorText?' 🍬 '+o.flavorText:''}${o.label?' ('+o.label+')':''}`).join(', ');const creditBadge=e.creditApplied>0?`<span style="font-size:10px;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.25);border-radius:5px;padding:1px 6px;color:var(--green);font-family:var(--mono);">-${fmtP(e.creditApplied)} credit</span>`:'';
 const debtBadge=e.shortPaid>0?`<span style="font-size:10px;background:rgba(244,107,107,0.1);border:1px solid rgba(244,107,107,0.25);border-radius:5px;padding:1px 6px;color:var(--red);font-family:var(--mono);">⚠️ owes ${fmtP(e.shortPaid)}</span>`:'';const saveBadge=e.extraCredit>0?`<span style="font-size:10px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:5px;padding:1px 6px;color:var(--accent);font-family:var(--mono);">💳 +${fmtP(e.extraCredit)} saved</span>`:'';const logIdx=log.indexOf(e);
 const delBtn=cu?.role==='owner'?`<button onclick="event.stopPropagation();deleteLogEntry(${logIdx})" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:6px;padding:3px 8px;color:var(--red);font-size:10px;cursor:pointer;font-family:var(--sans);margin-top:4px;">🗑️ Delete</button>`:'';
 const expandRows=`<div class="ae-expand">
@@ -1677,7 +1713,7 @@ const expandRows=`<div class="ae-expand">
   ${e.payMethod==='split'?`<div class="ex-row"><span class="ex-label">💵 Cash Portion</span><span class="ex-val green">${fmtP(e.splitCash||0)}</span></div><div class="ex-row"><span class="ex-label">💚 CashApp Portion</span><span class="ex-val" style="color:#a89cff;">${fmtP(e.splitVirtual||0)}</span></div>`:''}
   <div class="ex-row"><span class="ex-label">Time</span><span class="ex-val">${e.date} ${e.time||''}</span></div>
   ${e.note?`<div class="ex-row"><span class="ex-label">Note</span><span class="ex-val" style="color:var(--orange);font-weight:400;font-size:12px;">${e.note}</span></div>`:''}
-  <div class="ex-items"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Items:</div>${(e.orderItems||[]).map(o=>`<div class="ex-item">${fmt(o.qty)}x ${o.itemName}${o.label?' <span style="color:var(--accent);font-size:11px;">('+o.label+')</span>':''}</div>`).join('')}</div>
+  <div class="ex-items"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Items:</div>${(e.orderItems||[]).map(o=>`<div class="ex-item">${fmt(o.qty)}x ${o.itemName}${o.flavorText?' <span style="color:var(--accent);font-size:11px;">🍬 '+o.flavorText+'</span>':''}${o.label?' <span style="color:var(--accent);font-size:11px;">('+o.label+')</span>':''}</div>`).join('')}</div>
   ${isOwnerView?`<button onclick="event.stopPropagation();openEditLog(${logIdx})" style="width:100%;margin-top:10px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:8px;padding:10px;color:var(--accent);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">✏️ Edit This Entry</button>`:''}
 </div>`;
 return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot order"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.customer||'Customer'}</span><span class="ae-qbadge">${(e.orderItems||[]).length} items</span>${creditBadge}${saveBadge}${debtBadge}</div><div class="ae-oi">${ois}</div>${e.note?`<div style="margin-top:4px;font-size:11px;color:var(--orange);">📝 ${e.note}</div>`:''}<div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${expandRows}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.amtReceived||0)}</span></div>${showC&&e.commission!=null?`<div class="ae-comm">you: ${fmtP(e.commission)}</div>`:''}${delBtn}</div></div>`;}else if(e.type==='sell'){const pc=(isV(e.payMethod)||e.payMethod==='split')?'virt':'cash';const si=log.indexOf(e);const sDelBtn=cu?.role==='owner'?`<button onclick="event.stopPropagation();deleteLogEntry(${si})" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:6px;padding:3px 8px;color:var(--red);font-size:10px;cursor:pointer;font-family:var(--sans);margin-top:4px;">🗑️ Delete</button>`:'';
