@@ -560,6 +560,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
       </div>
       <button onclick="openAdminGate()" style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white3);font-size:14px;cursor:pointer;opacity:0.4;transition:opacity .2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.4'" title="Admin">⚙️</button>
       <button class="orders-btn" id="orders-btn" onclick="openOrderHistory()" style="display:none;">📜 Orders</button>
+      <button onclick="document.getElementById('route-popup').style.display='flex'" style="background:transparent;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:6px 10px;color:#fff;font-family:'Oswald',sans-serif;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(62,207,142,0.5)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)'">🕐 Today's Routes</button>
       <button class="cart-btn" onclick="openCart()">
         🛒 Cart <div class="cart-count" id="cart-count">0</div>
       </button>
