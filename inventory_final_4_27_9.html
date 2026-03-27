@@ -1967,10 +1967,10 @@ function openEditLog(idx){
   if(isOrder&&e.orderItems){
     itemsEl.innerHTML=e.orderItems.map((it,ii)=>`
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        <div style="flex:1;font-size:14px;color:var(--text);font-family:var(--mono);">${it.itemName}</div>
+        <div style="flex:1;font-size:14px;color:var(--text);font-family:var(--mono);">${it.itemName}${it.label?' <span style="color:var(--accent);font-size:11px;">('+it.label+')</span>':''}</div>
         <div style="display:flex;align-items:center;gap:4px;">
           <span style="font-size:12px;color:var(--text3);">qty:</span>
-          <input type="number" class="log-item-qty" data-idx="${ii}" value="${it.qty}" min="0" step="0.1" style="width:80px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--mono);font-size:14px;outline:none;text-align:center;">
+          <input type="number" class="log-item-qty" data-idx="${ii}" value="${(it.label && typeof labelToQty==='function' && labelToQty(it.label)>1)?labelToQty(it.label):it.qty}" min="0" step="0.1" style="width:80px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--mono);font-size:14px;outline:none;text-align:center;">
         </div>
       </div>`).join('');
   }else if(e.type==='sell'){
@@ -2869,7 +2869,24 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   const total = order.total || 0;
   const payMethod = order.payMethod || 'cash';
   const isVirtual = ['cashapp','venmo','applepay'].includes(payMethod);
-  const profit = calcProfit([], total, isVirtual);
+  // Look up actual inventory items to get real cost for profit calculation
+  const objs = (order.orderItems||[]).map(oi => {
+    const itemName = (oi.itemName||oi.name||'').toLowerCase();
+    const cat = oi.cat||'';
+    const qty = labelToQty(oi.label) || oi.qty || 1;
+    let found = null;
+    if (cat && inv[cat]) {
+      found = (inv[cat]||[]).find(item => (item.name||'').toLowerCase() === itemName);
+    }
+    if (!found) {
+      for (const c of C()) {
+        found = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
+        if (found) break;
+      }
+    }
+    return { item: found || null, qty };
+  });
+  const profit = calcProfit(objs, total, isVirtual);
   // Only calc commission for staff, not owner
   const ownerNames=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
   const isOwner=ownerNames.includes(assignedTo);
@@ -2879,7 +2896,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
     type: 'order',
     source: 'website',
     customer: order.customerPhone || 'Website Customer',
-    orderItems: (order.orderItems||[]).map(i => ({cat:i.cat||'', itemName:i.itemName||i.name||'', qty:i.qty||1, label:i.label||'', price:i.price||0, flavorText:i.flavorText||''})),
+    orderItems: (order.orderItems||[]).map(i => ({cat:i.cat||'', itemName:i.itemName||i.name||'', qty:(i.label && labelToQty(i.label) > 1) ? labelToQty(i.label) : (i.qty||1), label:i.label||'', price:i.price||0, flavorText:i.flavorText||''})),
     total, payMethod,
     payMethodLabel: order.payMethodLabel || 'Cash',
     amtReceived: total, profit, commission,
@@ -3249,7 +3266,7 @@ function repairCommission(total,profit,who){
 }
 
 function repairAllCommissions(){
-  const repairKey='commRepairV10';
+  const repairKey='commRepairV11';
   if(localStorage.getItem(repairKey)==='done')return;
   let changed=false;
 
@@ -3267,7 +3284,9 @@ function repairAllCommissions(){
     if(e.type==='order'&&e.orderItems){
       e.orderItems.forEach(oi=>{
         const found=itemLookup[(oi.itemName||'').toLowerCase()];
-        if(found)cost+=cpuItem(found)*(oi.qty||0);
+        // Use labelToQty for web orders where qty is 1 but label has real quantity
+        const qty = (oi.label && labelToQty(oi.label) > 1) ? labelToQty(oi.label) : (oi.qty||0);
+        if(found)cost+=cpuItem(found)*qty;
       });
     }else if(e.type==='sell'&&e.name){
       const found=itemLookup[(e.name||'').toLowerCase()];
@@ -3307,7 +3326,8 @@ function repairAllCommissions(){
         let cost=0;
         (o.items||[]).forEach(it=>{
           const found=itemLookup[(it.itemName||'').toLowerCase()];
-          if(found)cost+=cpuItem(found)*(it.qty||0);
+          const qty = (it.label && labelToQty(it.label) > 1) ? labelToQty(it.label) : (it.qty||0);
+          if(found)cost+=cpuItem(found)*qty;
         });
         const isVirtual=o.payMethod&&(o.payMethod.toLowerCase().includes('cashapp')||o.payMethod.toLowerCase().includes('venmo')||o.payMethod.toLowerCase().includes('zelle'));
         const vFee=isVirtual?5:0;
