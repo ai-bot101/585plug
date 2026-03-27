@@ -3266,17 +3266,21 @@ function repairCommission(total,profit,who){
 }
 
 function repairAllCommissions(){
-  const repairKey='commRepairV12';
-  if(localStorage.getItem(repairKey)==='done')return;
   let changed=false;
 
-  // Fix live log entries — recalculate profit from current costs, then fix commission
+  // Build item lookup from current inventory (has real costs)
   const itemLookup={};
   C().forEach(cat=>{
     (inv[cat]||[]).forEach(item=>{
       if(item.name)itemLookup[item.name.toLowerCase()]=item;
     });
   });
+
+  // Skip if inventory hasn't loaded yet (no items = no costs to calc)
+  const itemCount=Object.keys(itemLookup).length;
+  if(itemCount===0)return;
+
+  // Fix live log entries — recalculate profit from current costs, then fix commission
   log.forEach(e=>{
     if(e.type!=='sell'&&e.type!=='order')return;
     let cost=0;
@@ -3352,9 +3356,10 @@ function repairAllCommissions(){
 
   if(changed){
     persist();
-    console.log('Commission repair V12 complete — profit/commission recalculated with correct item costs + label quantities');
+    renderAll();
+    console.log('Commission repair complete — ' + log.length + ' entries checked, profit/commission recalculated with ' + itemCount + ' inventory items');
+    showToast('Commissions recalculated ✅','ok');
   }
-  localStorage.setItem(repairKey,'done');
 }
 
 async function repairPassHashes(){
