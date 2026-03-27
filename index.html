@@ -578,7 +578,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
         <div class="ct-label">Total</div>
         <div class="ct-val" id="cart-total">$0</div>
       </div>
-      <div style="text-align:center;padding:6px 14px 12px;font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5;font-family:'Inter',sans-serif;">Looking for a better price? Message us — we offer deals for loyal customers.</div>
+      <div id="bulk-deal-msg" style="display:none;text-align:center;padding:6px 14px 12px;font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5;font-family:'Inter',sans-serif;">Buying in bulk? Message us for better pricing on larger orders.</div>
       <div class="section-label">Payment Method</div>
       <div class="pay-method">
         <button class="pm-btn" id="pm-cash" onclick="selPay('cash')">💵 Cash</button>
@@ -1326,6 +1326,12 @@ function renderCart() {
     fb.innerHTML = '';
   }
   document.getElementById('cart-total').textContent = '$' + total;
+  // Show bulk deal message for ounce+ sizes or 10+ items
+  const bulkLabels=['ounce','ounces','oz','zip','2 ounce','2 ounces','2oz','2 oz','qp','quarter pound','hp','half pound','pound','lb','p'];
+  const hasBulk=cart.some(c=>bulkLabels.includes((c.label||'').trim().toLowerCase()));
+  const hasQty=cart.some(c=>{const n=parseInt(c.label);return !isNaN(n)&&n>=10;});
+  const bulkMsg=document.getElementById('bulk-deal-msg');
+  if(bulkMsg)bulkMsg.style.display=(hasBulk||hasQty)?'block':'none';
   checkoutReady();
 }
 
