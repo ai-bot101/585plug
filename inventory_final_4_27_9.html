@@ -2870,7 +2870,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
 
   const total = order.total || 0;
   const payMethod = order.payMethod || 'cash';
-  const isVirtual = ['cashapp','venmo','applepay'].includes(payMethod);
+  const isVirtual = ['cashapp','venmo','applepay'].includes(payMethod) || payMethod === 'split';
   // Look up actual inventory items to get real cost for profit calculation
   const objs = (order.orderItems||[]).map(oi => {
     const itemName = (oi.itemName||oi.name||'').toLowerCase();
@@ -3286,7 +3286,7 @@ function repairAllCommissions(){
   log.forEach(e=>{
     if(e.type!=='sell'&&e.type!=='order')return;
     let cost=0;
-    const isVirtual=e.payMethod&&VIRT.includes(e.payMethod);
+    const isVirtual=e.payMethod&&(VIRT.includes(e.payMethod)||e.payMethod==='split');
     if(e.type==='order'&&e.orderItems){
       e.orderItems.forEach(oi=>{
         const found=itemLookup[(oi.itemName||'').toLowerCase()];
@@ -3335,7 +3335,7 @@ function repairAllCommissions(){
           const qty = (it.label && labelToQty(it.label) > 1) ? labelToQty(it.label) : (it.qty||0);
           if(found)cost+=cpuItem(found)*qty;
         });
-        const isVirtual=o.payMethod&&(o.payMethod.toLowerCase().includes('cashapp')||o.payMethod.toLowerCase().includes('venmo')||o.payMethod.toLowerCase().includes('zelle'));
+        const isVirtual=o.payMethod&&(VIRT.includes(o.payMethod)||o.payMethod==='split');
         const vFee=isVirtual?5:0;
         const correctProfit=Math.max(0,(o.total||0)-vFee-cost);
         const correctComm=repairCommission(o.total||0,correctProfit,o.who);
@@ -4528,7 +4528,7 @@ function viewEODLog(i,filterPerson){
       const found=eodItemLookup[(it.itemName||'').toLowerCase()];
       if(found)cost+=cpuItem(found)*(it.qty||0);
     });
-    const isVirtual=o.payMethod&&(o.payMethod.toLowerCase().includes('cashapp')||o.payMethod.toLowerCase().includes('venmo')||o.payMethod.toLowerCase().includes('zelle'));
+    const isVirtual=o.payMethod&&(VIRT.includes(o.payMethod)||o.payMethod==='split');
     const vFee=isVirtual?5:0;
     o._liveProfit=Math.max(0,(o.total||0)-vFee-cost);
     o._liveComm=o.commissionManual?o.commission:(ownerNames.includes(o.who)?0:repairCommission(o.total||0,o._liveProfit,o.who));
