@@ -1759,7 +1759,7 @@ function totBanner(sells,dl,isT,showProfit){
   const lbl=isT?'Today':'On '+dl;
   let html=`<div class="tot-card grand"><div class="tot-label">Total Received ${lbl}</div><div class="tot-val gv">${fmtP(g)}</div><div class="tot-sub">${sells.length} transaction${sells.length!==1?'s':''}</div></div><div class="tot-card"><div class="tot-label">Cash</div><div class="tot-val cv">${fmtP(cv.cash)}</div><div class="tot-sub">${cv.cCount} sales</div></div><div class="tot-card"><div class="tot-label">Virtual</div><div class="tot-val vv">${fmtP(cv.virt)}</div><div class="tot-sub">${cv.vCount} sales</div></div>`;
   if(showProfit){
-    // Recalculate profit & commission live from current inventory costs (matches EOD logic)
+    // Recalculate profit & commission live from current inventory costs (IDENTICAL to EOD logic)
     const ilk={};
     C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.name)ilk[item.name.toLowerCase()]=item;});});
     const ownerNames2=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
@@ -1770,13 +1770,15 @@ function totBanner(sells,dl,isT,showProfit){
       // selfbuys = staff buying at cost, always $0 profit and $0 commission
       if(e.type==='selfbuy'){totalProfit+=0;return;}
       let cost=0;
+      const amt=e.amtReceived||e.total||0;
       const isVirt=e.payMethod&&(VIRT.includes(e.payMethod)||e.payMethod==='split');
-      if((e.type==='order')&&e.orderItems){
-        e.orderItems.forEach(oi=>{
+      const items=e.orderItems||e.items||[];
+      if((e.type==='order')&&items.length){
+        items.forEach(oi=>{
           const found=ilk[(oi.itemName||'').toLowerCase()];
           let qty=(oi.label&&labelToQty(oi.label)>1)?labelToQty(oi.label):(oi.qty||0);
           if(qty<=1&&found&&found.prices&&found.prices.length){
-            const mp=oi.price||((e.orderItems.length===1)?(e.amtReceived||0):0);
+            const mp=oi.price||((items.length===1)?amt:0);
             if(mp>0){const tier=found.prices.find(p=>parseFloat(p.price)===mp);if(tier&&tier.label){const tq=labelToQty(tier.label);if(tq>1)qty=tq;}}
           }
           if(found)cost+=cpuItem(found)*qty;
@@ -1785,11 +1787,10 @@ function totBanner(sells,dl,isT,showProfit){
         const found=ilk[(e.name||'').toLowerCase()];
         if(found)cost+=cpuItem(found)*(e.amount||0);
       }
-      const amt=e.amtReceived||0;
       const pr=Math.max(0,amt-(isVirt?5:0)-cost);
       totalProfit+=pr;
       if(!liveCommByUser[e.who])liveCommByUser[e.who]=0;
-      const comm=ownerNames2.includes(e.who)?0:repairCommission(amt,pr,e.who);
+      const comm=ownerNames2.includes(e.who)?0:(e.commissionManual?e.commission:repairCommission(amt,pr,e.who));
       liveCommByUser[e.who]+=comm;
     });
     const totalComm=cfg.users.filter(u=>u.role==='staff').reduce((s,u)=>s+(liveCommByUser[u.name]||0),0);
@@ -1870,17 +1871,19 @@ return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot sell"></
 const tm={add:'add',del:'del',edit:'edit'};const lm={add:'+ Added',del:'Deleted',edit:'Edited'};return`<div class="ae"><div class="adot ${e.type}"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name||''}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div></div><div class="ae-right"><span class="ae-badge ${tm[e.type]||'edit'}">${lm[e.type]||e.type}</span></div></div>`;}}
 function buildLog(entries,staffOnly,showC){if(!entries.length)return'<div class="empty">No activity this day</div>';const f=staffOnly?entries.filter(e=>e.type==='sell'||e.type==='order'||(e.type==='selfbuy'&&e.who===cu?.name)):entries;if(!f.length)return'<div class="empty">No sales this day</div>';return f.map(e=>logEntry(e,showC)).join('');}
 function renderStaffLog(){renderPendingOrders();const days=getDays(),today=tday();const isAllTime=staffSelDay==='alltime';const dl=isAllTime?'alltime':staffSelDay==='today'?today:staffSelDay;document.getElementById('staff-dtabs').innerHTML=`<div class="dtab ${isAllTime?'active':''}" onclick="setSD('alltime')" style="${isAllTime?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`+days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setSD('${d}')">${it?'Today':d}</div>`;}).join('');const dayLog=isAllTime?log:log.filter(e=>e.date===dl);const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');const ec=document.getElementById('staff-earn');const mn=cu?.name;const myDebt=getStaffDebt(mn);const isPaused=!!commissionPaused[mn];const myDailyDebtCfg=null;if(cfg.showEarnings){const ms=isAllTime?log.filter(e=>(e.type==='sell'||e.type==='order')&&e.who===mn):sells.filter(e=>e.who===mn&&e.type!=='selfbuy');
-/* Live recalculate commission from current inventory costs (matches totBanner/EOD logic) */
+/* Live recalculate commission from current inventory costs (IDENTICAL to EOD logic) */
 const ilkS={};C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.name)ilkS[item.name.toLowerCase()]=item;});});
 const te=ms.reduce((s,e)=>{
   let cost=0;
+  const amt=e.amtReceived||e.total||0;
   const isVirt=e.payMethod&&(VIRT.includes(e.payMethod)||e.payMethod==='split');
-  if((e.type==='order')&&e.orderItems){
-    e.orderItems.forEach(oi=>{
+  const items=e.orderItems||e.items||[];
+  if((e.type==='order')&&items.length){
+    items.forEach(oi=>{
       const found=ilkS[(oi.itemName||'').toLowerCase()];
       let qty=(oi.label&&labelToQty(oi.label)>1)?labelToQty(oi.label):(oi.qty||0);
       if(qty<=1&&found&&found.prices&&found.prices.length){
-        const mp=oi.price||((e.orderItems.length===1)?(e.amtReceived||0):0);
+        const mp=oi.price||((items.length===1)?amt:0);
         if(mp>0){const tier=found.prices.find(p=>parseFloat(p.price)===mp);if(tier&&tier.label){const tq=labelToQty(tier.label);if(tq>1)qty=tq;}}
       }
       if(found)cost+=cpuItem(found)*qty;
@@ -1889,9 +1892,8 @@ const te=ms.reduce((s,e)=>{
     const found=ilkS[(e.name||'').toLowerCase()];
     if(found)cost+=cpuItem(found)*(e.amount||0);
   }
-  const amt=e.amtReceived||0;
   const pr=Math.max(0,amt-(isVirt?5:0)-cost);
-  const comm=repairCommission(amt,pr,e.who);
+  const comm=e.commissionManual?e.commission:repairCommission(amt,pr,e.who);
   return s+comm;
 },0);const ts=ms.reduce((s,e)=>s+(e.amtReceived||0),0);const earnLabel=isAllTime?'All-Time Earnings':'Your Earnings Today';const earnSub=isAllTime?`across ${[...new Set(ms.map(e=>e.date))].length} day${[...new Set(ms.map(e=>e.date))].length!==1?'s':''}`:(`from ${ms.length} sale${ms.length!==1?'s':''}`);ec.innerHTML=`<div class="earn-card"><div class="ec-title">${earnLabel}</div><div class="ec-total">${fmtP(te)}</div><div class="ec-sub">${earnSub}</div><div class="ec-bk"><div class="ec-row"><span class="ec-rl">${isAllTime?'All-time sales total':'Your sales total'}</span><span class="ec-rv">${fmtP(ts)}</span></div><div class="ec-row"><span class="ec-rl">${isAllTime?'All-time commission':'Your commission'}</span><span class="ec-rv">${fmtP(te)}</span></div><div class="ec-row"><span class="ec-rl">Total orders</span><span class="ec-rv">${ms.length}</span></div>${myDailyDebtCfg?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">📌 Daily Deduction</span><span class="ec-rv" style="color:var(--red);">-${fmtP(myDailyDebtCfg.amountPerDay)}/day</span></div>`:''}${myDebt>0?`<div class="ec-row" style="${myDailyDebtCfg?'':'border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;'}"><span class="ec-rl" style="color:var(--red);">&#9888; Total Owed</span><span class="ec-rv" style="color:var(--red);">-${fmtP(myDebt)}</span></div><div style="font-size:11px;color:var(--red);margin-top:4px;opacity:.8;">Collects daily · Deducted from next payout</div>`:""}${isPaused?`<div class="ec-row" style="border-top:1px solid rgba(244,107,107,0.2);padding-top:8px;margin-top:4px;"><span class="ec-rl" style="color:var(--red);">&#9940; Commission Paused</span><span class="ec-rv" style="color:var(--red);">$0 earned</span></div>`:"" }</div></div>`;}else{const notices=[];if(myDailyDebtCfg)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📌 Daily Deduction</div><div style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--red);">-${fmtP(myDailyDebtCfg.amountPerDay)}/day</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Accumulates every day · Deducted from payouts</div></div>`);if(myDebt>0)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9888; You Owe</div><div style="font-size:28px;font-weight:700;font-family:var(--mono);color:var(--red);">${fmtP(myDebt)}</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Collects daily · Deducted from next payout</div></div>`);if(isPaused)notices.push(`<div style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.25);border-radius:12px;padding:14px;margin-bottom:14px;"><div style="font-size:11px;font-family:var(--mono);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#9940; Commission Paused</div><div style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--red);">$0 per order</div><div style="font-size:11px;color:var(--text3);margin-top:4px;">Owner has paused your commission</div></div>`);ec.innerHTML=notices.join('');}document.getElementById('staff-totals').innerHTML=isAllTime?totBanner(sells,'All Time',false):totBanner(sells,dl,dl===today);document.getElementById('staff-dact').innerHTML=isAllTime?buildLog(log.slice(0,100),true,cfg.showEarnings):buildLog(dayLog,true,cfg.showEarnings);renderStaffCommHistory();}
 let staffCommExpanded={};
@@ -1900,17 +1902,19 @@ function renderStaffCommHistory(){
   if(!el||!cu)return;
   const mn=cu.name;
   const allSells=log.filter(e=>(e.type==='sell'||e.type==='order')&&e.who===mn);
-  /* Live recalculate commission from current inventory costs (matches totBanner/EOD logic) */
+  /* Live recalculate commission from current inventory costs (IDENTICAL to EOD logic) */
   const ilkCH={};C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.name)ilkCH[item.name.toLowerCase()]=item;});});
   function liveCommForEntry(e){
     let cost=0;
+    const amt=e.amtReceived||e.total||0;
     const isVirt=e.payMethod&&(VIRT.includes(e.payMethod)||e.payMethod==='split');
-    if((e.type==='order')&&e.orderItems){
-      e.orderItems.forEach(oi=>{
+    const items=e.orderItems||e.items||[];
+    if((e.type==='order')&&items.length){
+      items.forEach(oi=>{
         const found=ilkCH[(oi.itemName||'').toLowerCase()];
         let qty=(oi.label&&labelToQty(oi.label)>1)?labelToQty(oi.label):(oi.qty||0);
         if(qty<=1&&found&&found.prices&&found.prices.length){
-          const mp=oi.price||((e.orderItems.length===1)?(e.amtReceived||0):0);
+          const mp=oi.price||((items.length===1)?amt:0);
           if(mp>0){const tier=found.prices.find(p=>parseFloat(p.price)===mp);if(tier&&tier.label){const tq=labelToQty(tier.label);if(tq>1)qty=tq;}}
         }
         if(found)cost+=cpuItem(found)*qty;
@@ -1919,9 +1923,8 @@ function renderStaffCommHistory(){
       const found=ilkCH[(e.name||'').toLowerCase()];
       if(found)cost+=cpuItem(found)*(e.amount||0);
     }
-    const amt=e.amtReceived||0;
     const pr=Math.max(0,amt-(isVirt?5:0)-cost);
-    return repairCommission(amt,pr,e.who);
+    return e.commissionManual?e.commission:repairCommission(amt,pr,e.who);
   }
   const totalComm=allSells.reduce((s,e)=>s+liveCommForEntry(e),0);
   const totalSales=allSells.reduce((s,e)=>s+(e.amtReceived||0),0);
