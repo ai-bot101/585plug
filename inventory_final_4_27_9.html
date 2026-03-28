@@ -2625,8 +2625,11 @@ function saveEdit(){
     const oldLeft=gl(item);
     const newLeft=parseFloat(lv);
     const delta=Math.round((newLeft-oldLeft)*10)/10;
-    if(delta!==0&&item.bought){item.bought=Math.round((item.bought+delta)*10)/10;}
     item.left=newLeft;
+    // If stock was manually adjusted, log it so repairStock stays in sync
+    if(delta!==0){
+      log.unshift({type:'adjustment',name:item.name.toLowerCase(),amount:Math.abs(delta),direction:delta>0?'add':'remove',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'Manual stock edit'});
+    }
   }
   // prices saved via getPriceTiers above
   persist();closeOv('edit-modal');renderStats();renderItems();pushInventory();showToast('Item updated','ok');
@@ -3481,6 +3484,7 @@ function repairAllCommissions(){
 // ── STOCK REPAIR: recalculate left from bought minus actual sales in log ──
 function repairStock(manual){
   const soldMap = {}; // { itemNameLower: totalQtySold }
+  const adjMap = {}; // { itemNameLower: netAdjustment } from manual edits
 
   // Count all confirmed sales from log
   log.forEach(e => {
@@ -3498,6 +3502,10 @@ function repairStock(manual){
         const key = (it.itemName||it.name||'').toLowerCase();
         if (key) soldMap[key] = (soldMap[key]||0) + (it.qty||0);
       });
+    } else if (e.type === 'adjustment') {
+      const key = (e.name||'').toLowerCase();
+      const amt = e.amount||0;
+      if (key) adjMap[key] = (adjMap[key]||0) + (e.direction==='remove' ? amt : -amt);
     }
   });
 
@@ -3517,7 +3525,7 @@ function repairStock(manual){
       if (!item.name || !item.bought) return;
       const key = item.name.toLowerCase();
       const totalSold = soldMap[key] || 0;
-      const correctLeft = Math.round(Math.max(0, item.bought - totalSold) * 10) / 10;
+      const correctLeft = Math.round(Math.max(0, item.bought - totalSold - (adjMap[key]||0)) * 10) / 10;
       const currentLeft = gl(item);
       // Fix if current stock doesn't match calculated stock (too low from double-deduction OR too high from missed deduction)
       if (Math.abs(currentLeft - correctLeft) > 0.05) {
