@@ -1879,7 +1879,11 @@ function openAdmin() {
       </div>
       <div id="ap-sales-detail" style="background:var(--black2);border:1px solid var(--border);border-radius:10px;padding:12px;"></div>
     </div>
-    <div class="ap-list" id="ap-list"><div class="ap-empty">Loading orders...</div></div>`;
+    <div class="ap-list" id="ap-list"><div class="ap-empty">Loading orders...</div></div>
+    <div id="ap-cancelled-wrap" style="flex-shrink:0;display:none;border-top:1px solid var(--border);">
+      <button id="ap-cancelled-toggle" onclick="toggleCancelledLog()" style="width:100%;padding:12px 16px;background:rgba(244,107,107,0.06);border:none;color:#ff4d4d;font-family:Oswald,sans-serif;font-size:13px;font-weight:600;cursor:pointer;letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:6px;">🚫 Cancelled Orders <span id="ap-cancelled-count" style="background:rgba(244,107,107,0.15);border-radius:10px;padding:2px 8px;font-size:11px;">0</span> <span id="ap-cancelled-arrow" style="transition:transform .2s;">▼</span></button>
+      <div id="ap-cancelled-list" style="display:none;padding:12px 16px;max-height:400px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    </div>`;
     panel.dataset.loaded='1';
   }
   panel.classList.add('open');
@@ -1956,43 +1960,72 @@ async function loadAdminOrders() {
 
     updateAdminStats(orders);
 
-    if (!orders.length) { list.innerHTML = '<div class="ap-empty">No orders yet</div>'; return; }
+    const activeOrders = orders.filter(o => !o.cancelled);
+    const cancelledOrders = orders.filter(o => o.cancelled);
 
-    list.innerHTML = orders.map(o => {
-      const items = (o.orderItems || []).map(it => {
-        let line = '<div class="ap-order-item">' + (it.itemName||'?') + ' <span style="color:var(--red);">(' + (it.label||'') + ' · $' + (it.price||0) + ')</span>';
-        if (it.flavorText) line += '<div class="ao-flavors">🍬 ' + it.flavorText + '</div>';
-        line += '</div>';
-        return line;
-      }).join('');
+    if (!activeOrders.length) { list.innerHTML = '<div class="ap-empty">No active orders</div>'; }
+    else {
+      list.innerHTML = activeOrders.map(o => renderAdminOrder(o)).join('');
+    }
 
-      const tags = [
-        '<span class="ap-order-tag pay">' + (o.payMethodLabel||o.payMethod||'?') + '</span>',
-        '<span class="ap-order-tag type">' + (o.orderType==='pickup'?'🏪 Pickup':'🚗 Delivery') + '</span>',
-        o.customerPhone ? '<span class="ap-order-tag phone">📱 ' + o.customerPhone + '</span>' : '',
-        o.address ? '<span class="ap-order-tag">📍 ' + o.address + '</span>' : ''
-      ].filter(Boolean).join('');
-
-      const isCancelled = o.cancelled;
-      return '<div class="ap-order ' + (isCancelled?'cancelled':'') + '">' +
-        '<div class="ap-order-head">' +
-          '<div class="ap-order-time">' + (o.date||'') + ' · ' + (o.time||'') + (isCancelled?' · <span style="color:var(--red);font-weight:700;">CANCELLED</span>':'') + '</div>' +
-          '<div class="ap-order-total">$' + (o.total||0) + '</div>' +
-        '</div>' +
-        '<div class="ap-order-items">' + items + '</div>' +
-        '<div class="ap-order-meta">' + tags + '</div>' +
-        (isCancelled
-          ? '<div class="ap-btn-row">' +
-              '<button class="ap-restore-btn" onclick="adminRestoreOrder(\'' + o.key + '\')">↩ Restore</button>' +
-              '<button class="ap-perm-del-btn" onclick="adminDeleteOrder(\'' + o.key + '\')">🗑 Delete</button>' +
-            '</div>'
-          : '<div class="ap-btn-row"><button class="ap-del-btn" onclick="adminCancelOrder(\'' + o.key + '\')">✕ Cancel Order</button></div>'
-        ) +
-      '</div>';
-    }).join('');
+    // Cancelled orders section
+    const cancelWrap = document.getElementById('ap-cancelled-wrap');
+    const cancelList = document.getElementById('ap-cancelled-list');
+    const cancelCount = document.getElementById('ap-cancelled-count');
+    if (cancelledOrders.length > 0) {
+      cancelWrap.style.display = 'block';
+      cancelCount.textContent = cancelledOrders.length;
+      cancelList.innerHTML = cancelledOrders.map(o => renderAdminOrder(o)).join('');
+    } else {
+      cancelWrap.style.display = 'none';
+    }
   } catch(e) {
     console.error('Admin fetch error:', e);
     list.innerHTML = '<div class="ap-empty">Failed to load orders. Check connection.</div>';
+  }
+}
+
+function renderAdminOrder(o) {
+  const items = (o.orderItems || []).map(it => {
+    let line = '<div class="ap-order-item">' + (it.itemName||'?') + ' <span style="color:var(--red);">(' + (it.label||'') + ' · $' + (it.price||0) + ')</span>';
+    if (it.flavorText) line += '<div class="ao-flavors">🍬 ' + it.flavorText + '</div>';
+    line += '</div>';
+    return line;
+  }).join('');
+  const tags = [
+    '<span class="ap-order-tag pay">' + (o.payMethodLabel||o.payMethod||'?') + '</span>',
+    '<span class="ap-order-tag type">' + (o.orderType==='pickup'?'🏪 Pickup':'🚗 Delivery') + '</span>',
+    o.customerPhone ? '<span class="ap-order-tag phone">📱 ' + o.customerPhone + '</span>' : '',
+    o.address ? '<span class="ap-order-tag">📍 ' + o.address + '</span>' : ''
+  ].filter(Boolean).join('');
+  const isCancelled = o.cancelled;
+  const cancelTime = o._cancelledAt ? ' · ' + new Date(o._cancelledAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+  return '<div class="ap-order ' + (isCancelled?'cancelled':'') + '">' +
+    '<div class="ap-order-head">' +
+      '<div class="ap-order-time">' + (o.date||'') + ' · ' + (o.time||'') + (isCancelled?' · <span style="color:var(--red);font-weight:700;">CANCELLED</span>' + cancelTime : '') + '</div>' +
+      '<div class="ap-order-total">$' + (o.total||0) + '</div>' +
+    '</div>' +
+    '<div class="ap-order-items">' + items + '</div>' +
+    '<div class="ap-order-meta">' + tags + '</div>' +
+    (isCancelled
+      ? '<div class="ap-btn-row">' +
+          '<button class="ap-restore-btn" onclick="adminRestoreOrder(\'' + o.key + '\')">↩ Restore</button>' +
+          '<button class="ap-perm-del-btn" onclick="adminDeleteOrder(\'' + o.key + '\')">🗑 Delete</button>' +
+        '</div>'
+      : '<div class="ap-btn-row"><button class="ap-del-btn" onclick="adminCancelOrder(\'' + o.key + '\')">✕ Cancel Order</button></div>'
+    ) +
+  '</div>';
+}
+
+function toggleCancelledLog() {
+  const list = document.getElementById('ap-cancelled-list');
+  const arrow = document.getElementById('ap-cancelled-arrow');
+  if (list.style.display === 'none') {
+    list.style.display = 'block';
+    arrow.style.transform = 'rotate(180deg)';
+  } else {
+    list.style.display = 'none';
+    arrow.style.transform = 'rotate(0deg)';
   }
 }
 
