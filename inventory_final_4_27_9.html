@@ -2750,10 +2750,11 @@ function processWebsiteOrders(pendingOrders) {
     }
     if (order.confirmed || order.cancelled) return;
     if (!pendingWebOrders[fbKey]) {
-      pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now()};
+      pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:false};
       newCount++;
       // Only deduct stock if we haven't already (prevents double-deduction on app reload)
       if (!order._stockDeducted) {
+        pendingWebOrders[fbKey]._stockDeductedLocally = true;
         (order.orderItems||[]).forEach(oi=>{
           const itemName=(oi.itemName||oi.name||'').toLowerCase();
           const qty=labelToQty(oi.label);
@@ -2960,7 +2961,31 @@ function finalizeConfirmOrder(fbKey, assignedTo){
     webOrderKey: fbKey
   };
 
-  // Stock already deducted on arrival (pending hold) — no need to deduct again
+  // Stock should have been deducted on arrival (pending hold), but verify and deduct if missed
+  if (!order._stockDeductedLocally) {
+    (order.orderItems||[]).forEach(oi => {
+      const itemName = (oi.itemName||oi.name||'').toLowerCase();
+      const qty = labelToQty(oi.label) || oi.qty || 1;
+      const cat = oi.cat||'';
+      let realCat = cat;
+      if (cat && !inv[cat]) { const m = C().find(c => c.toLowerCase() === cat.toLowerCase()); if (m) realCat = m; }
+      let foundItem = null;
+      if (!realCat || !inv[realCat]) {
+        for (const c of C()) { const f = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName); if (f) { f.left = Math.max(0, Math.round((gl(f)-qty)*10)/10); foundItem = f; break; } }
+      } else {
+        const f = (inv[realCat]||[]).find(item => (item.name||'').toLowerCase() === itemName);
+        if (f) { f.left = Math.max(0, Math.round((gl(f)-qty)*10)/10); foundItem = f; }
+      }
+      // Deduct flavor stock if needed
+      if (foundItem && foundItem.flavors && oi.flavors && typeof oi.flavors === 'object') {
+        Object.entries(oi.flavors).forEach(([fname, fqty]) => {
+          if (fqty <= 0) return;
+          const flav = foundItem.flavors.find(fl => fl.name && fl.name.toLowerCase() === fname.toLowerCase());
+          if (flav) flav.stock = Math.max(0, (flav.stock||0) - fqty);
+        });
+      }
+    });
+  }
 
   log.unshift(e);
   delete pendingWebOrders[fbKey];
@@ -3480,8 +3505,8 @@ function repairStock(manual){
       const totalSold = soldMap[key] || 0;
       const correctLeft = Math.round(Math.max(0, item.bought - totalSold) * 10) / 10;
       const currentLeft = gl(item);
-      // Only fix if current stock is LOWER than it should be (double-deduction made it too low)
-      if (currentLeft < correctLeft - 0.05) {
+      // Fix if current stock doesn't match calculated stock (too low from double-deduction OR too high from missed deduction)
+      if (Math.abs(currentLeft - correctLeft) > 0.05) {
         fixes.push(item.name + ': ' + currentLeft + ' → ' + correctLeft);
         item.left = correctLeft;
         fixed++;
