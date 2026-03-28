@@ -61,7 +61,7 @@ html.no-scroll{overflow:hidden !important;position:fixed;width:100%;}
 .ag-hint{margin-top:18px;font-size:11px;color:var(--border2);font-family:'Oswald',sans-serif;letter-spacing:1px;}
 
 /* ORDER PREVIEW MODAL */
-#order-preview{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
+#order-preview{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:none;padding:16px;}
 #order-preview.open{display:flex;}
 .op-card{background:var(--black2);border:1px solid var(--border2);border-radius:18px;padding:24px 20px;width:100%;max-width:400px;max-height:85vh;display:flex;flex-direction:column;}
 .op-title{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--red);letter-spacing:2px;margin-bottom:4px;text-align:center;}
@@ -81,7 +81,7 @@ html.no-scroll{overflow:hidden !important;position:fixed;width:100%;}
 .op-done-btn:hover{border-color:var(--red);color:var(--white2);}
 
 /* ORDER CONFIRMATION */
-#order-confirm{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:450;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
+#order-confirm{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:450;display:none;align-items:center;justify-content:center;backdrop-filter:none;padding:16px;}
 #order-confirm.open{display:flex;}
 .oc-card{background:var(--black2);border:1px solid var(--border2);border-radius:18px;padding:24px 20px;width:100%;max-width:400px;max-height:85vh;display:flex;flex-direction:column;}
 .oc-title{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--white);letter-spacing:2px;text-align:center;margin-bottom:4px;}
@@ -106,7 +106,7 @@ html.no-scroll{overflow:hidden !important;position:fixed;width:100%;}
 .oc-send-btn:hover{background:var(--red3);}
 
 /* SEND REMINDER POPUP */
-#send-reminder{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:550;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);padding:16px;}
+#send-reminder{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:550;display:none;align-items:center;justify-content:center;backdrop-filter:none;padding:16px;}
 #send-reminder.open{display:flex;}
 .sr-card{background:var(--black2);border:1px solid var(--red);border-radius:18px;padding:28px 22px;width:100%;max-width:360px;text-align:center;box-shadow:0 0 40px rgba(204,31,31,0.2);}
 .sr-icon{font-size:44px;margin-bottom:10px;}
@@ -122,7 +122,7 @@ html.no-scroll{overflow:hidden !important;position:fixed;width:100%;}
 .sr-got-it:hover{border-color:var(--green);color:var(--green);}
 
 /* ORDER HISTORY */
-#order-history{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
+#order-history{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:none;padding:16px;}
 #order-history.open{display:flex;}
 .oh-card{background:var(--black2);border:1px solid var(--border2);border-radius:18px;padding:24px 20px;width:100%;max-width:420px;max-height:85vh;display:flex;flex-direction:column;}
 .oh-title{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--red);letter-spacing:2px;margin-bottom:4px;text-align:center;}
@@ -148,7 +148,7 @@ html.no-scroll{overflow:hidden !important;position:fixed;width:100%;}
 
 /* APP */
 #app{display:none;overflow-x:hidden;max-width:100%;width:100%;}
-header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 16px;}
+header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.98);border-bottom:1px solid var(--border);padding:0 16px;}
 .header-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:60px;gap:12px;}
 .logo-wrap{display:flex;align-items:center;gap:10px;flex-shrink:0;}
 .logo-circle{width:38px;height:38px;border-radius:50%;border:2px solid var(--red);overflow:hidden;flex-shrink:0;}
@@ -239,7 +239,7 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .add-btn.added{background:#1a5c1a;}
 
 /* FLAVOR PICKER */
-#flavor-picker{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:600;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
+#flavor-picker{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:600;display:none;align-items:center;justify-content:center;backdrop-filter:none;padding:16px;}
 #flavor-picker.open{display:flex;}
 .fp-card{background:var(--black2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto;padding:24px 20px;}
 .fp-title{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--white);letter-spacing:2px;margin-bottom:4px;}
@@ -274,7 +274,7 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .empty-state p{font-family:'Oswald',sans-serif;font-size:15px;letter-spacing:1px;}
 
 /* CART OVERLAY */
-.cart-overlay{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:200;display:none;backdrop-filter:blur(4px);touch-action:none;overscroll-behavior:none;}
+.cart-overlay{position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:200;display:none;backdrop-filter:none;touch-action:none;overscroll-behavior:none;}
 .cart-overlay.open{display:block;}
 .cart-overlay.open~*{pointer-events:none !important;}
 .cart-drawer{position:fixed;right:-100vw;top:0;bottom:0;width:100%;max-width:440px;background:var(--black2);border-left:1px solid var(--border);z-index:201;display:flex;flex-direction:column;transition:right .3s cubic-bezier(.4,0,.2,1);height:100%;height:100svh;height:-webkit-fill-available;padding-bottom:env(safe-area-inset-bottom);}
@@ -319,7 +319,7 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .checkout-btn:disabled{background:var(--black4);color:var(--white3);cursor:not-allowed;}
 
 /* ADMIN PANEL */
-#admin-gate{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:700;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px);padding:16px;}
+#admin-gate{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:700;display:none;align-items:center;justify-content:center;backdrop-filter:none;padding:16px;}
 #admin-gate.open{display:flex;}
 .adg-card{background:var(--black2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:340px;padding:28px 24px;text-align:center;}
 .adg-icon{font-size:36px;margin-bottom:8px;}
@@ -450,7 +450,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
 </div>
 
 <!-- ROUTE TIMES POPUP -->
-<div id="route-popup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:800;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px);" onclick="if(event.target===this)closeRoutePopup()">
+<div id="route-popup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:800;align-items:center;justify-content:center;padding:20px;backdrop-filter:none;" onclick="if(event.target===this)closeRoutePopup()">
   <div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px 24px;max-width:340px;width:100%;text-align:center;position:relative;">
     <button onclick="closeRoutePopup()" style="position:absolute;top:10px;right:12px;background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:32px;height:32px;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
     <div style="font-size:28px;margin-bottom:6px;">🚗</div>
@@ -988,7 +988,6 @@ async function doFetch() {
 
 function startLiveSync() {
   doFetch();
-  fetchSalesCounts(); // load order history for "Top Selling" sort
   if (fbPollTimer) clearInterval(fbPollTimer);
   fbPollTimer = setInterval(doFetch, 15000);
 }
@@ -1026,9 +1025,13 @@ function buildSortBar() {
   ).join('');
 }
 
-function setSort(mode) {
+async function setSort(mode) {
   sortMode = mode;
   buildSortBar();
+  // Lazy-load sales data only when user taps Top Selling
+  if (mode === 'popular' && Object.keys(salesCounts).length === 0) {
+    await fetchSalesCounts();
+  }
   renderMenu();
 }
 
