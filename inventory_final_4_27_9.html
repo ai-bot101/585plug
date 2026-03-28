@@ -2989,7 +2989,8 @@ function renderPendingOrders() {
             <div style="font-size:11px;color:var(--text3);line-height:1.8;">
               ${phone ? `<span>${phone}</span><br>` : ''}
               <span>${delivType}</span><br>
-              <span>💳 ${payLabel}</span>${splitInfo}
+              <span style="cursor:pointer;" onclick="togglePendingPayPicker('${o.fbKey}')">💳 ${payLabel} <span style="font-size:9px;opacity:0.6;">✎</span></span>
+              <div id="pending-pay-picker-${o.fbKey}" style="display:none;margin-top:6px;"></div>${splitInfo}
             </div>
           </div>
           <div style="text-align:right;flex-shrink:0;">
@@ -3053,6 +3054,27 @@ function updatePendingSplit(fbKey){
     body:JSON.stringify({['pending_orders/'+fbKey+'/total']:newTotal,['pending_orders/'+fbKey+'/splitCash']:cashAmt,['pending_orders/'+fbKey+'/splitVirtual']:virtAmt})
   }).catch(()=>{});
   showToast('Split updated · Total: '+fmtP(newTotal),'ok');
+}
+
+function togglePendingPayPicker(fbKey){
+  const el=document.getElementById('pending-pay-picker-'+fbKey);
+  if(!el)return;
+  if(el.style.display!=='none'){el.style.display='none';return;}
+  const methods=PM.filter(m=>m.id!=='nopay');
+  const current=pendingWebOrders[fbKey]?.payMethod||'cash';
+  el.innerHTML=methods.map(m=>`<button onclick="updatePendingPayMethod('${fbKey}','${m.id}','${m.label}')" style="padding:6px 10px;margin:2px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${m.id===current?'var(--accent)':'var(--border)'};background:${m.id===current?'rgba(108,99,255,0.15)':'var(--bg3)'};color:${m.id===current?'var(--accent)':'var(--text2)'};font-family:var(--sans);">${m.icon} ${m.label}</button>`).join('');
+  el.style.display='block';
+}
+function updatePendingPayMethod(fbKey,methodId,methodLabel){
+  if(!pendingWebOrders[fbKey])return;
+  pendingWebOrders[fbKey].payMethod=methodId;
+  pendingWebOrders[fbKey].payMethodLabel=methodLabel;
+  // Sync to Firebase
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({['pending_orders/'+fbKey+'/payMethod']:methodId,['pending_orders/'+fbKey+'/payMethodLabel']:methodLabel})
+  }).catch(()=>{});
+  showToast('Payment changed to '+methodLabel,'ok');
+  renderPendingOrders();
 }
 
 function confirmWebOrder(fbKey) {
