@@ -1518,10 +1518,54 @@ function labelToQty(label) {
 }
 function searchItems(q){const res=document.getElementById('isr');if(!q.trim()){res.classList.remove('open');return;}const m=[];C().forEach(cat=>{(inv[cat]||[]).forEach((item,ri)=>{if(item.name.toLowerCase().includes(q.toLowerCase())&&gl(item)>0)m.push({cat,ri,item});});});if(!m.length){res.classList.remove('open');return;}res.innerHTML=m.slice(0,8).map(({cat,ri,item})=>{const ao=isAddOnOnly(item);const blocked=ao&&orderItems.length===0;const badge=ao?`<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>`:'';const fc=(item.flavors||[]).filter(f=>f.name&&f.stock>0).length;const flavHint=fc>0?' · 🍬 '+fc+' flavors':'';return`<div class="isr-item" onclick="${blocked?`showToast('Add another item first — this is add-on only','err')`:`addIO('${cat}',${ri})`}" style="${blocked?'opacity:0.5;':''}"><span style="text-transform:capitalize">${item.name}${badge}</span><span class="isr-left">${cat} · ${fmt(gl(item))} left${flavHint}${blocked?' · needs other items':''}</span></div>`;}).join('');res.classList.add('open');}
 function addIO(cat,ri){const item=(inv[cat]||[])[ri];if(!item)return;if(isAddOnOnly(item)&&orderItems.length===0){showToast(item.name+' is add-on only — add another item first','err');return;}if(orderItems.find(o=>o.cat===cat&&o.ri===ri&&!o.flavorText)){showToast(item.name+' already in order','err');return;}
+// If item has price tiers, show price picker so label/qty are set correctly
+const priceTiers=(item.prices||[]).filter(p=>p.label&&p.price>0);
+if(priceTiers.length>0){showPricePicker(cat,ri,item,priceTiers);return;}
 // If item has flavors with stock, show flavor picker
 const flavorsAvail=(item.flavors||[]).filter(f=>f.name&&f.stock>0);
 if(flavorsAvail.length>0){showFlavorPicker(cat,ri,item,flavorsAvail);return;}
-orderItems.push({cat,ri,itemName:item.name,qty:1,flavorText:''});document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');renderOrdItems();calcComm();}
+orderItems.push({cat,ri,itemName:item.name,qty:1,label:'',price:0,flavorText:''});document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');renderOrdItems();calcComm();}
+function showPricePicker(cat,ri,item,tiers){
+  document.getElementById('price-pick-modal')?.remove();
+  const d=document.createElement('div');d.id='price-pick-modal';
+  d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;';
+  d.innerHTML=`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:360px;width:100%;max-height:80vh;overflow-y:auto;">
+    <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">${item.name}</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px;">Pick a size / price</div>
+    ${tiers.map((t,i)=>{
+      const qty=labelToQty(t.label);
+      return`<div onclick="pickPriceTier('${cat}',${ri},${i})" style="display:flex;align-items:center;justify-content:space-between;padding:14px;margin-bottom:8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;cursor:pointer;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div><div style="font-size:14px;font-weight:600;color:var(--text);text-transform:capitalize;">${t.label}</div><div style="font-size:11px;color:var(--text3);">${qty>1?fmt(qty)+'g':'1 unit'}</div></div>
+        <div style="font-size:16px;font-weight:700;color:var(--green);">$${t.price}</div>
+      </div>`;
+    }).join('')}
+    <button onclick="document.getElementById('price-pick-modal').remove()" style="width:100%;margin-top:12px;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text3);font-size:13px;cursor:pointer;">Cancel</button>
+  </div>`;
+  document.body.appendChild(d);
+}
+function pickPriceTier(cat,ri,ti){
+  document.getElementById('price-pick-modal')?.remove();
+  const item=(inv[cat]||[])[ri];if(!item)return;
+  const tier=(item.prices||[])[ti];if(!tier)return;
+  const label=tier.label||'';
+  const qty=labelToQty(label);
+  const price=parseFloat(tier.price)||0;
+  // Check if same item already in order
+  if(orderItems.find(o=>o.cat===cat&&o.ri===ri&&!o.flavorText)){showToast(item.name+' already in order','err');return;}
+  // If item has flavors, pass label/qty/price through to flavor picker
+  const flavorsAvail=(item.flavors||[]).filter(f=>f.name&&f.stock>0);
+  if(flavorsAvail.length>0){
+    _pendingPriceTier={label,qty,price};
+    showFlavorPicker(cat,ri,item,flavorsAvail);
+    return;
+  }
+  orderItems.push({cat,ri,itemName:item.name,qty,label,price,flavorText:''});
+  document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');
+  // Auto-fill total if this is the only item
+  if(orderItems.length===1){const totalInp=document.getElementById('ord-total');if(totalInp&&!totalInp.value)totalInp.value=price;}
+  renderOrdItems();calcComm();
+}
+let _pendingPriceTier=null;
 function showFlavorPicker(cat,ri,item,flavors){
   const existing=document.getElementById('flavor-pick-modal');if(existing)existing.remove();
   const d=document.createElement('div');d.id='flavor-pick-modal';
@@ -1543,10 +1587,18 @@ function pickFlavor(cat,ri,flavorName,fi){
   const item=(inv[cat]||[])[ri];if(!item)return;
   // Check if same item+flavor combo already in order
   if(flavorName&&orderItems.find(o=>o.cat===cat&&o.ri===ri&&o.flavorText===flavorName)){showToast(item.name+' ('+flavorName+') already in order','err');return;}
-  orderItems.push({cat,ri,itemName:item.name,qty:1,flavorText:flavorName});
-  document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');renderOrdItems();calcComm();
+  // Use pending price tier if set (from price picker → flavor picker flow)
+  const pt=_pendingPriceTier||{};
+  const qty=pt.qty||1;
+  const label=pt.label||'';
+  const price=pt.price||0;
+  _pendingPriceTier=null;
+  orderItems.push({cat,ri,itemName:item.name,qty,label,price,flavorText:flavorName});
+  document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');
+  if(orderItems.length===1&&price>0){const totalInp=document.getElementById('ord-total');if(totalInp&&!totalInp.value)totalInp.value=price;}
+  renderOrdItems();calcComm();
 }
-function renderOrdItems(){const list=document.getElementById('order-items-list');if(!orderItems.length){list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0 12px;">No items added yet — search above</div>';return;}list.innerHTML=orderItems.map((o,i)=>{const it=(inv[o.cat]||[])[o.ri];const ao=it&&isAddOnOnly(it);const flav=o.flavorText?`<span style="font-size:10px;color:var(--accent);margin-left:6px;">🍬 ${o.flavorText}</span>`:'';return`<div class="order-item-row"><div class="oir-name">${o.itemName}${flav}${ao?'<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>':''}</div><div class="oir-qty"><input type="number" value="${o.qty}" min="0.1" step="0.1" onchange="updOQ(${i},this.value)"></div><button class="oir-remove" onclick="remOI(${i})">x</button></div>`;}).join('');}
+function renderOrdItems(){const list=document.getElementById('order-items-list');if(!orderItems.length){list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0 12px;">No items added yet — search above</div>';return;}list.innerHTML=orderItems.map((o,i)=>{const it=(inv[o.cat]||[])[o.ri];const ao=it&&isAddOnOnly(it);const flav=o.flavorText?`<span style="font-size:10px;color:var(--accent);margin-left:6px;">🍬 ${o.flavorText}</span>`:'';const tierTag=o.label?`<span style="font-size:10px;color:var(--green);margin-left:6px;text-transform:capitalize;">${o.label}${o.price?' · $'+o.price:''}</span>`:'';return`<div class="order-item-row"><div class="oir-name">${o.itemName}${tierTag}${flav}${ao?'<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>':''}</div><div class="oir-qty"><input type="number" value="${o.qty}" min="0.1" step="0.1" onchange="updOQ(${i},this.value)"></div><button class="oir-remove" onclick="remOI(${i})">x</button></div>`;}).join('');}
 function updOQ(i,v){orderItems[i].qty=parseFloat(v)||0;calcComm();}
 function remOI(i){
   // check if removing this would leave only add-on-only items with no base item
@@ -1650,7 +1702,7 @@ function confirmOrder(){
   // owner adding their own order = no commission deducted, full profit is theirs
   const isOwnerOrder=cu?.role==='owner';
   const{commission,deducted}=isOwnerOrder?{commission:0,deducted:0}:calcComm2(effectiveAmt,profit,cu.name);
-  const e={type:'order',customer,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,label:o.label||'',flavorText:o.flavorText||''})),total,payMethod:orderPayMethod,payMethodLabel:ml,amtReceived:total,profit,commission,creditApplied,extraCredit:extra,shortPaid:short,note,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
+  const e={type:'order',customer,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,label:o.label||'',price:o.price||0,flavorText:o.flavorText||''})),total,payMethod:orderPayMethod,payMethodLabel:ml,amtReceived:total,profit,commission,creditApplied,extraCredit:extra,shortPaid:short,note,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
   if(orderPayMethod==='split'){e.splitCash=splitCash;e.splitVirtual=splitVirtual;}
   log.unshift(e);persist();closeOrder();
   renderStats();renderItems();
@@ -2226,7 +2278,8 @@ function saveLogEdit(){
   if(isOrder&&e.orderItems){
     e.orderItems.forEach(oi=>{
       const found=itemLk[(oi.itemName||'').toLowerCase()];
-      if(found)cost+=cpuItem(found)*(oi.qty||0);
+      const qty=(oi.label&&labelToQty(oi.label)>1)?labelToQty(oi.label):(oi.qty||0);
+      if(found)cost+=cpuItem(found)*qty;
     });
   }else if(e.type==='sell'){
     const found=itemLk[(e.name||'').toLowerCase()];
@@ -3518,7 +3571,20 @@ function repairAllCommissions(){
       e.orderItems.forEach(oi=>{
         const found=itemLookup[(oi.itemName||'').toLowerCase()];
         // Use labelToQty for web orders where qty is 1 but label has real quantity
-        const qty = (oi.label && labelToQty(oi.label) > 1) ? labelToQty(oi.label) : (oi.qty||0);
+        let qty = (oi.label && labelToQty(oi.label) > 1) ? labelToQty(oi.label) : (oi.qty||0);
+        // Recovery: if qty<=1 and no usable label, try to match price to a tier
+        if(qty<=1 && found && found.prices && found.prices.length){
+          const itemPrice=oi.price||0;
+          // For single-item orders, also try matching order total to a tier
+          const matchPrice=itemPrice>0?itemPrice:((e.orderItems.length===1)?(e.amtReceived||0):0);
+          if(matchPrice>0){
+            const tier=found.prices.find(p=>parseFloat(p.price)===matchPrice);
+            if(tier&&tier.label){
+              const tierQty=labelToQty(tier.label);
+              if(tierQty>1){qty=tierQty;oi.label=tier.label;oi.qty=tierQty;changed=true;}
+            }
+          }
+        }
         if(found)cost+=cpuItem(found)*qty;
       });
     }else if(e.type==='sell'&&e.name){
@@ -3559,7 +3625,19 @@ function repairAllCommissions(){
         let cost=0;
         (o.items||[]).forEach(it=>{
           const found=itemLookup[(it.itemName||'').toLowerCase()];
-          const qty = (it.label && labelToQty(it.label) > 1) ? labelToQty(it.label) : (it.qty||0);
+          let qty = (it.label && labelToQty(it.label) > 1) ? labelToQty(it.label) : (it.qty||0);
+          // Recovery: match price to tier if qty<=1 and no label
+          if(qty<=1 && found && found.prices && found.prices.length){
+            const itemPrice=it.price||0;
+            const matchPrice=itemPrice>0?itemPrice:(((o.items||[]).length===1)?(o.total||0):0);
+            if(matchPrice>0){
+              const tier=found.prices.find(p=>parseFloat(p.price)===matchPrice);
+              if(tier&&tier.label){
+                const tierQty=labelToQty(tier.label);
+                if(tierQty>1){qty=tierQty;it.label=tier.label;it.qty=tierQty;changed=true;}
+              }
+            }
+          }
           if(found)cost+=cpuItem(found)*qty;
         });
         const isVirtual=o.payMethod&&(VIRT.includes(o.payMethod)||o.payMethod==='split');
@@ -4329,7 +4407,8 @@ function saveEODOrderEdit(){
       });
     });
     if(found){
-      cost+=cpuItem(found)*it.qty;
+      const qty=(it.label&&labelToQty(it.label)>1)?labelToQty(it.label):(it.qty||0);
+      cost+=cpuItem(found)*qty;
     }
   });
   // update payment method
@@ -4788,7 +4867,17 @@ function viewEODLog(i,filterPerson){
     let cost=0;
     (o.items||[]).forEach(it=>{
       const found=eodItemLookup[(it.itemName||'').toLowerCase()];
-      if(found)cost+=cpuItem(found)*(it.qty||0);
+      let qty=(it.label&&labelToQty(it.label)>1)?labelToQty(it.label):(it.qty||0);
+      // Recovery: match price to tier if qty<=1 and no label
+      if(qty<=1 && found && found.prices && found.prices.length){
+        const itemPrice=it.price||0;
+        const matchPrice=itemPrice>0?itemPrice:(((o.items||[]).length===1)?(o.total||0):0);
+        if(matchPrice>0){
+          const tier=found.prices.find(p=>parseFloat(p.price)===matchPrice);
+          if(tier&&tier.label){const tq=labelToQty(tier.label);if(tq>1)qty=tq;}
+        }
+      }
+      if(found)cost+=cpuItem(found)*qty;
     });
     const isVirtual=o.payMethod&&(VIRT.includes(o.payMethod)||o.payMethod==='split');
     const vFee=isVirtual?5:0;
