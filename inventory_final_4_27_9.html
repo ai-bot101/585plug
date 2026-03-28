@@ -1604,7 +1604,7 @@ function confirmOrder(){
   // owner adding their own order = no commission deducted, full profit is theirs
   const isOwnerOrder=cu?.role==='owner';
   const{commission,deducted}=isOwnerOrder?{commission:0,deducted:0}:calcComm2(effectiveAmt,profit,cu.name);
-  const e={type:'order',customer,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,flavorText:o.flavorText||''})),total,payMethod:orderPayMethod,payMethodLabel:ml,amtReceived:total,profit,commission,creditApplied,extraCredit:extra,shortPaid:short,note,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
+  const e={type:'order',customer,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,label:o.label||'',flavorText:o.flavorText||''})),total,payMethod:orderPayMethod,payMethodLabel:ml,amtReceived:total,profit,commission,creditApplied,extraCredit:extra,shortPaid:short,note,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
   if(orderPayMethod==='split'){e.splitCash=splitCash;e.splitVirtual=splitVirtual;}
   log.unshift(e);persist();closeOrder();
   renderStats();renderItems();
@@ -4279,7 +4279,8 @@ function deleteEODOrder(logIdx,orderIdx){
   if(o.items&&o.items.length){
     o.items.forEach(it=>{
       const itemName=(it.itemName||'').toLowerCase();
-      const qty=it.qty||0;
+      // Use label to get real quantity (e.g. "eighth" = 3.7g, "ounce" = 28.2g, "2" = 2 units)
+      const qty=it.label?labelToQty(it.label):(it.qty||0);
       if(!itemName||!qty)return;
       for(const c of C()){
         const found=(inv[c]||[]).find(item=>item.name&&item.name.toLowerCase()===itemName);
@@ -4290,7 +4291,16 @@ function deleteEODOrder(logIdx,orderIdx){
 
   // ── REMOVE MATCHING ACTIVITY LOG ENTRY ──
   const delCust=(o.customer||'').toLowerCase();
-  const matchIdx=log.findIndex(e=>(e.type==='sell'||e.type==='order')&&e.who===o.who&&e.time===o.time&&e.date===r.date&&(e.customer||e.name||'').toLowerCase()===delCust);
+  // Try exact match first (who + time + date + customer)
+  let matchIdx=log.findIndex(e=>(e.type==='sell'||e.type==='order')&&e.who===o.who&&e.time===o.time&&e.date===r.date&&(e.customer||e.name||'').toLowerCase()===delCust);
+  // Fallback: match by date + total + customer (in case time format differs)
+  if(matchIdx<0){
+    matchIdx=log.findIndex(e=>(e.type==='sell'||e.type==='order')&&e.date===r.date&&(e.amtReceived||e.total||0)===(o.total||0)&&(e.customer||e.name||'').toLowerCase()===delCust);
+  }
+  // Fallback 2: match by date + total + who (in case customer name differs)
+  if(matchIdx<0){
+    matchIdx=log.findIndex(e=>(e.type==='sell'||e.type==='order')&&e.date===r.date&&(e.amtReceived||e.total||0)===(o.total||0)&&e.who===o.who);
+  }
   if(matchIdx>=0){
     const entry=log[matchIdx];
     // If it was a website order, delete from Firebase too
