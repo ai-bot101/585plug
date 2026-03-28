@@ -1759,11 +1759,38 @@ function totBanner(sells,dl,isT,showProfit){
   const lbl=isT?'Today':'On '+dl;
   let html=`<div class="tot-card grand"><div class="tot-label">Total Received ${lbl}</div><div class="tot-val gv">${fmtP(g)}</div><div class="tot-sub">${sells.length} transaction${sells.length!==1?'s':''}</div></div><div class="tot-card"><div class="tot-label">Cash</div><div class="tot-val cv">${fmtP(cv.cash)}</div><div class="tot-sub">${cv.cCount} sales</div></div><div class="tot-card"><div class="tot-label">Virtual</div><div class="tot-val vv">${fmtP(cv.virt)}</div><div class="tot-sub">${cv.vCount} sales</div></div>`;
   if(showProfit){
-    // total profit = sum of all profits logged
-    const totalProfit=sells.reduce((s,e)=>s+(e.profit||0),0);
-    // total commission paid to staff
-    const totalComm=sells.reduce((s,e)=>s+(e.commission||0),0);
-    // owner net = profit - commission
+    // Recalculate profit & commission live from current inventory costs (matches EOD logic)
+    const ilk={};
+    C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.name)ilk[item.name.toLowerCase()]=item;});});
+    const ownerNames2=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
+    let totalProfit=0;
+    const liveCommByUser={};
+    cfg.users.forEach(u=>{liveCommByUser[u.name]=0;});
+    sells.forEach(e=>{
+      let cost=0;
+      const isVirt=e.payMethod&&(VIRT.includes(e.payMethod)||e.payMethod==='split');
+      if((e.type==='order')&&e.orderItems){
+        e.orderItems.forEach(oi=>{
+          const found=ilk[(oi.itemName||'').toLowerCase()];
+          let qty=(oi.label&&labelToQty(oi.label)>1)?labelToQty(oi.label):(oi.qty||0);
+          if(qty<=1&&found&&found.prices&&found.prices.length){
+            const mp=oi.price||((e.orderItems.length===1)?(e.amtReceived||0):0);
+            if(mp>0){const tier=found.prices.find(p=>parseFloat(p.price)===mp);if(tier&&tier.label){const tq=labelToQty(tier.label);if(tq>1)qty=tq;}}
+          }
+          if(found)cost+=cpuItem(found)*qty;
+        });
+      }else if(e.type==='sell'){
+        const found=ilk[(e.name||'').toLowerCase()];
+        if(found)cost+=cpuItem(found)*(e.amount||0);
+      }
+      const amt=e.amtReceived||0;
+      const pr=Math.max(0,amt-(isVirt?5:0)-cost);
+      totalProfit+=pr;
+      if(!liveCommByUser[e.who])liveCommByUser[e.who]=0;
+      const comm=ownerNames2.includes(e.who)?0:repairCommission(amt,pr,e.who);
+      liveCommByUser[e.who]+=comm;
+    });
+    const totalComm=cfg.users.filter(u=>u.role==='staff').reduce((s,u)=>s+(liveCommByUser[u.name]||0),0);
     const ownerNet=Math.max(0,totalProfit-totalComm);
     html+=`<div class="tot-card" style="border-color:rgba(108,99,255,0.3);background:rgba(108,99,255,0.06);">
       <div class="tot-label" style="color:var(--accent);">Total Profit</div>
@@ -1772,10 +1799,9 @@ function totBanner(sells,dl,isT,showProfit){
     </div>
     ${cfg.users.filter(u=>u.role==='staff').map((u,i)=>{
       const col=i===0?'#f46b6b':'#c084fc';
-      const uComm=sells.filter(e=>e.who===u.name).reduce((s,e)=>s+(e.commission||0),0);
       return`<div class="tot-card" style="border-color:${col}44;background:${col}11;">
         <div class="tot-label" style="color:${col};">${u.name}</div>
-        <div class="tot-val" style="color:${col};font-size:22px;">${fmtP(uComm)}</div>
+        <div class="tot-val" style="color:${col};font-size:22px;">${fmtP(liveCommByUser[u.name]||0)}</div>
         <div class="tot-sub">commission owed</div>
       </div>`;
     }).join('')}
