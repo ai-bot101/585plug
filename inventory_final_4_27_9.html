@@ -2971,7 +2971,8 @@ function processWebsiteOrders(pendingOrders) {
       pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:false};
       newCount++;
       // Only deduct stock if we haven't already (prevents double-deduction on app reload)
-      if (!order._stockDeducted) {
+      // Manual orders (from + Add Order) skip auto stock deduction — deducted on confirm
+      if (!order._stockDeducted && order.source !== 'manual') {
         pendingWebOrders[fbKey]._stockDeductedLocally = true;
         (order.orderItems||[]).forEach(oi=>{
           const itemName=(oi.itemName||oi.name||'').toLowerCase();
