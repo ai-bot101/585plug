@@ -2613,7 +2613,13 @@ function saveEdit(){
   item.flavors=getFlavors('em');
   item.bought=parseFloat(document.getElementById('em-bought').value)||item.bought;
   const lv=document.getElementById('em-left').value;
-  item.left=lv!==''?parseFloat(lv):item.left;
+  if(lv!==''){
+    const oldLeft=gl(item);
+    const newLeft=parseFloat(lv);
+    const delta=Math.round((newLeft-oldLeft)*10)/10;
+    if(delta!==0&&item.bought){item.bought=Math.round((item.bought+delta)*10)/10;}
+    item.left=newLeft;
+  }
   // prices saved via getPriceTiers above
   persist();closeOv('edit-modal');renderStats();renderItems();pushInventory();showToast('Item updated','ok');
 }
