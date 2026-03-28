@@ -1971,10 +1971,18 @@ function deleteLogEntry(idx) {
       // Multi-item order
       entry.orderItems.forEach(oi => {
         const itemName = (oi.itemName||oi.name||'').toLowerCase();
-        const qty = labelToQty(oi.label);
+        const qty = oi.label ? labelToQty(oi.label) : (oi.qty||1);
         for (const c of C()) {
-          const found = (inv[c]||[]).find(item => item.name === itemName);
-          if (found) { found.left = Math.round((gl(found) + qty)*10)/10; break; }
+          const found = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
+          if (found) {
+            found.left = Math.round((gl(found) + qty)*10)/10;
+            // Restore flavor stock
+            if (oi.flavorText && Array.isArray(found.flavors)) {
+              const fl = found.flavors.find(f => f.name === oi.flavorText);
+              if (fl) fl.stock = (fl.stock||0) + qty;
+            }
+            break;
+          }
         }
       });
     } else if (entry.name) {
@@ -1982,7 +1990,7 @@ function deleteLogEntry(idx) {
       const itemName = entry.name.toLowerCase();
       const qty = entry.amount || entry.qty || 1;
       for (const c of C()) {
-        const found = (inv[c]||[]).find(item => item.name === itemName);
+        const found = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
         if (found) { found.left = Math.round((gl(found) + qty)*10)/10; break; }
       }
     }
@@ -3085,10 +3093,11 @@ function reverseConfirmedOrder(fbKey) {
   const orderItems = logEntry ? logEntry.orderItems : [];
   orderItems.forEach(oi => {
     const itemName = (oi.itemName||oi.name||'').toLowerCase();
-    const qty = labelToQty(oi.label);
+    const qty = oi.label ? labelToQty(oi.label) : (oi.qty||1);
     const cat = oi.cat || '';
 
     let realCat = cat;
+    let foundItem = null;
     if (cat && !inv[cat]) {
       const match = C().find(c => c.toLowerCase() === cat.toLowerCase());
       if (match) realCat = match;
@@ -3096,11 +3105,16 @@ function reverseConfirmedOrder(fbKey) {
     if (!realCat || !inv[realCat]) {
       for (const c of C()) {
         const found = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
-        if (found) { found.left = Math.round((gl(found) + qty)*10)/10; break; }
+        if (found) { found.left = Math.round((gl(found) + qty)*10)/10; foundItem = found; break; }
       }
     } else {
       const found = (inv[realCat]||[]).find(item => (item.name||'').toLowerCase() === itemName);
-      if (found) found.left = Math.round((gl(found) + qty)*10)/10;
+      if (found) { found.left = Math.round((gl(found) + qty)*10)/10; foundItem = found; }
+    }
+    // Restore flavor stock
+    if (foundItem && oi.flavorText && Array.isArray(foundItem.flavors)) {
+      const fl = foundItem.flavors.find(f => f.name === oi.flavorText);
+      if (fl) fl.stock = (fl.stock||0) + qty;
     }
   });
 
@@ -4284,7 +4298,15 @@ function deleteEODOrder(logIdx,orderIdx){
       if(!itemName||!qty)return;
       for(const c of C()){
         const found=(inv[c]||[]).find(item=>item.name&&item.name.toLowerCase()===itemName);
-        if(found){ found.left=Math.round((gl(found)+qty)*10)/10; break; }
+        if(found){
+          found.left=Math.round((gl(found)+qty)*10)/10;
+          // Restore flavor stock
+          if(it.flavorText&&Array.isArray(found.flavors)){
+            const fl=found.flavors.find(f=>f.name===it.flavorText);
+            if(fl)fl.stock=(fl.stock||0)+qty;
+          }
+          break;
+        }
       }
     });
   }
