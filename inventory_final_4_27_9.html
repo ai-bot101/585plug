@@ -1900,7 +1900,30 @@ function renderStaffCommHistory(){
   if(!el||!cu)return;
   const mn=cu.name;
   const allSells=log.filter(e=>(e.type==='sell'||e.type==='order')&&e.who===mn);
-  const totalComm=allSells.reduce((s,e)=>s+(e.commission||0),0);
+  /* Live recalculate commission from current inventory costs (matches totBanner/EOD logic) */
+  const ilkCH={};C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.name)ilkCH[item.name.toLowerCase()]=item;});});
+  function liveCommForEntry(e){
+    let cost=0;
+    const isVirt=e.payMethod&&(VIRT.includes(e.payMethod)||e.payMethod==='split');
+    if((e.type==='order')&&e.orderItems){
+      e.orderItems.forEach(oi=>{
+        const found=ilkCH[(oi.itemName||'').toLowerCase()];
+        let qty=(oi.label&&labelToQty(oi.label)>1)?labelToQty(oi.label):(oi.qty||0);
+        if(qty<=1&&found&&found.prices&&found.prices.length){
+          const mp=oi.price||((e.orderItems.length===1)?(e.amtReceived||0):0);
+          if(mp>0){const tier=found.prices.find(p=>parseFloat(p.price)===mp);if(tier&&tier.label){const tq=labelToQty(tier.label);if(tq>1)qty=tq;}}
+        }
+        if(found)cost+=cpuItem(found)*qty;
+      });
+    }else if(e.type==='sell'){
+      const found=ilkCH[(e.name||'').toLowerCase()];
+      if(found)cost+=cpuItem(found)*(e.amount||0);
+    }
+    const amt=e.amtReceived||0;
+    const pr=Math.max(0,amt-(isVirt?5:0)-cost);
+    return repairCommission(amt,pr,e.who);
+  }
+  const totalComm=allSells.reduce((s,e)=>s+liveCommForEntry(e),0);
   const totalSales=allSells.reduce((s,e)=>s+(e.amtReceived||0),0);
   // calculate total daily deductions for this staff
   const debtLogs=log.filter(e=>e.type==='debt'&&e.who===mn);
@@ -1913,7 +1936,7 @@ function renderStaffCommHistory(){
   allSells.forEach(e=>{
     if(!byDate[e.date])byDate[e.date]={orders:[],comm:0,sales:0,debts:[]};
     byDate[e.date].orders.push(e);
-    byDate[e.date].comm+=(e.commission||0);
+    byDate[e.date].comm+=liveCommForEntry(e);
     byDate[e.date].sales+=(e.amtReceived||0);
   });
   // also add debt log entries to byDate
@@ -1997,7 +2020,7 @@ function renderStaffCommHistory(){
           </div>
           <div style="text-align:right;flex-shrink:0;margin-left:10px;">
             <div style="font-size:15px;font-weight:700;font-family:var(--mono);color:var(--green);">${fmtP(o.amtReceived||0)}</div>
-            <div style="font-size:12px;font-weight:600;font-family:var(--mono);color:var(--orange);">+${fmtP(o.commission||0)}</div>
+            <div style="font-size:12px;font-weight:600;font-family:var(--mono);color:var(--orange);">+${fmtP(liveCommForEntry(o))}</div>
           </div>
         </div>`;
       });
