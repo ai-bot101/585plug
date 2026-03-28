@@ -1674,6 +1674,40 @@ function confirmOrder(){
     splitVirtual=parseFloat(document.getElementById('ord-split-virtual').value)||0;
     ml='Cash+CashApp';
   }
+
+  // ── OWNER: send to pending orders instead of straight to log ──
+  if(cu?.role==='owner'){
+    const fbKey='manual_'+Date.now()+'_'+Math.random().toString(36).substr(2,6);
+    const pendingData={
+      source:'manual',
+      customerPhone:customer,
+      orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,label:o.label||'',price:o.price||0,flavorText:o.flavorText||''})),
+      total,
+      payMethod:orderPayMethod,
+      payMethodLabel:ml,
+      orderType:'pickup',
+      timestamp:Date.now(),
+      date:tday(),
+      time:tstr(),
+      note:note||'',
+      extraCredit:extra||0,
+      shortPaid:short||0,
+      confirmed:false
+    };
+    if(orderPayMethod==='split'){pendingData.splitCash=splitCash;pendingData.splitVirtual=splitVirtual;}
+    // Write to Firebase pending_orders
+    fetch(FB_URL+'/inv_d6bb4/pending_orders/'+fbKey+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(pendingData)}).catch(()=>{});
+    // Also add to local pending list so it shows immediately
+    pendingWebOrders[fbKey]=pendingData;
+    closeOrder();
+    renderPendingOrders();
+    renderStats();renderItems();
+    if(cu?.role==='owner')renderDash();
+    showToast('Order held as pending · '+customer+' · '+fmtP(total),'ok');
+    return;
+  }
+
+  // ── STAFF: go straight to log (existing behavior) ──
   // apply existing credit or clear existing debt
   const currentBal=customerCredits[customer.trim().toLowerCase()]||0;
   const creditApplied=Math.min(Math.max(0,currentBal),total);
@@ -1699,14 +1733,12 @@ function confirmOrder(){
   // profit ignores the extra — extra is just credit, not real order revenue
   const effectiveAmt=total-extra-creditApplied;
   const profit=calcProfit(objs.map(o=>({item:o.item,qty:o.qty})),effectiveAmt,vFee2);
-  // owner adding their own order = no commission deducted, full profit is theirs
-  const isOwnerOrder=cu?.role==='owner';
-  const{commission,deducted}=isOwnerOrder?{commission:0,deducted:0}:calcComm2(effectiveAmt,profit,cu.name);
+  const{commission,deducted}=calcComm2(effectiveAmt,profit,cu.name);
   const e={type:'order',customer,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,label:o.label||'',price:o.price||0,flavorText:o.flavorText||''})),total,payMethod:orderPayMethod,payMethodLabel:ml,amtReceived:total,profit,commission,creditApplied,extraCredit:extra,shortPaid:short,note,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
   if(orderPayMethod==='split'){e.splitCash=splitCash;e.splitVirtual=splitVirtual;}
   log.unshift(e);persist();closeOrder();
   renderStats();renderItems();
-  if(cu?.role==='owner')renderDash();else renderStaffLog();
+  renderStaffLog();
   pushSheet(e);
   let msg=customer+' · '+ml+' · '+fmtP(total);
   if(creditApplied>0)msg+=' (credit: -'+fmtP(creditApplied)+')';
@@ -3026,8 +3058,9 @@ function renderPendingOrders() {
       const payLabel = o.payMethodLabel || o.payMethod || 'Cash';
       const delivType = o.orderType === 'pickup' ? '🏪 Pickup' : o.address ? '🚗 '+o.address : '🚗 Delivery';
       const phone = o.customerPhone ? '📱 '+o.customerPhone : '';
+      const isManual = o.source==='manual';
       const holdMins = o.heldAt ? Math.round((Date.now()-o.heldAt)/60000) : 0;
-      const holdLabel = holdMins < 1 ? 'Just now' : holdMins+'m ago';
+      const holdLabel = isManual ? 'Manual' : (holdMins < 1 ? 'Just now' : holdMins+'m ago');
       const splitInfo = o.payMethod==='split'?`<br><span>💵 $${o.splitCash||0} cash + 💚 $${o.splitVirtual||0} CashApp</span>`:'';
       return `<div style="background:var(--bg2);border:1px solid rgba(255,165,0,0.3);border-radius:10px;padding:14px;margin-bottom:10px;position:relative;overflow:hidden;">
         <div style="position:absolute;top:0;right:0;background:linear-gradient(135deg,rgba(255,165,0,0.2),rgba(255,120,0,0.1));border-bottom-left-radius:10px;padding:4px 12px;">
