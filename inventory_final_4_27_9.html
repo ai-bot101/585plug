@@ -3145,6 +3145,56 @@ function reverseConfirmedOrder(fbKey) {
   showToast('Order reversed — stock restored ✅', 'ok');
 }
 
+function revertToPending(fbKey) {
+  if (!confirm('Move this order back to pending?')) return;
+
+  // Find the log entry
+  const logIdx = log.findIndex(e => e.webOrderKey === fbKey);
+  if (logIdx < 0) { showToast('Could not find order in log', 'err'); return; }
+  const entry = log[logIdx];
+
+  // Rebuild the pending order object from the log entry
+  const pendingOrder = {
+    orderItems: (entry.orderItems||[]).map(i => ({
+      itemName: i.itemName||'', cat: i.cat||'', qty: i.qty||1,
+      label: i.label||'', price: i.price||0,
+      flavorText: i.flavorText||'',
+      flavors: i.flavors||null
+    })),
+    total: entry.amtReceived||entry.total||0,
+    payMethod: entry.payMethod||'cash',
+    payMethodLabel: entry.payMethodLabel||'Cash',
+    customerPhone: entry.customer||'',
+    address: (entry.note||'').replace(/^Address:\s*/i,''),
+    date: entry.date||tday(),
+    time: entry.time||tstr(),
+    timestamp: entry.timestamp||Date.now(),
+    confirmed: false, cancelled: false,
+    fbKey: fbKey,
+    _stockDeductedLocally: true // stock is already held
+  };
+
+  // Remove from log
+  log.splice(logIdx, 1);
+
+  // Add back to pending
+  pendingWebOrders[fbKey] = pendingOrder;
+  processedOrderIds.delete(fbKey);
+
+  // Update Firebase — set confirmed back to false
+  fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({['pending_orders/'+fbKey+'/confirmed']: false})
+  }).catch(()=>{});
+
+  persist();
+  renderPendingOrders();
+  renderConfirmedWebOrders();
+  renderStats();
+  renderItems();
+  if (cu?.role==='owner') renderDash(); else renderStaffLog();
+  showToast('Order moved back to pending ⏪', 'ok');
+}
+
 // ── CONFIRMED WEBSITE ORDERS (reversible) ──
 function renderConfirmedWebOrders() {
   const el = document.getElementById('confirmed-orders-section');
@@ -3181,7 +3231,10 @@ function renderConfirmedWebOrders() {
             <div style="font-size:10px;color:var(--text3);margin-top:2px;">${o.time||''}</div>
           </div>
         </div>
-        <button onclick="reverseConfirmedOrder('${o.webOrderKey}')" style="width:100%;background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:10px;color:var(--red);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">❌ Cancel & Restore Stock</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button onclick="revertToPending('${o.webOrderKey}')" style="background:rgba(255,165,0,0.08);border:1px solid rgba(255,165,0,0.25);border-radius:8px;padding:10px;color:#ffa500;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">⏪ Revert to Pending</button>
+          <button onclick="reverseConfirmedOrder('${o.webOrderKey}')" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:10px;color:var(--red);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">❌ Cancel & Restore</button>
+        </div>
       </div>`;
     }).join('')}
   </div>`;
