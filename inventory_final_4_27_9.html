@@ -1184,8 +1184,8 @@ let pendingWebOrders={}; // website orders waiting for confirmation
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
 let commissionPaused={}; // {staffName: true} — commission disabled for this staff member
-// Auto daily debts: array of {staffName, amountPerDay, startDate (YYYY-MM-DD), endDate (YYYY-MM-DD), lastProcessedDate (YYYY-MM-DD)}
-let autoDailyDebts=[{staffName:'Staff 1',amountPerDay:9,startDate:'2026-03-24',endDate:'2026-11-01',lastProcessedDate:null}];
+// Auto daily debts: DISABLED — cleared out per owner request
+let autoDailyDebts=[];
 let selfBuyItems=[],sbPayMethod='cash';
 function C(){return cfg.categories;}
 function gl(i){return(i.left!==null&&i.left!==undefined)?i.left:(i.bought||0);}
@@ -1261,8 +1261,10 @@ function calcComm2(total,profit,staffName){
   }
   if(pct===0&&tiers.length>0)pct=tiers[tiers.length-1].pct;
   let comm=profit*(pct/100);
-  // floor: commission is at least $10 minimum per order as long as there's a sale (total > 0)
-  if(total>0&&comm<cfg.commissionFloorMin)comm=cfg.commissionFloorMin;
+  // floor: if profit is under threshold (e.g. $20), pay at least minimum (e.g. $10)
+  const floorUnder=cfg.commissionFloorUnder||20;
+  const floorMin=cfg.commissionFloorMin||10;
+  if(total>0&&profit<floorUnder&&comm<floorMin)comm=floorMin;
   comm=Math.floor(comm);
   // deduct any owed debt from this commission — carries over if debt > commission
   let deducted=0;
@@ -1360,8 +1362,33 @@ async function tryLogin(){
     document.getElementById('log-tab').style.display='';
   }
   renderAll();updateSync();
-  // Process auto daily debts on owner login
-  if(own)processAutoDailyDebts();
+  // One-time cleanup: remove all auto daily debt data
+  if(!localStorage.getItem('585_debt_cleanup_v2')){
+    // Clear all staff debts from auto daily system
+    staffDebts={};
+    // Remove debt log entries created by auto daily system
+    log=log.filter(e=>!(e.type==='debt'&&(e.reason||'').includes('Auto daily')));
+    // Clear autoDailyDebts in case it was loaded from Firebase
+    autoDailyDebts=[];
+    // Fix saved EOD logs — remove daily deductions and restore payouts
+    eodLogs.forEach(r=>{
+      if(r.dailyDeductions&&r.dailyDeductions.length){
+        r.dailyDeductions=[];
+        r.totalDailyDeductions=0;
+      }
+      if(r.payouts){
+        Object.keys(r.payouts).forEach(name=>{
+          const p=r.payouts[name];
+          if(p&&p.deduction>0){
+            p.payout=p.earned; // restore full commission
+            p.deduction=0;
+          }
+        });
+      }
+    });
+    persist();
+    localStorage.setItem('585_debt_cleanup_v2','1');
+  }
   // Repair commissions + stock on every login
   repairAllCommissions();
   repairStock(false);
@@ -3450,8 +3477,10 @@ function repairCommission(total,profit,who){
   }
   if(pct===0&&tiers.length>0)pct=tiers[tiers.length-1].pct;
   let comm=(profit>0)?profit*(pct/100):0;
-  // floor: commission is at least $10 minimum per order as long as there's a sale (total > 0)
-  if(total>0&&comm<(cfg.commissionFloorMin||10))comm=cfg.commissionFloorMin||10;
+  // floor: if profit is under threshold (e.g. $20), pay at least minimum (e.g. $10)
+  const floorUnder2=cfg.commissionFloorUnder||20;
+  const floorMin2=cfg.commissionFloorMin||10;
+  if(total>0&&profit<floorUnder2&&comm<floorMin2)comm=floorMin2;
   return Math.floor(comm);
 }
 
