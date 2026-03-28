@@ -1854,8 +1854,10 @@ function openAdmin() {
     panel.innerHTML=`<div class="ap-header">
       <div class="ap-title">📋 Order Log</div>
       <div style="display:flex;gap:8px;">
-        <button class="ap-close" onclick="loadAdminOrders()" style="background:rgba(62,207,142,0.1);border-color:rgba(62,207,142,0.2);color:var(--green);">↻ Refresh</button>
-        <button class="ap-close" onclick="closeAdmin()">✕ Close</button>
+        <button class="ap-close" onclick="adminEndOfDay()" style="background:rgba(108,99,255,0.1);border-color:rgba(108,99,255,0.2);color:#8b85ff;">📦 End Day</button>
+        <button class="ap-close" onclick="showAdminEODLogs()" style="background:rgba(255,165,0,0.1);border-color:rgba(255,165,0,0.2);color:#ffa500;">📜 Past Days</button>
+        <button class="ap-close" onclick="loadAdminOrders()" style="background:rgba(62,207,142,0.1);border-color:rgba(62,207,142,0.2);color:var(--green);">↻</button>
+        <button class="ap-close" onclick="closeAdmin()">✕</button>
       </div>
     </div>
     <div style="flex:1;overflow-y:auto;min-height:0;-webkit-overflow-scrolling:touch;">
@@ -2011,12 +2013,13 @@ function renderAdminOrder(o) {
     '</div>' +
     '<div class="ap-order-items">' + items + '</div>' +
     '<div class="ap-order-meta">' + tags + '</div>' +
-    (isCancelled
-      ? '<div class="ap-btn-row">' +
-          '<button class="ap-restore-btn" onclick="adminRestoreOrder(\'' + o.key + '\')">↩ Restore</button>' +
-          '<button class="ap-perm-del-btn" onclick="adminDeleteOrder(\'' + o.key + '\')">🗑 Delete</button>' +
-        '</div>'
-      : '<div class="ap-btn-row"><button class="ap-del-btn" onclick="adminCancelOrder(\'' + o.key + '\')">✕ Cancel Order</button></div>'
+    (o._archived ? ''
+      : isCancelled
+        ? '<div class="ap-btn-row">' +
+            '<button class="ap-restore-btn" onclick="adminRestoreOrder(\'' + o.key + '\')">↩ Restore</button>' +
+            '<button class="ap-perm-del-btn" onclick="adminDeleteOrder(\'' + o.key + '\')">🗑 Delete</button>' +
+          '</div>'
+        : '<div class="ap-btn-row"><button class="ap-del-btn" onclick="adminCancelOrder(\'' + o.key + '\')">✕ Cancel Order</button></div>'
     ) +
   '</div>';
 }
@@ -2031,6 +2034,134 @@ function toggleCancelledLog() {
     list.style.display = 'none';
     arrow.style.transform = 'rotate(0deg)';
   }
+}
+
+// ── ADMIN END OF DAY ──
+async function adminEndOfDay() {
+  if (!adminUnlocked) return;
+  if (!_adminOrders || !_adminOrders.length) {
+    alert('No orders to archive.');
+    return;
+  }
+  const count = _adminOrders.length;
+  const revenue = _adminOrders.reduce((s,o) => s + (o.total||0), 0);
+  if (!confirm('End of Day — Archive ' + count + ' orders ($' + revenue + ' total) and clear the log?\n\nThis cannot be undone.')) return;
+
+  try {
+    // Fetch ALL current pending orders from Firebase (including cancelled)
+    const res = await fetch(FB_URL + '/inv_d6bb4/pending_orders.json');
+    const data = await res.json();
+    if (!data) { alert('No orders found.'); return; }
+
+    const allOrders = Object.entries(data).map(([key, o]) => ({key, ...o}));
+    const dateLabel = new Date().toLocaleDateString('en-US', {month:'2-digit', day:'2-digit', year:'numeric'});
+    const archiveId = Date.now().toString();
+
+    // Build archive record
+    const archive = {
+      date: dateLabel,
+      archivedAt: Date.now(),
+      archivedTime: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}),
+      totalOrders: allOrders.filter(o => !o.cancelled).length,
+      totalRevenue: allOrders.filter(o => !o.cancelled).reduce((s,o) => s + (o.total||0), 0),
+      cancelledCount: allOrders.filter(o => o.cancelled).length,
+      orders: allOrders
+    };
+
+    // Save archive to Firebase
+    await fetch(FB_URL + '/inv_d6bb4/order_archives/' + archiveId + '.json', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(archive)
+    });
+
+    // Delete ALL pending orders from Firebase
+    await fetch(FB_URL + '/inv_d6bb4/pending_orders.json', {
+      method: 'DELETE'
+    });
+
+    alert('End of Day complete!\n\n' + archive.totalOrders + ' orders archived ($' + archive.totalRevenue + ' revenue)\nLog cleared.');
+    loadAdminOrders();
+  } catch(e) {
+    console.error('EOD error:', e);
+    alert('Failed to archive orders. Check your connection.');
+  }
+}
+
+async function showAdminEODLogs() {
+  if (!adminUnlocked) return;
+  const list = document.getElementById('ap-list');
+  list.innerHTML = '<div class="ap-empty">Loading past days...</div>';
+
+  try {
+    const res = await fetch(FB_URL + '/inv_d6bb4/order_archives.json');
+    const data = await res.json();
+    if (!data) { list.innerHTML = '<div class="ap-empty">No archived days yet</div>'; return; }
+
+    const archives = Object.entries(data).map(([id, a]) => ({id, ...a}));
+    archives.sort((a,b) => (b.archivedAt||0) - (a.archivedAt||0));
+
+    list.innerHTML = '<div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">' +
+      '<div style="font-family:Bebas Neue,sans-serif;font-size:20px;color:#ffa500;letter-spacing:2px;">📜 Past Day Logs</div>' +
+      '<button onclick="loadAdminOrders()" style="background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.2);border-radius:8px;padding:6px 12px;color:var(--green);font-family:Oswald,sans-serif;font-size:12px;cursor:pointer;">← Back to Orders</button>' +
+    '</div>' +
+    archives.map(a => {
+      const orderCount = a.totalOrders || 0;
+      const cancelCount = a.cancelledCount || 0;
+      return '<div class="ap-order" style="border-color:rgba(255,165,0,0.25);background:rgba(255,165,0,0.03);">' +
+        '<div class="ap-order-head">' +
+          '<div style="font-family:Oswald,sans-serif;font-size:15px;font-weight:600;color:var(--white);">📅 ' + (a.date||'?') + '</div>' +
+          '<div style="font-family:Bebas Neue,sans-serif;font-size:22px;color:var(--green);letter-spacing:1px;">$' + (a.totalRevenue||0) + '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;margin:8px 0;">' +
+          '<span class="ap-order-tag pay">' + orderCount + ' order' + (orderCount!==1?'s':'') + '</span>' +
+          (cancelCount > 0 ? '<span class="ap-order-tag" style="border-color:rgba(244,107,107,0.3);color:var(--red);">' + cancelCount + ' cancelled</span>' : '') +
+          '<span class="ap-order-tag" style="border-color:rgba(108,99,255,0.3);color:#8b85ff;">Closed ' + (a.archivedTime||'') + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button onclick="viewArchivedDay(\'' + a.id + '\')" style="flex:1;background:rgba(255,165,0,0.08);border:1px solid rgba(255,165,0,0.25);border-radius:8px;padding:10px;color:#ffa500;font-family:Oswald,sans-serif;font-size:13px;font-weight:600;cursor:pointer;">👁 View Orders</button>' +
+          '<button onclick="deleteArchivedDay(\'' + a.id + '\')" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:10px;color:var(--red);font-family:Oswald,sans-serif;font-size:12px;cursor:pointer;">🗑</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    console.error('Load archives error:', e);
+    list.innerHTML = '<div class="ap-empty">Failed to load past days.</div>';
+  }
+}
+
+async function viewArchivedDay(archiveId) {
+  if (!adminUnlocked) return;
+  const list = document.getElementById('ap-list');
+  list.innerHTML = '<div class="ap-empty">Loading...</div>';
+
+  try {
+    const res = await fetch(FB_URL + '/inv_d6bb4/order_archives/' + archiveId + '.json');
+    const archive = await res.json();
+    if (!archive || !archive.orders) { list.innerHTML = '<div class="ap-empty">No data found</div>'; return; }
+
+    const orders = archive.orders;
+    const active = orders.filter(o => !o.cancelled);
+    const cancelled = orders.filter(o => o.cancelled);
+
+    list.innerHTML = '<div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">' +
+      '<div style="font-family:Bebas Neue,sans-serif;font-size:18px;color:#ffa500;letter-spacing:2px;">📅 ' + (archive.date||'') + ' · $' + (archive.totalRevenue||0) + '</div>' +
+      '<button onclick="showAdminEODLogs()" style="background:rgba(255,165,0,0.1);border:1px solid rgba(255,165,0,0.2);border-radius:8px;padding:6px 12px;color:#ffa500;font-family:Oswald,sans-serif;font-size:12px;cursor:pointer;">← Back</button>' +
+    '</div>' +
+    active.map(o => renderAdminOrder({...o, _archived: true})).join('') +
+    (cancelled.length ? '<div style="font-family:Oswald,sans-serif;font-size:12px;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;padding:12px 0 8px;">Cancelled Orders</div>' + cancelled.map(o => renderAdminOrder({...o, _archived: true})).join('') : '');
+  } catch(e) {
+    list.innerHTML = '<div class="ap-empty">Failed to load archive.</div>';
+  }
+}
+
+async function deleteArchivedDay(archiveId) {
+  if (!adminUnlocked) return;
+  if (!confirm('Delete this archived day log? This cannot be undone.')) return;
+  try {
+    await fetch(FB_URL + '/inv_d6bb4/order_archives/' + archiveId + '.json', { method: 'DELETE' });
+    showAdminEODLogs();
+  } catch(e) { alert('Failed to delete.'); }
 }
 
 async function adminCancelOrder(key) {
