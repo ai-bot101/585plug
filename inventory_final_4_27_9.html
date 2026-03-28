@@ -2983,9 +2983,15 @@ function processWebsiteOrders(pendingOrders) {
     if (!pendingWebOrders[fbKey]) {
       pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:false};
       newCount++;
-      // Only deduct stock if we haven't already (prevents double-deduction on app reload)
-      if (!order._stockDeducted) {
+      // Deduct stock if not already done reliably.
+      // _stockDeductedV2 means the fix is in place (processWebsiteOrders runs AFTER inv update).
+      // Old _stockDeducted (without V2) was set by buggy code that ran BEFORE inv update,
+      // so the deduction was lost when inv got overwritten — re-deduct those orders.
+      const needsDeduct = !order._stockDeductedV2;
+      if (needsDeduct) {
         pendingWebOrders[fbKey]._stockDeductedLocally = true;
+        pendingWebOrders[fbKey]._stockDeducted = true;
+        pendingWebOrders[fbKey]._stockDeductedV2 = true;
         (order.orderItems||[]).forEach(oi=>{
           const itemName=(oi.itemName||oi.name||'').toLowerCase();
           const qty=labelToQty(oi.label);
@@ -3008,9 +3014,9 @@ function processWebsiteOrders(pendingOrders) {
             });
           }
         });
-        // Mark in Firebase so stock isn't deducted again on reload
+        // Mark in Firebase with V2 flag so other devices/reloads know deduction is reliable
         fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({['pending_orders/'+fbKey+'/_stockDeducted']: true})
+          body: JSON.stringify({['pending_orders/'+fbKey+'/_stockDeducted']: true, ['pending_orders/'+fbKey+'/_stockDeductedV2']: true})
         }).catch(()=>{});
         persist();renderStats();renderItems();
       }
@@ -4043,27 +4049,25 @@ async function fbPullNow(){
     if(!res.ok)return;
     const data=await res.json();
     if(!data)return;
-    // Always check for new pending orders even if updatedAt hasn't changed
-    if(data.pending_orders && cu){
-      processWebsiteOrders(data.pending_orders);
+    // Update inventory data FIRST (if changed), then check pending orders
+    // This prevents the bug where processWebsiteOrders deducts stock and then inv gets overwritten
+    if(data.updatedAt && data.updatedAt>fbLastTimestamp){
+      fbLastTimestamp=data.updatedAt;
+      // always overwrite ALL fields so resets/clears propagate to all devices
+      inv=data.inv||{};C().forEach(c=>{if(!inv[c])inv[c]=[];});
+      log=Array.isArray(data.log)?data.log:[];
+      if(data.cfg){const savedCu=cu;cfg=data.cfg;cu=savedCu;}
+      customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
+      dayNotes=data.dayNotes||{};
+      eodLogs=Array.isArray(data.eodLogs)?data.eodLogs:[];
+      failedAttempts=Array.isArray(data.failedAttempts)?data.failedAttempts:[];
+      loginLog=Array.isArray(data.loginLog)?data.loginLog:[];
+      cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
+      staffDebts=data.staffDebts||{};
+      commissionPaused=data.commissionPaused||{};
+      /* autoDailyDebts removed — no longer loading */
     }
-    if(!data.updatedAt)return;
-    if(data.updatedAt<=fbLastTimestamp)return;
-    fbLastTimestamp=data.updatedAt;
-    // always overwrite ALL fields so resets/clears propagate to all devices
-    inv=data.inv||{};C().forEach(c=>{if(!inv[c])inv[c]=[];});
-    log=Array.isArray(data.log)?data.log:[];
-    if(data.cfg){const savedCu=cu;cfg=data.cfg;cu=savedCu;}
-    customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
-    dayNotes=data.dayNotes||{};
-    eodLogs=Array.isArray(data.eodLogs)?data.eodLogs:[];
-    failedAttempts=Array.isArray(data.failedAttempts)?data.failedAttempts:[];
-    loginLog=Array.isArray(data.loginLog)?data.loginLog:[];
-    cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
-    staffDebts=data.staffDebts||{};
-    commissionPaused=data.commissionPaused||{};
-    /* autoDailyDebts removed — no longer loading */
-    // Auto-import website orders
+    // Process pending orders AFTER inv is up-to-date so stock deductions stick
     if(data.pending_orders && cu){
       processWebsiteOrders(data.pending_orders);
     }
@@ -4108,6 +4112,13 @@ function fbPush(){
       };
       // Preserve pending_orders from Firebase so PUT doesn't wipe them
       if (currentPending && typeof currentPending === 'object' && Object.keys(currentPending).length) {
+        // Merge local _stockDeducted flags so async PATCH can't be overwritten by this PUT
+        Object.entries(pendingWebOrders).forEach(([key, localOrder]) => {
+          if ((localOrder._stockDeducted || localOrder._stockDeductedLocally) && currentPending[key]) {
+            currentPending[key]._stockDeducted = true;
+            currentPending[key]._stockDeductedV2 = true;
+          }
+        });
         payload.pending_orders = currentPending;
       }
       fbLastTimestamp=payload.updatedAt; // prevent echo pull
