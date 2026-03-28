@@ -2993,10 +2993,24 @@ function renderPendingOrders() {
             </div>
           </div>
           <div style="text-align:right;flex-shrink:0;">
-            <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--green);">$${o.total||0}</div>
+            <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end;">
+              <span style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--green);">$</span>
+              <input type="number" id="pending-total-${o.fbKey}" value="${o.total||0}" onchange="updatePendingTotal('${o.fbKey}',this.value)" style="width:70px;background:var(--bg3);border:1px solid rgba(62,207,142,0.3);border-radius:6px;padding:4px 8px;color:var(--green);font-family:var(--mono);font-size:20px;font-weight:700;text-align:right;outline:none;" onfocus="this.select()">
+            </div>
+            <div style="font-size:9px;color:var(--text3);margin-top:2px;">tap to edit</div>
             <div style="font-size:10px;color:var(--text3);margin-top:2px;">${o.date||''} · ${o.time||''}</div>
           </div>
         </div>
+        ${o.payMethod==='split'?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:2px;">💵 Cash</div>
+            <input type="number" id="pending-split-cash-${o.fbKey}" value="${o.splitCash||0}" onchange="updatePendingSplit('${o.fbKey}')" style="width:100%;background:transparent;border:none;color:var(--text);font-family:var(--mono);font-size:14px;font-weight:700;outline:none;" onfocus="this.select()">
+          </div>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:2px;">💚 CashApp</div>
+            <input type="number" id="pending-split-virt-${o.fbKey}" value="${o.splitVirtual||0}" onchange="updatePendingSplit('${o.fbKey}')" style="width:100%;background:transparent;border:none;color:var(--text);font-family:var(--mono);font-size:14px;font-weight:700;outline:none;" onfocus="this.select()">
+          </div>
+        </div>`:''}
         <div style="background:rgba(255,165,0,0.06);border:1px solid rgba(255,165,0,0.15);border-radius:6px;padding:6px 10px;margin-bottom:10px;">
           <div style="font-size:10px;color:#ffa500;font-family:var(--mono);letter-spacing:0.5px;">📦 INVENTORY ON HOLD — stock deducted until confirmed or cancelled</div>
         </div>
@@ -3010,6 +3024,35 @@ function renderPendingOrders() {
 
   if (ownerEl) { ownerEl.innerHTML = html; ownerEl.style.display = 'block'; }
   if (staffEl) { staffEl.innerHTML = html; staffEl.style.display = 'block'; }
+}
+function updatePendingTotal(fbKey,val){
+  const newTotal=parseFloat(val)||0;
+  if(!pendingWebOrders[fbKey])return;
+  pendingWebOrders[fbKey].total=newTotal;
+  // Sync to Firebase so it persists
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({['pending_orders/'+fbKey+'/total']:newTotal})
+  }).catch(()=>{});
+  showToast('Order total updated to '+fmtP(newTotal),'ok');
+}
+function updatePendingSplit(fbKey){
+  if(!pendingWebOrders[fbKey])return;
+  const cashEl=document.getElementById('pending-split-cash-'+fbKey);
+  const virtEl=document.getElementById('pending-split-virt-'+fbKey);
+  const cashAmt=parseFloat(cashEl?.value)||0;
+  const virtAmt=parseFloat(virtEl?.value)||0;
+  const newTotal=cashAmt+virtAmt;
+  pendingWebOrders[fbKey].splitCash=cashAmt;
+  pendingWebOrders[fbKey].splitVirtual=virtAmt;
+  pendingWebOrders[fbKey].total=newTotal;
+  // Update the total input
+  const totalEl=document.getElementById('pending-total-'+fbKey);
+  if(totalEl)totalEl.value=newTotal;
+  // Sync to Firebase
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({['pending_orders/'+fbKey+'/total']:newTotal,['pending_orders/'+fbKey+'/splitCash']:cashAmt,['pending_orders/'+fbKey+'/splitVirtual']:virtAmt})
+  }).catch(()=>{});
+  showToast('Split updated · Total: '+fmtP(newTotal),'ok');
 }
 
 function confirmWebOrder(fbKey) {
