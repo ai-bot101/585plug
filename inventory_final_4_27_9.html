@@ -1696,8 +1696,10 @@ function confirmOrder(){
     };
     if(orderPayMethod==='split'){pendingData.splitCash=splitCash;pendingData.splitVirtual=splitVirtual;}
     // Write to Firebase pending_orders
-    fetch(FB_URL+'/inv_d6bb4/pending_orders/'+fbKey+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(pendingData)}).catch(()=>{});
+    fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(pendingData)}).catch(()=>{});
     // Also add to local pending list so it shows immediately
+    pendingData.fbKey=fbKey;
+    pendingData.heldAt=Date.now();
     pendingWebOrders[fbKey]=pendingData;
     closeOrder();
     renderPendingOrders();
