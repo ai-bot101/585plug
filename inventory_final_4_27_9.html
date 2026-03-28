@@ -3013,7 +3013,7 @@ function renderPendingOrders() {
             <div style="font-size:11px;color:var(--text3);line-height:1.8;">
               ${phone ? `<span>${phone}</span><br>` : ''}
               <span>${delivType}</span><br>
-              <span style="cursor:pointer;" onclick="togglePendingPayPicker('${o.fbKey}')">💳 ${payLabel} <span style="font-size:9px;opacity:0.6;">✎</span></span>
+              <div style="display:inline-block;margin-top:4px;padding:6px 12px;background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.3);border-radius:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;" onclick="togglePendingPayPicker('${o.fbKey}')"><span style="font-size:12px;font-weight:600;color:var(--accent);">💳 ${payLabel} <span style="font-size:10px;">✎</span></span></div>
               <div id="pending-pay-picker-${o.fbKey}" style="display:none;margin-top:6px;"></div>${splitInfo}
             </div>
           </div>
