@@ -3597,7 +3597,11 @@ function repairAllCommissions(){
       e.profit=correctProfit;
       changed=true;
     }
-    if(!e.commissionManual){
+    // owners always get $0 commission, even if manually overridden
+    const ownerNamesCheck=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
+    if(ownerNamesCheck.includes(e.who)){
+      if(e.commission!==0){e.commission=0;changed=true;}
+    } else if(!e.commissionManual){
       const correctComm=repairCommission(amt,correctProfit,e.who);
       if(e.commission!==correctComm){
         e.commission=correctComm;
@@ -4882,7 +4886,7 @@ function viewEODLog(i,filterPerson){
     const isVirtual=o.payMethod&&(VIRT.includes(o.payMethod)||o.payMethod==='split');
     const vFee=isVirtual?5:0;
     o._liveProfit=Math.max(0,(o.total||0)-vFee-cost);
-    o._liveComm=o.commissionManual?o.commission:(ownerNames.includes(o.who)?0:repairCommission(o.total||0,o._liveProfit,o.who));
+    o._liveComm=ownerNames.includes(o.who)?0:(o.commissionManual?o.commission:repairCommission(o.total||0,o._liveProfit,o.who));
   });
   const filtered=eodPersonFilter==='all'?allOrders:allOrders.filter(o=>o.who===eodPersonFilter);
 
