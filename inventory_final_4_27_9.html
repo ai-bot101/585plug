@@ -3034,9 +3034,24 @@ function reverseConfirmedOrder(fbKey) {
   const logIdx = log.findIndex(e => e.webOrderKey === fbKey);
   const logEntry = logIdx > -1 ? log[logIdx] : null;
 
+  // Save to cancelled orders log before deleting
+  if (logEntry) {
+    const cancelEntry = {
+      ...logEntry,
+      fbKey,
+      wasConfirmed: true,
+      cancelledBy: cu?.name || 'Staff',
+      cancelledAt: Date.now(),
+      cancelledDate: tday(),
+      cancelledTime: tstr()
+    };
+    if (!cancelledOrders) cancelledOrders = [];
+    cancelledOrders.unshift(cancelEntry);
+    if (cancelledOrders.length > 200) cancelledOrders = cancelledOrders.slice(0, 200);
+  }
+
   // Restore stock for each item
   const orderItems = logEntry ? logEntry.orderItems : [];
-  // Also try to get items from Firebase order data
   orderItems.forEach(oi => {
     const itemName = (oi.itemName||oi.name||'').toLowerCase();
     const qty = labelToQty(oi.label);
@@ -3067,6 +3082,7 @@ function reverseConfirmedOrder(fbKey) {
   persist();
   renderStats();
   renderItems();
+  renderCancelledOrders();
   if (cu?.role==='owner') renderDash(); else renderStaffLog();
   showToast('Order reversed — stock restored ✅', 'ok');
 }
@@ -3148,7 +3164,7 @@ function renderCancelledOrders() {
           <div style="text-align:right;flex-shrink:0;">
             <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--red);">$${o.total||0}</div>
             <div style="font-size:10px;color:var(--text3);margin-top:2px;">${o.date||''} · ${o.time||''}</div>
-            <div style="font-size:10px;color:var(--red);margin-top:2px;">Cancelled by ${o.cancelledBy||'Staff'}</div>
+            <div style="font-size:10px;color:var(--red);margin-top:2px;">Cancelled by ${o.cancelledBy||'Staff'}${o.wasConfirmed?' · <span style="color:#ffa500;">was confirmed</span>':''}</div>
           </div>
         </div>
       </div>`;
