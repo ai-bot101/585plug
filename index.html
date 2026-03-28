@@ -899,6 +899,29 @@ function buildPrices(item) {
   return [{label:'Ask for price', price:null}];
 }
 
+function menuLabelToQty(label) {
+  if (!label) return 1;
+  const l = label.trim().toLowerCase();
+  const map = {
+    'gram':1,'g':1,'each':1,
+    'eighth':3.5,'eighth (3.5g)':3.5,'8th':3.5,'eight':3.7,
+    'quarter':7,'quarter (7g)':7,'quarters':7,'q':7,
+    'half':14,'half (14g)':14,'halfs':14,'halves':14,
+    'zip':28,'zip (28g)':28,'ounce':28,'ounces':28,'oz':28,
+    '2 ounce':56,'2 ounces':56,'2oz':56,'2 oz':56,
+    'qp':112,'quarter pound':112,
+    'hp':224,'half pound':224,
+    'pound':448,'lb':448,'p':448
+  };
+  if (map[l] !== undefined) return map[l];
+  const numMatch = l.match(/^(\d+)/);
+  if (numMatch) return parseInt(numMatch[1]);
+  for (const [key, val] of Object.entries(map)) {
+    if (l.includes(key)) return val;
+  }
+  return 1;
+}
+
 function processData(data) {
   if (!data) return;
   const inv = data.inv || {};
@@ -924,7 +947,7 @@ function processData(data) {
       const allAddOn = prices.length>0 && prices.every(p=>p.addOnOnly);
       const flavors = Array.isArray(item.flavors) ? item.flavors.filter(f=>f.name&&f.name.trim()) : [];
       const images = Array.isArray(item.images)&&item.images.length ? item.images : (item.img ? [item.img] : []);
-      built.push({id:id++, name:item.name, cat:cat.toUpperCase(), desc:item.desc||'', img:item.img||'', images, prices, soldOut, allAddOn, flavors, markedSoldOut});
+      built.push({id:id++, name:item.name, cat:cat.toUpperCase(), desc:item.desc||'', img:item.img||'', images, prices, soldOut, allAddOn, flavors, markedSoldOut, left});
     });
   });
   menuItems = built;
@@ -1040,13 +1063,18 @@ function renderCard(item) {
   }
 
   const hasOtherItems = cart.some(c => { const ci=menuItems.find(m=>m.id===c.itemId); return ci && !ci.allAddOn; });
+  const itemStock = item.left !== undefined ? item.left : 9999;
   const priceRows = item.prices && item.prices.length
     ? item.prices.map((p,idx) => {
         const aoBlocked = p.addOnOnly && !hasOtherItems;
+        const qtyNeeded = menuLabelToQty(p.label);
+        const oosForQty = !item.soldOut && itemStock < qtyNeeded && itemStock > 0;
         const aoTag = p.addOnOnly ? '<span style="font-size:8px;background:rgba(200,50,50,0.15);border:1px solid rgba(200,50,50,0.3);border-radius:3px;padding:0 4px;color:var(--red);font-weight:600;margin-left:4px;">ORDER ADD-ON</span>' : '';
-        return `<div class="price-row ${selIdx===idx?'selected':''} ${aoBlocked?'ao-blocked':''}" onclick="${item.soldOut||aoBlocked?'':'selPrice('+item.id+','+idx+')'}" ${aoBlocked?'title="Only available when added to an order with other items"':''}>
+        const oosTag = oosForQty ? '<span style="font-size:8px;background:rgba(244,107,107,0.15);border:1px solid rgba(244,107,107,0.3);border-radius:3px;padding:0 4px;color:#ff4d4d;font-weight:600;margin-left:4px;">NOT ENOUGH</span>' : '';
+        const blocked = aoBlocked || oosForQty;
+        return `<div class="price-row ${selIdx===idx?'selected':''} ${blocked?'ao-blocked':''}" onclick="${item.soldOut||blocked?'':'selPrice('+item.id+','+idx+')'}" ${oosForQty?'title="Not enough stock for this size"':aoBlocked?'title="Only available when added to an order with other items"':''}>
           <div class="price-check">${selIdx===idx?'✓':''}</div>
-          <div class="price-label">${p.label}${aoTag}</div>
+          <div class="price-label">${p.label}${aoTag}${oosTag}</div>
           <div class="price-val">${p.price!==null?'$'+p.price:'DM'}</div>
         </div>`;
       }).join('')
@@ -1085,9 +1113,17 @@ function renderCard(item) {
 // ── PRICE SELECTION ──
 function selPrice(itemId, idx) {
   const item = menuItems.find(i=>i.id===itemId);
-  if (item && item.prices[idx]?.addOnOnly) {
+  if (!item) return;
+  if (item.prices[idx]?.addOnOnly) {
     const hasBase = cart.some(c=>{ const ci=menuItems.find(m=>m.id===c.itemId); return ci && !ci.allAddOn; });
     if (!hasBase) { showToast('Add another item to your order first — this is an add-on price',''); return; }
+  }
+  // Check stock for this size
+  const qtyNeeded = menuLabelToQty(item.prices[idx]?.label);
+  const stock = item.left !== undefined ? item.left : 9999;
+  if (stock < qtyNeeded && stock > 0) {
+    showToast('Not enough in stock for ' + item.prices[idx].label, '');
+    return;
   }
   if (selectedPrices[itemId] === idx) {
     delete selectedPrices[itemId];
