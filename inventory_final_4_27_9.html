@@ -3070,8 +3070,24 @@ function cancelWebOrder(fbKey) {
 }
 
 function reverseConfirmedOrder(fbKey) {
-  if (!confirm('Cancel this confirmed order and restore stock?')) return;
+  // Show styled confirmation popup
+  const m = document.createElement('div');
+  m.id = 'cancel-confirm-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid rgba(244,107,107,0.3);border-radius:18px;padding:24px;max-width:360px;width:100%;text-align:center;">
+    <div style="font-size:36px;margin-bottom:12px;">⚠️</div>
+    <h3 style="margin:0 0 8px;color:var(--text);font-size:18px;">Are you sure you want to cancel this order?</h3>
+    <p style="color:var(--text3);font-size:13px;margin:0 0 20px;">This will restore all stock and remove it from your sales log.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <button onclick="document.getElementById('cancel-confirm-modal')?.remove()" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;color:var(--text3);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>
+      <button onclick="document.getElementById('cancel-confirm-modal')?.remove();doReverseConfirmed('${fbKey}')" style="background:rgba(244,107,107,0.12);border:1px solid rgba(244,107,107,0.3);border-radius:10px;padding:12px;color:var(--red);font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;">Yes, Cancel Order</button>
+    </div>
+  </div>`;
+  m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+  document.body.appendChild(m);
+}
 
+function doReverseConfirmed(fbKey) {
   // Find the log entry for this confirmed order
   const logIdx = log.findIndex(e => e.webOrderKey === fbKey);
   const logEntry = logIdx > -1 ? log[logIdx] : null;
