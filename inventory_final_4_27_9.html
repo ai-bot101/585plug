@@ -3122,7 +3122,17 @@ function reverseConfirmedOrder(fbKey) {
   });
 
   // Remove from sales log
-  if (logIdx > -1) log.splice(logIdx, 1);
+  if (logIdx > -1) {
+    log.splice(logIdx, 1);
+  } else {
+    // No log entry found — create adjustment entries so repairStock doesn't re-deduct
+    orderItems.forEach(oi => {
+      const itemName = (oi.itemName||oi.name||'').toLowerCase();
+      const qty = oi.label ? labelToQty(oi.label) : (oi.qty||1);
+      if (!itemName || !qty) return;
+      log.unshift({type:'adjustment',name:itemName,amount:qty,direction:'add',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'Confirmed order reversed (no log match)'});
+    });
+  }
 
   // Delete from Firebase pending_orders
   fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
@@ -4092,7 +4102,7 @@ function buildEODRecord(dateStr){
     orders:orders.map(e=>({
       type:e.type,
       customer:e.customer||e.name||'',
-      items:e.orderItems||(e.name?[{itemName:e.name,qty:e.amount}]:[]),
+      items:e.orderItems ? e.orderItems.map(oi=>({...oi})) : (e.name?[{itemName:e.name,qty:e.amount,label:e.label||''}]:[]),
       total:e.amtReceived||0,
       profit:e.profit||0,
       payMethod:e.payMethod||'cash',
@@ -4338,6 +4348,18 @@ function deleteEODOrder(logIdx,orderIdx){
       fetch(FB_URL+'/pending_orders/'+entry.webOrderKey+'.json',{method:'DELETE'}).catch(()=>{});
     }
     log.splice(matchIdx,1);
+  } else {
+    // Could not find matching log entry — create adjustment entries so repairStock stays correct
+    // Without this, repairStock would re-deduct the stock we just restored
+    console.warn('deleteEODOrder: no matching log entry found, creating adjustment entries');
+    if(o.items&&o.items.length){
+      o.items.forEach(it=>{
+        const itemName=(it.itemName||'').toLowerCase();
+        const qty=it.label?labelToQty(it.label):(it.qty||0);
+        if(!itemName||!qty)return;
+        log.unshift({type:'adjustment',name:itemName,amount:qty,direction:'add',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'EOD order deleted (no log match)'});
+      });
+    }
   }
 
   // ── REMOVE ORDER FROM EOD ──
