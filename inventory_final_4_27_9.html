@@ -4833,10 +4833,10 @@ function viewEODLog(i,filterPerson){
   });
   const liveTotalProfit=allOrders.reduce((s,o)=>s+(o._liveProfit||0),0);
   const liveStaffComm=cfg.users.filter(u=>u.role==='staff').reduce((s,u)=>s+(liveCommByPerson[u.name]||0),0);
-  // Calculate daily deductions for staff payouts
-  const eodDailyDeds=r.dailyDeductions||[];
-  const eodTotalDailyDed=eodDailyDeds.reduce((s,d)=>s+d.amount,0);
-  const liveOwnerNet=Math.max(0,liveTotalProfit-liveStaffComm+eodTotalDailyDed);
+  // Daily deductions removed
+  const eodDailyDeds=[];
+  const eodTotalDailyDed=0;
+  const liveOwnerNet=Math.max(0,liveTotalProfit-liveStaffComm);
 
   if(eodPersonFilter==='all'){
     // show full commission breakdown for everyone
@@ -4928,7 +4928,7 @@ function viewEODLog(i,filterPerson){
               '<div style="font-size:10px;font-family:var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">💰 Staff Payouts (Morning)</div>'+
               staffUsers.map(u=>{
                 const p=po[u.name]||{earned:liveCommByPerson[u.name]||0,deduction:0,payout:liveCommByPerson[u.name]||0};
-                const deductNote=p.deduction>0?' <span style="color:var(--red);font-size:10px;">(-$'+p.deduction+' daily)</span>':'';
+                const deductNote='';
                 return'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">'+
                   '<div><span style="font-weight:600;color:var(--text);">'+u.name+'</span>'+deductNote+'</div>'+
                   '<span style="font-family:var(--mono);font-weight:700;color:var(--accent);">'+fmtP(p.payout)+'</span>'+
