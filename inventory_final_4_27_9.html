@@ -1942,10 +1942,6 @@ function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today
           <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:var(--accent)">${fmtP(at.comm)}</div>
         </div>
       </div>
-      ${(()=>{const dd=autoDailyDebts.find(x=>x.staffName===u.name);const debt=getStaffDebt(u.name);return dd?`<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(244,107,107,0.06);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:8px 10px;width:100%;">
-        <div><span style="font-size:11px;color:var(--red);font-weight:600;">📌 -$${dd.amountPerDay}/day</span><span style="font-size:10px;color:var(--text3);margin-left:6px;">collects daily</span></div>
-        <div style="font-size:13px;font-weight:700;font-family:var(--mono);color:var(--red);">Owes: ${fmtP(debt)}</div>
-      </div>`:'';})()}
     </div>`;
   }).join('');const is={};sells.forEach(e=>{if(e.type==='order'){(e.orderItems||[]).forEach(o=>{if(!is[o.itemName])is[o.itemName]=0;is[o.itemName]+=(e.amtReceived||0)/Math.max(1,(e.orderItems||[]).length);});}else{if(!is[e.name])is[e.name]=0;is[e.name]+=(e.amtReceived||0);}});const sorted=Object.entries(is).sort((a,b)=>b[1]-a[1]).slice(0,8),mx=sorted[0]?.[1]||1;document.getElementById('dtop').innerHTML=sorted.length?sorted.map(([n,a])=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)"><span style="flex:1;font-size:12px;color:var(--text);text-transform:capitalize">${n}</span><div style="flex:2;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden"><div style="height:100%;width:${(a/mx*100).toFixed(1)}%;background:var(--green);border-radius:2px"></div></div><span style="font-family:var(--mono);font-size:11px;color:var(--green);min-width:40px;text-align:right">${fmtP(a)}</span></div>`).join(''):'<div class="empty">No sales recorded</div>';}
 function renderCredits(){
@@ -3350,21 +3346,9 @@ function renderDebtList(){
   const el=document.getElementById('debt-staff-list');
   const staff=cfg.users.filter(u=>u.role==='staff');
   if(!staff.length){el.innerHTML='';return;}
-  // render auto daily debt info
+  // auto daily debt feature removed — hide the container
   const adEl=document.getElementById('auto-debt-info');
-  if(adEl&&autoDailyDebts.length){
-    const today=new Date();const todayStr=today.toISOString().slice(0,10);
-    adEl.innerHTML=autoDailyDebts.map(d=>{
-      const active=todayStr<=d.endDate;
-      const endDate=new Date(d.endDate+'T00:00:00');
-      const daysLeft=active?Math.ceil((endDate-today)/(1000*60*60*24)):0;
-      return`<div style="background:${active?'rgba(244,164,74,0.08)':'rgba(62,207,142,0.08)'};border:1px solid ${active?'rgba(244,164,74,0.3)':'rgba(62,207,142,0.3)'};border-radius:10px;padding:12px 14px;margin-bottom:8px;">
-        <div style="font-size:11px;font-family:var(--mono);color:${active?'var(--orange)':'var(--green)'};letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">${active?'⏳ Auto Daily Debt Active':'✅ Auto Daily Debt Completed'}</div>
-        <div style="font-size:13px;color:var(--text);">${d.staffName} — <strong>$${d.amountPerDay}/day</strong> until ${d.endDate}</div>
-        ${active?`<div style="font-size:11px;color:var(--text3);margin-top:4px;">${daysLeft} days remaining</div>`:''}
-      </div>`;
-    }).join('');
-  }
+  if(adEl) adEl.innerHTML='';
   el.innerHTML=staff.map((u,i)=>{
     const debt=staffDebts[u.name]||0;
     const paused=!!commissionPaused[u.name];
