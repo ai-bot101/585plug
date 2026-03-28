@@ -1261,10 +1261,9 @@ function calcComm2(total,profit,staffName){
   }
   if(pct===0&&tiers.length>0)pct=tiers[tiers.length-1].pct;
   let comm=profit*(pct/100);
-  // floor: if profit is under threshold (e.g. $20), pay at least minimum (e.g. $10)
-  const floorUnder=cfg.commissionFloorUnder||20;
+  // floor: every order pays at least $10 commission no matter what
   const floorMin=cfg.commissionFloorMin||10;
-  if(total>0&&profit<floorUnder&&comm<floorMin)comm=floorMin;
+  if(total>0&&comm<floorMin)comm=floorMin;
   comm=Math.floor(comm);
   // deduct any owed debt from this commission — carries over if debt > commission
   let deducted=0;
@@ -3461,10 +3460,9 @@ function repairCommission(total,profit,who){
   }
   if(pct===0&&tiers.length>0)pct=tiers[tiers.length-1].pct;
   let comm=(profit>0)?profit*(pct/100):0;
-  // floor: if profit is under threshold (e.g. $20), pay at least minimum (e.g. $10)
-  const floorUnder2=cfg.commissionFloorUnder||20;
+  // floor: every order pays at least $10 commission no matter what
   const floorMin2=cfg.commissionFloorMin||10;
-  if(total>0&&profit<floorUnder2&&comm<floorMin2)comm=floorMin2;
+  if(total>0&&comm<floorMin2)comm=floorMin2;
   return Math.floor(comm);
 }
 
@@ -4927,7 +4925,7 @@ function viewEODLog(i,filterPerson){
             return'<div style="margin-top:10px;padding:12px 14px;background:rgba(108,99,255,0.06);border:1px solid rgba(108,99,255,0.2);border-radius:8px;">'+
               '<div style="font-size:10px;font-family:var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">💰 Staff Payouts (Morning)</div>'+
               staffUsers.map(u=>{
-                const p=po[u.name]||{earned:liveCommByPerson[u.name]||0,deduction:0,payout:liveCommByPerson[u.name]||0};
+                const p={earned:liveCommByPerson[u.name]||0,deduction:0,payout:liveCommByPerson[u.name]||0};
                 const deductNote='';
                 return'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">'+
                   '<div><span style="font-weight:600;color:var(--text);">'+u.name+'</span>'+deductNote+'</div>'+
