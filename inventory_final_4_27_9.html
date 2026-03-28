@@ -1695,13 +1695,26 @@ function confirmOrder(){
       confirmed:false
     };
     if(orderPayMethod==='split'){pendingData.splitCash=splitCash;pendingData.splitVirtual=splitVirtual;}
+    // Deduct inventory immediately (restored if cancelled)
+    const objs2=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||''}));
+    objs2.forEach(({item,qty,flavorText})=>{
+      if(!item)return;
+      item.left=Math.max(0,Math.round((gl(item)-qty)*10)/10);
+      if(flavorText&&Array.isArray(item.flavors)){
+        const fl=item.flavors.find(f=>f.name===flavorText);
+        if(fl)fl.stock=Math.max(0,fl.stock-qty);
+      }
+    });
+    pendingData._stockDeducted=true;
     // Write to Firebase pending_orders
     fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(pendingData)}).catch(()=>{});
     // Also add to local pending list so it shows immediately
     pendingData.fbKey=fbKey;
     pendingData.heldAt=Date.now();
+    pendingData._stockDeductedLocally=true;
     pendingWebOrders[fbKey]=pendingData;
     closeOrder();
+    persist();
     renderPendingOrders();
     renderStats();renderItems();
     if(cu?.role==='owner')renderDash();
@@ -2971,8 +2984,7 @@ function processWebsiteOrders(pendingOrders) {
       pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:false};
       newCount++;
       // Only deduct stock if we haven't already (prevents double-deduction on app reload)
-      // Manual orders (from + Add Order) skip auto stock deduction — deducted on confirm
-      if (!order._stockDeducted && order.source !== 'manual') {
+      if (!order._stockDeducted) {
         pendingWebOrders[fbKey]._stockDeductedLocally = true;
         (order.orderItems||[]).forEach(oi=>{
           const itemName=(oi.itemName||oi.name||'').toLowerCase();
