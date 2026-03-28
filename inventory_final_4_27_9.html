@@ -1767,6 +1767,8 @@ function totBanner(sells,dl,isT,showProfit){
     const liveCommByUser={};
     cfg.users.forEach(u=>{liveCommByUser[u.name]=0;});
     sells.forEach(e=>{
+      // selfbuys = staff buying at cost, always $0 profit and $0 commission
+      if(e.type==='selfbuy'){totalProfit+=0;return;}
       let cost=0;
       const isVirt=e.payMethod&&(VIRT.includes(e.payMethod)||e.payMethod==='split');
       if((e.type==='order')&&e.orderItems){
