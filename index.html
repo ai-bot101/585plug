@@ -1858,12 +1858,13 @@ function openAdmin() {
         <button class="ap-close" onclick="closeAdmin()">✕ Close</button>
       </div>
     </div>
+    <div style="flex:1;overflow-y:auto;min-height:0;-webkit-overflow-scrolling:touch;">
     <div class="ap-stats">
       <div class="ap-stat"><div class="ap-stat-val" id="ap-total-orders">0</div><div class="ap-stat-label">Orders</div></div>
       <div class="ap-stat"><div class="ap-stat-val" id="ap-total-revenue">$0</div><div class="ap-stat-label">Revenue</div></div>
       <div class="ap-stat"><div class="ap-stat-val" id="ap-today-orders">0</div><div class="ap-stat-label">Today</div></div>
     </div>
-    <div style="padding:0 16px 12px;flex-shrink:0;">
+    <div style="padding:0 16px 12px;">
       <div style="background:var(--black2);border:1px solid var(--border);border-radius:10px;padding:14px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <div style="font-family:Oswald,sans-serif;font-size:12px;color:var(--white3);text-transform:uppercase;letter-spacing:1.5px;">📢 Menu Announcement</div>
@@ -1881,10 +1882,11 @@ function openAdmin() {
       </div>
       <div id="ap-sales-detail" style="background:var(--black2);border:1px solid var(--border);border-radius:10px;padding:12px;"></div>
     </div>
-    <div class="ap-list" id="ap-list"><div class="ap-empty">Loading orders...</div></div>
-    <div id="ap-cancelled-wrap" style="flex-shrink:0;display:none;border-top:1px solid var(--border);">
+    <div class="ap-list" id="ap-list" style="flex:none;"><div class="ap-empty">Loading orders...</div></div>
+    <div id="ap-cancelled-wrap" style="display:none;border-top:1px solid var(--border);">
       <button id="ap-cancelled-toggle" onclick="toggleCancelledLog()" style="width:100%;padding:12px 16px;background:rgba(244,107,107,0.06);border:none;color:#ff4d4d;font-family:Oswald,sans-serif;font-size:13px;font-weight:600;cursor:pointer;letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:6px;">🚫 Cancelled Orders <span id="ap-cancelled-count" style="background:rgba(244,107,107,0.15);border-radius:10px;padding:2px 8px;font-size:11px;">0</span> <span id="ap-cancelled-arrow" style="transition:transform .2s;">▼</span></button>
       <div id="ap-cancelled-list" style="display:none;padding:12px 16px;max-height:400px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    </div>
     </div>`;
     panel.dataset.loaded='1';
   }
