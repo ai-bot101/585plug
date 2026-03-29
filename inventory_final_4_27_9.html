@@ -388,6 +388,7 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       <button class="nbtn" id="earnbtn" onclick="toggleEarningsQuick()" style="display:none" id="earnbtn">👁 Earnings</button>
       <button class="nbtn" id="fixstockbtn" onclick="repairStock(true)" style="display:none;color:var(--green);border-color:rgba(62,207,142,0.3);">Fix Stock</button>
       <button class="nbtn" id="resetbtn" onclick="openResetModal()" style="display:none;color:var(--red);border-color:rgba(244,107,107,0.3);">⚠ Reset</button>
+      <button class="nbtn ac" id="stockchkbtn" onclick="openStockCheckModal()" style="display:none">📋 Stock</button>
       <button class="nbtn ac" id="costbtn" onclick="openCostModal()" style="display:none">Costs</button>
       <button class="nbtn ac" id="tierbtn" onclick="openTierModal()" style="display:none">Commission</button>
       <button class="nbtn" id="debtbtn" onclick="openDebtModal()" style="display:none;color:var(--red);border-color:rgba(244,107,107,0.3);">💸 Owed $</button>
@@ -617,6 +618,14 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
     <div style="font-size:10px;color:var(--text3);font-family:var(--mono);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;">New Category</div>
     <div class="add-cat-row"><input type="text" id="new-cat-inp" placeholder="e.g. CONCENTRATES" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')addCat()"><button onclick="addCat()">Add</button></div>
     <div class="mact"><button class="mp" onclick="closeOv('cat-modal')">Done</button></div>
+  </div>
+</div>
+<div class="ov" id="stockcheck-modal">
+  <div class="modal wide">
+    <h3>📋 Stock Check</h3>
+    <div class="msub">Quick view of what's left — grouped by category.</div>
+    <div id="stockcheck-list" style="max-height:60vh;overflow-y:auto;"></div>
+    <div class="mact"><button class="mp" onclick="closeOv('stockcheck-modal')">Done</button></div>
   </div>
 </div>
 <div class="ov" id="cost-modal">
@@ -1347,7 +1356,7 @@ async function tryLogin(){
   if(loginLog.length>200)loginLog=loginLog.slice(0,200);
   persist();
   // login log available via owner dashboard Download button
-  cu={...u,idx:si};document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn','fixstockbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
+  cu={...u,idx:si};document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn','fixstockbtn','stockchkbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
   document.getElementById('cust-tab').style.display=own?'':'none';document.getElementById('dash-tab').style.display=own?'':'none';document.getElementById('log-tab').style.display=own?'none':'';if(own){const et=document.getElementById('earnings-toggle');if(et)et.checked=cfg.showEarnings||false;}show('screen-app');
   updateEarnBtn();
   if(own)scheduleAutoLock();
@@ -1445,6 +1454,31 @@ function renderTierList(){document.getElementById('tier-list').innerHTML=cfg.com
 function addTier(){const mn=parseFloat(document.getElementById('t-min').value),mx=parseFloat(document.getElementById('t-max').value),pc=parseFloat(document.getElementById('t-pct').value);if(isNaN(mn)||isNaN(mx)||isNaN(pc)){showToast('Fill in all fields','err');return;}cfg.commissionTiers.push({min:mn,max:mx,pct:pc});cfg.commissionTiers.sort((a,b)=>a.min-b.min);renderTierList();showToast('Tier added','ok');}
 function delTier(i){cfg.commissionTiers.splice(i,1);renderTierList();}
 function saveTiers(){cfg.commissionFloorUnder=parseFloat(document.getElementById('t-fu').value)||20;cfg.commissionFloorMin=parseFloat(document.getElementById('t-fm').value)||10;persist();closeOv('tier-modal');showToast('Commission settings saved','ok');}
+function openStockCheckModal(){
+  let html='';
+  C().forEach(cat=>{
+    const items=(inv[cat]||[]).filter(i=>i.name);
+    if(!items.length)return;
+    html+=`<div style="margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--accent);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--border);">${cat} <span style="font-weight:400;color:var(--text3);">(${items.length})</span></div>`;
+    items.forEach(item=>{
+      const left=gl(item);
+      const bought=item.bought||0;
+      const pct=bought>0?Math.round((left/bought)*100):100;
+      const isZero=left===0&&bought>0;
+      const isLow=pct<=25&&pct>0;
+      const color=isZero?'var(--red)':isLow?'var(--orange)':'var(--green)';
+      const tag=isZero?'<span style="font-size:9px;background:rgba(244,107,107,0.12);color:var(--red);padding:1px 6px;border-radius:4px;font-weight:600;margin-left:6px;">OUT</span>':isLow?'<span style="font-size:9px;background:rgba(244,162,74,0.12);color:var(--orange);padding:1px 6px;border-radius:4px;font-weight:600;margin-left:6px;">LOW</span>':'';
+      html+=`<div class="ic-row" style="padding:8px 12px;">
+        <div class="ic-name">${item.name}${tag}</div>
+        <div style="font-size:14px;font-family:var(--mono);font-weight:700;color:${color};min-width:50px;text-align:right;">${fmt(left)}</div>
+      </div>`;
+    });
+    html+='</div>';
+  });
+  document.getElementById('stockcheck-list').innerHTML=html||'<div class="empty">No items yet</div>';
+  document.getElementById('stockcheck-modal').classList.add('open');
+}
 function openCostModal(){const all=C().flatMap(cat=>(inv[cat]||[]).map((item,ri)=>({cat,ri,item})));document.getElementById('item-cost-list').innerHTML=all.length?all.map(({cat,ri,item})=>`<div class="ic-row"><div class="ic-name">${item.name} <span style="font-size:10px;color:var(--text3)">(${cat})</span></div><div class="ic-cost">${cpuItem(item)>0?fmtP(cpuItem(item))+'/unit':'not set'}</div><button class="ic-edit" onclick="openEditCost('${cat}',${ri})">Set Cost</button></div>`).join(''):'<div class="empty">No items yet</div>';document.getElementById('cost-modal').classList.add('open');}
 function switchCostTab(mode){
   document.getElementById('ec-mode').value=mode;
