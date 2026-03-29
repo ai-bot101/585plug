@@ -389,6 +389,7 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       <button class="nbtn" id="fixstockbtn" onclick="repairStock(true)" style="display:none;color:var(--green);border-color:rgba(62,207,142,0.3);">Fix Stock</button>
       <button class="nbtn" id="resetbtn" onclick="openResetModal()" style="display:none;color:var(--red);border-color:rgba(244,107,107,0.3);">⚠ Reset</button>
       <button class="nbtn ac" id="stockchkbtn" onclick="openStockCheckModal()" style="display:none">📋 Stock</button>
+      <button class="nbtn ac" id="profitbtn" onclick="openProfitModal()" style="display:none;color:var(--green);border-color:rgba(62,207,142,0.3);">💰 Profit</button>
       <button class="nbtn ac" id="costbtn" onclick="openCostModal()" style="display:none">Costs</button>
       <button class="nbtn ac" id="tierbtn" onclick="openTierModal()" style="display:none">Commission</button>
       <button class="nbtn" id="debtbtn" onclick="openDebtModal()" style="display:none;color:var(--red);border-color:rgba(244,107,107,0.3);">💸 Owed $</button>
@@ -626,6 +627,14 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
     <div class="msub">Quick view of what's left — grouped by category.</div>
     <div id="stockcheck-list" style="max-height:60vh;overflow-y:auto;"></div>
     <div class="mact"><button class="mp" onclick="closeOv('stockcheck-modal')">Done</button></div>
+  </div>
+</div>
+<div class="ov" id="profit-modal">
+  <div class="modal wide">
+    <h3>💰 Profit Per Item</h3>
+    <div class="msub">Profit and margin based on lowest selling price vs cost per unit.</div>
+    <div id="profit-list" style="max-height:60vh;overflow-y:auto;"></div>
+    <div class="mact"><button class="mp" onclick="closeOv('profit-modal')">Done</button></div>
   </div>
 </div>
 <div class="ov" id="cost-modal">
@@ -1356,7 +1365,7 @@ async function tryLogin(){
   if(loginLog.length>200)loginLog=loginLog.slice(0,200);
   persist();
   // login log available via owner dashboard Download button
-  cu={...u,idx:si};document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn','fixstockbtn','stockchkbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
+  cu={...u,idx:si};document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn','fixstockbtn','stockchkbtn','profitbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
   document.getElementById('cust-tab').style.display=own?'':'none';document.getElementById('dash-tab').style.display=own?'':'none';document.getElementById('log-tab').style.display=own?'none':'';if(own){const et=document.getElementById('earnings-toggle');if(et)et.checked=cfg.showEarnings||false;}show('screen-app');
   updateEarnBtn();
   if(own)scheduleAutoLock();
@@ -1478,6 +1487,55 @@ function openStockCheckModal(){
   });
   document.getElementById('stockcheck-list').innerHTML=html||'<div class="empty">No items yet</div>';
   document.getElementById('stockcheck-modal').classList.add('open');
+}
+function openProfitModal(){
+  let html='';
+  let totalProfit=0,totalRev=0;
+  C().forEach(cat=>{
+    const items=(inv[cat]||[]).filter(i=>i.name);
+    if(!items.length)return;
+    html+=`<div style="margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--accent);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--border);">${cat}</div>`;
+    items.forEach(item=>{
+      const cpu=cpuItem(item);
+      // Find the lowest selling price from price tiers
+      const prices=(item.prices||[]).filter(p=>p.price>0).map(p=>{
+        const lq=labelToQty(p.label);
+        return {label:p.label, price:p.price, perUnit:lq>1?p.price/lq:p.price, qty:lq};
+      });
+      if(!prices.length||cpu<=0){
+        html+=`<div class="ic-row" style="padding:8px 12px;">
+          <div class="ic-name">${item.name}</div>
+          <div style="font-size:11px;color:var(--text3);font-family:var(--mono);">${cpu<=0?'no cost set':'no prices set'}</div>
+        </div>`;
+        return;
+      }
+      // Show profit for each price tier
+      const rows=prices.map(p=>{
+        const profit=p.price-(cpu*p.qty);
+        const margin=p.price>0?Math.round((profit/p.price)*100):0;
+        const sold=Math.max(0,(item.bought||0)-gl(item));
+        const profitColor=profit>0?'var(--green)':profit<0?'var(--red)':'var(--text3)';
+        totalProfit+=profit>0?profit:0;
+        totalRev+=p.price;
+        return `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+          <span style="font-size:10px;color:var(--text3);min-width:60px;">${p.label}</span>
+          <span style="font-size:12px;font-family:var(--mono);color:${profitColor};font-weight:700;min-width:55px;">+${fmtP(profit)}</span>
+          <span style="font-size:10px;font-family:var(--mono);color:${margin>=50?'var(--green)':margin>=25?'var(--orange)':'var(--red)'};background:${margin>=50?'rgba(62,207,142,0.1)':margin>=25?'rgba(244,162,74,0.1)':'rgba(244,107,107,0.1)'};padding:1px 6px;border-radius:4px;font-weight:600;">${margin}%</span>
+        </div>`;
+      });
+      html+=`<div class="ic-row" style="padding:10px 12px;flex-direction:column;align-items:stretch;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="ic-name" style="margin-bottom:2px;">${item.name}</div>
+          <div style="font-size:10px;color:var(--text3);font-family:var(--mono);">cost: ${fmtP(cpu)}/unit</div>
+        </div>
+        ${rows.join('')}
+      </div>`;
+    });
+    html+='</div>';
+  });
+  document.getElementById('profit-list').innerHTML=html||'<div class="empty">No items yet</div>';
+  document.getElementById('profit-modal').classList.add('open');
 }
 function openCostModal(){const all=C().flatMap(cat=>(inv[cat]||[]).map((item,ri)=>({cat,ri,item})));document.getElementById('item-cost-list').innerHTML=all.length?all.map(({cat,ri,item})=>`<div class="ic-row"><div class="ic-name">${item.name} <span style="font-size:10px;color:var(--text3)">(${cat})</span></div><div class="ic-cost">${cpuItem(item)>0?fmtP(cpuItem(item))+'/unit':'not set'}</div><button class="ic-edit" onclick="openEditCost('${cat}',${ri})">Set Cost</button></div>`).join(''):'<div class="empty">No items yet</div>';document.getElementById('cost-modal').classList.add('open');}
 function switchCostTab(mode){
@@ -2781,7 +2839,8 @@ function addItem(){
     desc,img,images,
     showStaffPrice:menuPrices.length>0,staffPriceType:'flat',
     staffFlat:menuPrices.length===1?menuPrices[0].price:0,
-    staffUnit:0,staffUnitLabel:'per g'
+    staffUnit:0,staffUnitLabel:'per g',
+    addedAt:Date.now()
   });
   const e={type:'add',name,cat,amount:bought,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
   log.unshift(e);persist();closeOv('add-modal');setCat(cat);renderStats();
