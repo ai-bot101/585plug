@@ -1435,6 +1435,17 @@ async function tryLogin(){
     persist();
     localStorage.setItem('585_eod_label_fix','1');
   }
+  // One-time fresh start: clear all old sales and reset inventory
+  if(!localStorage.getItem('585_fresh_start_v1')){
+    // Remove all sell, order, selfbuy, and adjustment entries from activity log
+    log=log.filter(e=>e.type!=='sell'&&e.type!=='order'&&e.type!=='selfbuy'&&e.type!=='adjustment');
+    // Clear EOD logs
+    eodLogs=[];
+    // Reset left = bought for every item
+    C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.bought)item.left=item.bought;});});
+    persist();
+    localStorage.setItem('585_fresh_start_v1','done');
+  }
   // Repair commissions on every login
   repairAllCommissions();
   // Recalculate all stock levels from activity logs, EOD, pending orders, and manual adjustments
