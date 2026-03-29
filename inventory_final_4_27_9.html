@@ -1436,24 +1436,33 @@ async function tryLogin(){
     localStorage.setItem('585_eod_label_fix','1');
   }
   // One-time fresh start: clear all old sales and reset inventory
-  if(!localStorage.getItem('585_fresh_start_v1')){
+  if(!localStorage.getItem('585_fresh_start_v2')){
     // Remove all sell, order, selfbuy, and adjustment entries from activity log
     log=log.filter(e=>e.type!=='sell'&&e.type!=='order'&&e.type!=='selfbuy'&&e.type!=='adjustment');
-    // Clear EOD logs
+    // Clear EOD logs and cancelled orders
     eodLogs=[];
+    cancelledOrders=[];
     // Reset left = bought for every item
     C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.bought)item.left=item.bought;});});
-    persist();
-    localStorage.setItem('585_fresh_start_v1','done');
+    // Push IMMEDIATELY to Firebase before sync can pull old data back
+    const freshPayload={
+      inv,log,cfg,
+      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
+      updatedAt:Date.now()
+    };
+    fbLastTimestamp=freshPayload.updatedAt;
+    fetch(FB_URL+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(freshPayload)}).then(()=>{
+      persistEncrypted().catch(()=>{});
+    }).catch(()=>{});
+    localStorage.setItem('585_fresh_start_v2','done');
   }
   // Repair commissions on every login
   repairAllCommissions();
-  // Recalculate all stock levels from activity logs, EOD, pending orders, and manual adjustments
+  // Recalculate stock levels from activity logs, pending orders, and manual adjustments
   repairStock(false);
   repairPassHashes();
   repairEODtoLog();
   // Force a fresh pull on login to guarantee sync regardless of timestamp
-  fbLastTimestamp=0;
   startAutoSync();}
 function logout(){persist();stopAutoSync();cu=null;si=null;document.getElementById('pass-wrap').style.display='none';document.getElementById('pass-inp').value='';document.getElementById('lerr').textContent='';document.querySelectorAll('.u-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('login-btn').disabled=true;fbLastTimestamp=0;backToCalc();}
 function toggleEarnings(val){cfg.showEarnings=val;persist();renderStaffLog();updateEarnBtn();}
