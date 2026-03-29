@@ -1437,7 +1437,8 @@ async function tryLogin(){
   }
   // Repair commissions on every login
   repairAllCommissions();
-  // repairStock removed from auto-login — owner can press Fix Stock button manually if needed
+  // Recalculate all stock levels from activity logs, EOD, pending orders, and manual adjustments
+  repairStock(false);
   repairPassHashes();
   repairEODtoLog();
   // Force a fresh pull on login to guarantee sync regardless of timestamp
@@ -4200,6 +4201,8 @@ function fbPoll(){
 
 
 async function fbPullNow(){
+  // Skip pull if there's a pending local push — prevents overwriting unsaved edits
+  if(fbPushTimer){return;}
   try{
     const res=await fetch(FB_URL+'.json?t='+Date.now());
     if(!res.ok)return;
@@ -4283,9 +4286,11 @@ function fbPush(){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify(payload)
       });
+      fbPushTimer=null; // clear so fbPull resumes
       document.getElementById('sdot').className='sdot ok';
       document.getElementById('slabel').textContent='Live — '+tstr();
     }catch(e){
+      fbPushTimer=null; // clear so fbPull resumes
       document.getElementById('sdot').className='sdot fail';
       document.getElementById('slabel').textContent='Sync failed — check connection';
     }
