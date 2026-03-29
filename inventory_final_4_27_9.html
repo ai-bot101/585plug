@@ -390,6 +390,7 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       <button class="nbtn" id="resetbtn" onclick="openResetModal()" style="display:none;color:var(--red);border-color:rgba(244,107,107,0.3);">⚠ Reset</button>
       <button class="nbtn ac" id="stockchkbtn" onclick="openStockCheckModal()" style="display:none">📋 Stock</button>
       <button class="nbtn ac" id="profitbtn" onclick="openProfitModal()" style="display:none;color:var(--green);border-color:rgba(62,207,142,0.3);">💰 Profit</button>
+      <button class="nbtn ac" id="staffbuysbtn" onclick="openStaffBuysModal()" style="display:none">🛒 Staff Buys</button>
       <button class="nbtn ac" id="costbtn" onclick="openCostModal()" style="display:none">Costs</button>
       <button class="nbtn ac" id="tierbtn" onclick="openTierModal()" style="display:none">Commission</button>
       <button class="nbtn" id="debtbtn" onclick="openDebtModal()" style="display:none;color:var(--red);border-color:rgba(244,107,107,0.3);">💸 Owed $</button>
@@ -627,6 +628,15 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
     <div class="msub">Quick view of what's left — grouped by category.</div>
     <div id="stockcheck-list" style="max-height:60vh;overflow-y:auto;"></div>
     <div class="mact"><button class="mp" onclick="closeOv('stockcheck-modal')">Done</button></div>
+  </div>
+</div>
+<div class="ov" id="staffbuys-modal">
+  <div class="modal wide">
+    <h3>🛒 Staff Purchases</h3>
+    <div class="msub">Everything staff bought at cost.</div>
+    <div id="staffbuys-tabs" style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;"></div>
+    <div id="staffbuys-list" style="max-height:55vh;overflow-y:auto;"></div>
+    <div class="mact"><button class="mp" onclick="closeOv('staffbuys-modal')">Done</button></div>
   </div>
 </div>
 <div class="ov" id="profit-modal">
@@ -1365,7 +1375,7 @@ async function tryLogin(){
   if(loginLog.length>200)loginLog=loginLog.slice(0,200);
   persist();
   // login log available via owner dashboard Download button
-  cu={...u,idx:si};document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn','fixstockbtn','stockchkbtn','profitbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
+  cu={...u,idx:si};document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn','fixstockbtn','stockchkbtn','profitbtn','staffbuysbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
   document.getElementById('cust-tab').style.display=own?'':'none';document.getElementById('dash-tab').style.display=own?'':'none';document.getElementById('log-tab').style.display=own?'none':'';if(own){const et=document.getElementById('earnings-toggle');if(et)et.checked=cfg.showEarnings||false;}show('screen-app');
   updateEarnBtn();
   if(own)scheduleAutoLock();
@@ -1487,6 +1497,60 @@ function openStockCheckModal(){
   });
   document.getElementById('stockcheck-list').innerHTML=html||'<div class="empty">No items yet</div>';
   document.getElementById('stockcheck-modal').classList.add('open');
+}
+let staffBuysFilter='all';
+function openStaffBuysModal(){
+  staffBuysFilter='all';
+  renderStaffBuys();
+  document.getElementById('staffbuys-modal').classList.add('open');
+}
+function renderStaffBuys(){
+  const buys=log.filter(e=>e.type==='selfbuy');
+  // Build staff tabs
+  const staffNames=[...new Set(buys.map(e=>e.who))];
+  const tabs=document.getElementById('staffbuys-tabs');
+  tabs.innerHTML=[{id:'all',label:'All'},...staffNames.map(n=>({id:n,label:n}))].map(t=>
+    `<button class="sort-pill ${staffBuysFilter===t.id?'active':''}" onclick="staffBuysFilter='${t.id}';renderStaffBuys()" style="padding:6px 14px;border-radius:20px;border:1px solid ${staffBuysFilter===t.id?'var(--accent)':'var(--border)'};background:${staffBuysFilter===t.id?'rgba(108,99,255,0.15)':'transparent'};color:${staffBuysFilter===t.id?'var(--accent)':'var(--text3)'};font-family:var(--sans);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">${t.label}</button>`
+  ).join('');
+  const filtered=staffBuysFilter==='all'?buys:buys.filter(e=>e.who===staffBuysFilter);
+  if(!filtered.length){
+    document.getElementById('staffbuys-list').innerHTML='<div class="empty">No staff purchases yet</div>';
+    return;
+  }
+  // Group by date
+  const byDate={};
+  filtered.forEach(e=>{
+    if(!byDate[e.date])byDate[e.date]={entries:[],total:0};
+    byDate[e.date].entries.push(e);
+    byDate[e.date].total+=(e.totalOwed||0);
+  });
+  // Grand total
+  const grandTotal=filtered.reduce((s,e)=>s+(e.totalOwed||0),0);
+  const totalItems=filtered.reduce((s,e)=>s+((e.items||[]).length),0);
+  let html=`<div style="background:rgba(108,99,255,0.08);border:1px solid rgba(108,99,255,0.25);border-radius:10px;padding:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+    <div><span style="font-size:12px;color:var(--text3);">Total Owed</span><div style="font-size:22px;font-weight:800;font-family:var(--mono);color:var(--accent);">${fmtP(grandTotal)}</div></div>
+    <div style="text-align:right;"><span style="font-size:12px;color:var(--text3);">${filtered.length} purchase${filtered.length!==1?'s':''}</span><div style="font-size:13px;color:var(--text3);">${totalItems} item${totalItems!==1?'s':''} total</div></div>
+  </div>`;
+  Object.entries(byDate).sort((a,b)=>new Date(b[0])-new Date(a[0])).forEach(([date,data])=>{
+    html+=`<div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--border);">
+        <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:0.5px;">${date}</span>
+        <span style="font-size:11px;font-family:var(--mono);color:var(--accent);font-weight:600;">${fmtP(data.total)}</span>
+      </div>`;
+    data.entries.forEach(e=>{
+      const items=(e.items||[]).map(i=>`<span>${i.qty}x ${i.itemName} · ${fmtP(i.cost)}</span>`).join('<br>');
+      html+=`<div class="ic-row" style="padding:10px 12px;flex-direction:column;align-items:stretch;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:13px;font-weight:600;color:var(--text);">${e.who}</span>
+          <span style="font-size:14px;font-family:var(--mono);font-weight:700;color:var(--orange);">${fmtP(e.totalOwed||0)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);line-height:1.6;">${items}</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:4px;">${e.time||''}</div>
+      </div>`;
+    });
+    html+='</div>';
+  });
+  document.getElementById('staffbuys-list').innerHTML=html;
 }
 function openProfitModal(){
   let html='';
