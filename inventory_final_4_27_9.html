@@ -1448,6 +1448,7 @@ async function tryLogin(){
     const freshPayload={
       inv,log,cfg,
       customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
+      pending_orders:pendingWebOrders||{},
       updatedAt:Date.now()
     };
     fbLastTimestamp=freshPayload.updatedAt;
