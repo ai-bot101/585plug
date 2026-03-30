@@ -1760,11 +1760,22 @@ function sendOrder() {
   };
 
   const orderKey = 'order_' + Date.now();
-  fetch(FB_URL + '/inv_d6bb4/pending_orders/' + orderKey + '.json', {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(pendingOrder)
-  }).catch(e => console.error('Failed to save order:', e));
+  const orderBody = JSON.stringify(pendingOrder);
+  // Retry up to 3 times if Firebase write fails (spotty connections)
+  (async function saveOrder(retries){
+    for(let i=0;i<retries;i++){
+      try{
+        const res=await fetch(FB_URL+'/inv_d6bb4/pending_orders/'+orderKey+'.json',{
+          method:'PUT',headers:{'Content-Type':'application/json'},body:orderBody
+        });
+        if(res.ok)return; // success
+      }catch(e){}
+      // wait before retry (500ms, 1500ms)
+      if(i<retries-1) await new Promise(r=>setTimeout(r,500*(i+1)));
+    }
+    // All retries failed — alert customer
+    alert('⚠️ Your order may not have been received. Please text your order directly to make sure it goes through.');
+  })(3);
 
   // Send push notification to owner via ntfy
   const notifItems = cart.map(c => c.name + ' (' + c.label + ')').join(', ');
