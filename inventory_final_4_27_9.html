@@ -3717,13 +3717,24 @@ function revertToPending(fbKey) {
   showToast('Order moved back to pending ⏪', 'ok');
 }
 
+function clearConfirmedOrders(){
+  if(!confirm('Clear all confirmed orders from this view?\n\nStock deductions will stay — this just hides them from the confirmed list.'))return;
+  const today=tday();
+  log.forEach(e=>{
+    if(e.source==='website'&&e.webOrderKey&&e.date===today){
+      e._cleared=true;
+    }
+  });
+  persist();renderConfirmedWebOrders();
+  showToast('Confirmed orders cleared ✅','ok');
+}
 // ── CONFIRMED WEBSITE ORDERS (reversible) ──
 function renderConfirmedWebOrders() {
   const el = document.getElementById('confirmed-orders-section');
   if (!el) return;
   // Find today's confirmed website orders in the log
   const today = tday();
-  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && e.date === today);
+  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && e.date === today && !e._cleared);
   if (!webOrders.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
 
   el.style.display = 'block';
@@ -3731,6 +3742,7 @@ function renderConfirmedWebOrders() {
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
       <h3 style="margin-bottom:0;color:var(--green);">✅ Confirmed Website Orders</h3>
       <span style="background:var(--green);color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-family:var(--mono);font-weight:700;">${webOrders.length}</span>
+      <button onclick="clearConfirmedOrders()" style="margin-left:auto;background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:6px 14px;color:var(--red);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;">🗑 Clear All</button>
     </div>
     ${webOrders.map(o => {
       const items = (o.orderItems||[]).map(i => {
@@ -4326,7 +4338,7 @@ function fbPush(){
         customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
         updatedAt:Date.now()
       };
-      // Preserve pending_orders from Firebase so PUT doesn't wipe them
+      // ALWAYS include pending_orders so PUT never wipes them
       if (currentPending && typeof currentPending === 'object' && Object.keys(currentPending).length) {
         // Merge local _stockDeducted flags so async PATCH can't be overwritten by this PUT
         Object.entries(pendingWebOrders).forEach(([key, localOrder]) => {
@@ -4336,6 +4348,12 @@ function fbPush(){
           }
         });
         payload.pending_orders = currentPending;
+      } else if (Object.keys(pendingWebOrders).length) {
+        // Fallback: if Firebase fetch failed, use local pending orders so they don't get wiped
+        payload.pending_orders = pendingWebOrders;
+      } else {
+        // Even if empty, include the key so PUT doesn't delete orders that arrived between fetch and PUT
+        payload.pending_orders = currentPending || {};
       }
       fbLastTimestamp=payload.updatedAt; // prevent echo pull
       await fetch(FB_URL+'.json',{
