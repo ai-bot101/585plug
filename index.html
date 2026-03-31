@@ -586,6 +586,12 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
     </button>
   </div>
 
+  <!-- SHOP CLOSED BANNER -->
+  <div id="shop-closed-banner" style="display:none;background:linear-gradient(90deg,rgba(244,107,107,0.18),rgba(244,107,107,0.08));border-bottom:1px solid rgba(244,107,107,0.4);padding:16px;text-align:center;">
+    <div style="font-size:22px;margin-bottom:6px;">🔒</div>
+    <div id="shop-closed-text" style="font-family:'Oswald',sans-serif;font-size:15px;color:#ff4d4d;font-weight:600;letter-spacing:0.5px;line-height:1.5;max-width:600px;margin:0 auto;">Shop is currently closed — check back soon!</div>
+  </div>
+
   <!-- ANNOUNCEMENT BANNER -->
   <div id="announce-bar" style="display:none;background:linear-gradient(90deg,rgba(204,31,31,0.15),rgba(204,31,31,0.08));border-bottom:1px solid rgba(204,31,31,0.3);padding:12px 16px;text-align:center;">
     <div id="announce-text" style="font-family:'Oswald',sans-serif;font-size:14px;color:#ff4d4d;font-weight:500;letter-spacing:0.5px;line-height:1.5;max-width:600px;margin:0 auto;"></div>
@@ -858,6 +864,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('app').style.display = 'block';
     startLiveSync();
     loadAnnouncement();
+    loadShopStatus();
     showRoutePopup();
   }
 });
@@ -886,6 +893,7 @@ async function tryAccess() {
     document.getElementById('app').style.display = 'block';
     startLiveSync();
     loadAnnouncement();
+    loadShopStatus();
     showRoutePopup();
   } else {
     document.getElementById('ag-err').textContent = 'Invalid code. Contact your plug.';
@@ -979,6 +987,11 @@ async function doFetch() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     processData(data);
+    // Check shop status on every poll so customers see open/close changes quickly
+    if(data.shopStatus){
+      const isOpen=data.shopStatus.open!==false;
+      applyShopStatus(isOpen,data.shopStatus.message||'');
+    }
   } catch(e) {
     console.error('Fetch error:', e);
     const ss = document.getElementById('sync-status');
@@ -2007,6 +2020,17 @@ function openAdmin() {
       <div class="ap-stat"><div class="ap-stat-val" id="ap-today-orders">0</div><div class="ap-stat-label">Today</div></div>
     </div>
     <div style="padding:0 16px 12px;">
+      <div style="background:var(--black2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-family:Oswald,sans-serif;font-size:12px;color:var(--white3);text-transform:uppercase;letter-spacing:1.5px;">🔒 Shop Status</div>
+          <div id="shop-status-badge" style="font-size:11px;font-family:Oswald,sans-serif;font-weight:700;padding:3px 10px;border-radius:6px;">...</div>
+        </div>
+        <textarea id="shop-closed-msg" placeholder="e.g. Shop opens at 1:30pm — route going out at 2pm! Updating menu real quick!" style="width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#fff;font-family:'Inter',sans-serif;font-size:13px;outline:none;resize:none;min-height:40px;line-height:1.5;margin-bottom:8px;" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button onclick="setShopStatus(false)" style="padding:10px;background:rgba(244,107,107,0.15);border:1px solid rgba(244,107,107,0.3);border-radius:8px;color:#ff4d4d;font-family:Oswald,sans-serif;font-size:13px;font-weight:600;cursor:pointer;letter-spacing:1px;">🔒 Close Shop</button>
+          <button onclick="setShopStatus(true)" style="padding:10px;background:rgba(62,207,142,0.15);border:1px solid rgba(62,207,142,0.3);border-radius:8px;color:var(--green);font-family:Oswald,sans-serif;font-size:13px;font-weight:600;cursor:pointer;letter-spacing:1px;">🟢 Open Shop</button>
+        </div>
+      </div>
       <div style="background:var(--black2);border:1px solid var(--border);border-radius:10px;padding:14px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <div style="font-family:Oswald,sans-serif;font-size:12px;color:var(--white3);text-transform:uppercase;letter-spacing:1.5px;">📢 Menu Announcement</div>
@@ -2035,6 +2059,7 @@ function openAdmin() {
   panel.classList.add('open');
   loadAdminOrders();
   loadAnnouncementAdmin();
+  loadShopStatus();
 }
 
 // ── ANNOUNCEMENT ──
@@ -2082,6 +2107,73 @@ async function clearAnnouncement(){
     loadAnnouncement();
     showToast('Announcement cleared','green');
   }catch(e){showToast('Failed to clear','red-t');}
+}
+
+// ── SHOP STATUS (open/closed) ──
+let shopOpen = true;
+async function loadShopStatus(){
+  try{
+    const res=await fetch(FB_URL+'/inv_d6bb4/shopStatus.json');
+    const data=await res.json();
+    if(data){
+      shopOpen=data.open!==false;
+      const msg=data.message||'';
+      applyShopStatus(shopOpen,msg);
+      // Fill admin input if open
+      const inp=document.getElementById('shop-closed-msg');
+      if(inp&&msg)inp.value=msg;
+    }
+  }catch(e){}
+}
+function applyShopStatus(isOpen,msg){
+  shopOpen=isOpen;
+  // Update customer-facing banner
+  const banner=document.getElementById('shop-closed-banner');
+  if(banner){
+    if(!isOpen){
+      document.getElementById('shop-closed-text').textContent=msg||'Shop is currently closed — check back soon!';
+      banner.style.display='block';
+    }else{
+      banner.style.display='none';
+    }
+  }
+  // Disable/enable all add-to-cart buttons
+  document.querySelectorAll('.add-btn,.price-pill').forEach(btn=>{
+    if(!isOpen){
+      btn.dataset.origPointer=btn.style.pointerEvents||'';
+      btn.style.pointerEvents='none';
+      btn.style.opacity='0.3';
+    }else{
+      btn.style.pointerEvents=btn.dataset.origPointer||'';
+      btn.style.opacity='';
+    }
+  });
+  // Disable checkout button
+  const cb=document.getElementById('checkout-btn');
+  if(cb){
+    if(!isOpen){cb.disabled=true;cb.style.opacity='0.3';}
+    else{cb.disabled=false;cb.style.opacity='';}
+  }
+  // Update admin badge
+  const badge=document.getElementById('shop-status-badge');
+  if(badge){
+    badge.textContent=isOpen?'🟢 OPEN':'🔒 CLOSED';
+    badge.style.background=isOpen?'rgba(62,207,142,0.15)':'rgba(244,107,107,0.15)';
+    badge.style.color=isOpen?'#3ecf8e':'#ff4d4d';
+  }
+}
+async function setShopStatus(open){
+  if(!adminUnlocked)return;
+  const msg=(document.getElementById('shop-closed-msg')?.value||'').trim();
+  try{
+    await fetch(FB_URL+'/inv_d6bb4/shopStatus.json',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({open,message:msg,updatedAt:Date.now()})
+    });
+    applyShopStatus(open,msg);
+    showToast(open?'Shop is now OPEN 🟢':'Shop is now CLOSED 🔒',open?'green':'red-t');
+  }catch(e){showToast('Failed to update status','red-t');}
 }
 
 function closeAdmin() {
