@@ -586,10 +586,14 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
     </button>
   </div>
 
-  <!-- SHOP CLOSED BANNER -->
-  <div id="shop-closed-banner" style="display:none;background:linear-gradient(90deg,rgba(244,107,107,0.18),rgba(244,107,107,0.08));border-bottom:1px solid rgba(244,107,107,0.4);padding:16px;text-align:center;">
-    <div style="font-size:22px;margin-bottom:6px;">🔒</div>
-    <div id="shop-closed-text" style="font-family:'Oswald',sans-serif;font-size:15px;color:#ff4d4d;font-weight:600;letter-spacing:0.5px;line-height:1.5;max-width:600px;margin:0 auto;">Shop is currently closed — check back soon!</div>
+  <!-- SHOP CLOSED OVERLAY — full screen, blocks everything -->
+  <div id="shop-closed-banner" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;align-items:center;justify-content:center;padding:20px;">
+    <div style="text-align:center;max-width:400px;width:100%;">
+      <div style="font-size:64px;margin-bottom:16px;">🔒</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:#fff;letter-spacing:3px;margin-bottom:12px;">SHOP CLOSED</div>
+      <div id="shop-closed-text" style="font-family:'Oswald',sans-serif;font-size:16px;color:#ff6b6b;font-weight:500;letter-spacing:0.5px;line-height:1.6;margin-bottom:24px;">Shop is currently closed — check back soon!</div>
+      <div style="font-family:'Oswald',sans-serif;font-size:12px;color:rgba(255,255,255,0.3);letter-spacing:1.5px;text-transform:uppercase;">This page will update automatically when we reopen</div>
+    </div>
   </div>
 
   <!-- ANNOUNCEMENT BANNER -->
@@ -2127,12 +2131,12 @@ async function loadShopStatus(){
 }
 function applyShopStatus(isOpen,msg){
   shopOpen=isOpen;
-  // Update customer-facing banner
+  // Update customer-facing overlay
   const banner=document.getElementById('shop-closed-banner');
   if(banner){
     if(!isOpen){
       document.getElementById('shop-closed-text').textContent=msg||'Shop is currently closed — check back soon!';
-      banner.style.display='block';
+      banner.style.display='flex';
     }else{
       banner.style.display='none';
     }
