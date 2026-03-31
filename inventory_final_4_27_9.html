@@ -1790,7 +1790,7 @@ function showFlavorPicker(cat,ri,item,flavors){
       <div><div style="font-size:14px;font-weight:600;color:var(--text);">${f.name}</div><div style="font-size:11px;color:var(--text3);">${f.stock} in stock</div></div>
       <div style="font-size:18px;">→</div>
     </div>`).join('')}</div>
-    <div onclick="pickFlavor('${cat}',${ri},'',−1)" style="text-align:center;padding:12px;margin-top:4px;color:var(--text3);font-size:12px;cursor:pointer;border:1px dashed var(--border);border-radius:10px;">No flavor / Skip</div>
+    <div onclick="pickFlavor('${cat}',${ri},'',-1)" style="text-align:center;padding:12px;margin-top:4px;color:var(--text3);font-size:12px;cursor:pointer;border:1px dashed var(--border);border-radius:10px;">No flavor / Skip</div>
     <button onclick="document.getElementById('flavor-pick-modal').remove()" style="width:100%;margin-top:12px;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text3);font-size:13px;cursor:pointer;">Cancel</button>
   </div>`;
   document.body.appendChild(d);
