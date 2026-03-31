@@ -387,6 +387,7 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       <button class="nbtn" id="lockdaybtn" onclick="lockDayNow()" style="display:none;color:var(--orange);border-color:rgba(244,162,74,0.3);">🔒 Lock Day</button>
       <button class="nbtn" id="earnbtn" onclick="toggleEarningsQuick()" style="display:none" id="earnbtn">👁 Earnings</button>
       <button class="nbtn" id="resetbtn" onclick="openResetModal()" style="display:none;color:var(--red);border-color:rgba(244,107,107,0.3);">⚠ Reset</button>
+      <button class="nbtn ac" id="refreshbtn" onclick="forceRefresh()" style="display:none;color:var(--blue,#4fc3f7);border-color:rgba(79,195,247,0.3);">🔄 Refresh</button>
       <button class="nbtn ac" id="stockchkbtn" onclick="openStockCheckModal()" style="display:none">📋 Stock</button>
       <button class="nbtn ac" id="profitbtn" onclick="openProfitModal()" style="display:none;color:var(--green);border-color:rgba(62,207,142,0.3);">💰 Profit</button>
       <button class="nbtn ac" id="staffbuysbtn" onclick="openStaffBuysModal()" style="display:none">🛒 Staff Buys</button>
@@ -1374,7 +1375,7 @@ async function tryLogin(){
   if(loginLog.length>200)loginLog=loginLog.slice(0,200);
   persist();
   // login log available via owner dashboard Download button
-  cu={...u,idx:si};document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn','stockchkbtn','profitbtn','staffbuysbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
+  cu={...u,idx:si};document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn','refreshbtn','stockchkbtn','profitbtn','staffbuysbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
   document.getElementById('cust-tab').style.display=own?'':'none';document.getElementById('dash-tab').style.display=own?'':'none';document.getElementById('log-tab').style.display=own?'none':'';if(own){const et=document.getElementById('earnings-toggle');if(et)et.checked=cfg.showEarnings||false;}show('screen-app');
   updateEarnBtn();
   if(own)scheduleAutoLock();
@@ -1494,6 +1495,41 @@ function renderTierList(){document.getElementById('tier-list').innerHTML=cfg.com
 function addTier(){const mn=parseFloat(document.getElementById('t-min').value),mx=parseFloat(document.getElementById('t-max').value),pc=parseFloat(document.getElementById('t-pct').value);if(isNaN(mn)||isNaN(mx)||isNaN(pc)){showToast('Fill in all fields','err');return;}cfg.commissionTiers.push({min:mn,max:mx,pct:pc});cfg.commissionTiers.sort((a,b)=>a.min-b.min);renderTierList();showToast('Tier added','ok');}
 function delTier(i){cfg.commissionTiers.splice(i,1);renderTierList();}
 function saveTiers(){cfg.commissionFloorUnder=parseFloat(document.getElementById('t-fu').value)||20;cfg.commissionFloorMin=parseFloat(document.getElementById('t-fm').value)||10;persist();closeOv('tier-modal');showToast('Commission settings saved','ok');}
+async function forceRefresh(){
+  const btn=document.getElementById('refreshbtn');
+  if(btn){btn.textContent='🔄 ...';btn.disabled=true;}
+  try{
+    const res=await fetch(FB_URL+'.json?t='+Date.now());
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    if(!data){showToast('No data from server','red-t');return;}
+    if(data.updatedAt)fbLastTimestamp=data.updatedAt;
+    inv=data.inv||{};C().forEach(c=>{if(!inv[c])inv[c]=[];});
+    log=Array.isArray(data.log)?data.log:[];
+    cfg=data.cfg||cfg;
+    customerCredits=data.customerCredits||{};
+    vipCustomers=data.vipCustomers||{};
+    customerDeals=data.customerDeals||{};
+    dayNotes=data.dayNotes||{};
+    eodLogs=Array.isArray(data.eodLogs)?data.eodLogs:[];
+    cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
+    cancelledOrders=Array.isArray(data.cancelledOrders)?data.cancelledOrders:[];
+    staffDebts=data.staffDebts||{};
+    commissionPaused=data.commissionPaused||{};
+    autoDailyDebts=data.autoDailyDebts||{};
+    // Process any new pending orders
+    if(data.pending_orders&&cu){
+      processWebsiteOrders(data.pending_orders);
+    }
+    persistEncrypted().catch(()=>{});
+    renderStats();renderItems();renderStaffLog();
+    showToast('Refreshed ✅','ok');
+  }catch(e){
+    showToast('Refresh failed — check connection','red-t');
+  }finally{
+    if(btn){btn.textContent='🔄 Refresh';btn.disabled=false;}
+  }
+}
 function openStockCheckModal(){
   let html='';
   C().forEach(cat=>{
