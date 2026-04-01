@@ -1686,12 +1686,12 @@ function fmtPhone(input) {
   input.value = v;
 }
 
-function submitPhone() {
+async function submitPhone() {
   const raw = document.getElementById('pg-phone').value.replace(/\D/g,'');
   if (raw.length !== 10) { showToast('Enter a valid 10-digit number','red-t'); return; }
   customerPhone = raw;
   document.getElementById('phone-gate').classList.remove('open');
-  sendOrder();
+  await sendOrder();
 }
 
 // ── ORDER CONFIRMATION ──
@@ -1723,15 +1723,15 @@ function showConfirm() {
 function closeConfirm() {
   document.getElementById('order-confirm').classList.remove('open');
 }
-function confirmAndSend() {
+async function confirmAndSend() {
   document.getElementById('order-confirm').classList.remove('open');
-  sendOrder();
+  await sendOrder();
 }
 
 // ── SEND ORDER ──
 let _orderMsg = '';
 
-function sendOrder() {
+async function sendOrder() {
   const pmLabels = {cash:'💵 Cash',cashapp:'💚 CashApp',venmo:'💙 Venmo',applepay:'🍎 Apple Pay',split:'💵💚 Cash+CashApp'};
   const pm = pmLabels[payMethod] || payMethod;
   const sub = getSub();
@@ -1756,6 +1756,35 @@ function sendOrder() {
   _orderMsg = '🍁 585 PLUG ORDER 🍁\n——————————————\n'+itemLines+'\n——————————————\n'
     +'SUBTOTAL: $'+sub+'\n'+feeNote+splitNote+'TOTAL: $'+total+'\nPAYMENT: '+pm+'\n'+delivLine+'\n——————————————\nSent from the585plug.shop';
 
+  // Validate cart against latest inventory before placing order
+  try{
+    const freshRes=await fetch(FB_URL+'/inv_d6bb4/inv.json');
+    if(freshRes.ok){
+      const freshInv=await freshRes.json();
+      if(freshInv){
+        for(const c of cart){
+          if(!c.flavors||!Object.keys(c.flavors).length)continue;
+          // Find the item in fresh inventory
+          let freshItem=null;
+          for(const cat of Object.keys(freshInv)){
+            if(!Array.isArray(freshInv[cat]))continue;
+            freshItem=freshInv[cat].find(it=>(it.name||'').toLowerCase()===c.name.toLowerCase());
+            if(freshItem)break;
+          }
+          if(!freshItem||!Array.isArray(freshItem.flavors))continue;
+          for(const [fname,fqty] of Object.entries(c.flavors)){
+            if(fqty<=0)continue;
+            const freshFlav=freshItem.flavors.find(f=>(f.name||'').toLowerCase()===fname.toLowerCase());
+            if(!freshFlav||freshFlav.stock<fqty){
+              alert('⚠️ Sorry! "'+fname+'" for '+c.name+' is no longer available. Please update your cart and try again.');
+              return;
+            }
+          }
+        }
+      }
+    }
+  }catch(e){}
+
   // Save to Firebase as pending order for inventory app to confirm
   const pendingOrder = {
     orderItems: cart.map(c => ({itemName:c.name, cat:c.cat, qty:1, label:c.label, price:c.price, flavors:c.flavors||null, flavorText:c.flavorText||''})),
@@ -1765,27 +1794,37 @@ function sendOrder() {
     time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
     timestamp: Date.now(),
     confirmed: false, cancelled: false,
+    customerPhone: customerPhone||'',
     splitCash: payMethod==='split'?splitCash:undefined,
     splitVirtual: payMethod==='split'?splitVirtual:undefined
   };
 
   const orderKey = 'order_' + Date.now();
   const orderBody = JSON.stringify(pendingOrder);
-  // Retry up to 3 times if Firebase write fails (spotty connections)
-  (async function saveOrder(retries){
-    for(let i=0;i<retries;i++){
-      try{
-        const res=await fetch(FB_URL+'/inv_d6bb4/pending_orders/'+orderKey+'.json',{
-          method:'PUT',headers:{'Content-Type':'application/json'},body:orderBody
-        });
-        if(res.ok)return; // success
-      }catch(e){}
-      // wait before retry (500ms, 1500ms)
-      if(i<retries-1) await new Promise(r=>setTimeout(r,500*(i+1)));
-    }
-    // All retries failed — alert customer
-    alert('⚠️ Your order may not have been received. Please text your order directly to make sure it goes through.');
-  })(3);
+  // Wait for Firebase save — retry up to 5 times before showing confirmation
+  let orderSaved = false;
+  for(let i=0;i<5;i++){
+    try{
+      const res=await fetch(FB_URL+'/inv_d6bb4/pending_orders/'+orderKey+'.json',{
+        method:'PUT',headers:{'Content-Type':'application/json'},body:orderBody
+      });
+      if(res.ok){orderSaved=true;break;}
+    }catch(e){}
+    // wait before retry (500ms, 1s, 1.5s, 2s)
+    await new Promise(r=>setTimeout(r,500*(i+1)));
+  }
+  if(!orderSaved){
+    // Last resort — try one more time with a fresh key
+    try{
+      const res2=await fetch(FB_URL+'/inv_d6bb4/pending_orders/order_'+Date.now()+'.json',{
+        method:'PUT',headers:{'Content-Type':'application/json'},body:orderBody
+      });
+      if(res2.ok)orderSaved=true;
+    }catch(e){}
+  }
+  if(!orderSaved){
+    alert('⚠️ Your order could not be saved to our system. Please make sure to text your order so we receive it!');
+  }
 
   // Send push notification to owner via ntfy
   const notifItems = cart.map(c => c.name + ' (' + c.label + ')').join(', ');
