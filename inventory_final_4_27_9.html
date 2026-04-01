@@ -1100,7 +1100,7 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
     <div id="eod-content"></div>
     <div class="mact">
       <button class="mc" onclick="closeOv('eod-modal')">Close</button>
-      <button class="mp" style="background:var(--green);color:#0c0c0f;" onclick="saveEODLog();closeOv('eod-modal');">💾 Save Log</button>
+      <button class="mp" id="save-eod-btn" style="background:var(--green);color:#0c0c0f;" onclick="try{saveEODLog();closeOv('eod-modal');}catch(e){alert('Error saving log: '+e.message);console.error(e);}">💾 Save Log</button>
     </div>
   </div>
 </div>
@@ -5222,12 +5222,13 @@ function saveEODLog(){
   // unique snapshot ID so each save creates its own log
   record.snapshotId=Date.now();
   record.savedAt=new Date().toLocaleString();
+  record.logNumber=eodLogs.length+1;
   eodLogs.unshift(record);
   persist();
   renderEODLogsList();
   renderLoginLog();
   renderCancelledOrders();
-  showToast('End of day log saved for '+dl,'ok');
+  showToast('Log #'+record.logNumber+' saved ✅ ('+record.txCount+' orders, '+fmtP(record.grandTotal)+')','ok');
 }
 
 function renderEODLogsList(){
@@ -5243,7 +5244,9 @@ function renderEODLogsList(){
   // group logs: check for multiple snapshots per date
   const dateCounts={};
   eodLogs.forEach(l=>{dateCounts[l.date]=(dateCounts[l.date]||0)+1;});
+  const totalLogs=eodLogs.length;
   el.innerHTML=eodLogs.map((log,i)=>{
+    const logNum=totalLogs-i;
     const commTotal=Object.values(log.commByPerson||{}).reduce((s,v)=>s+v,0);
     const cashIssues=(log.cashReconResults||[]).filter(r=>r.diff!==0);
     const hasFailedLogins=(log.failedLoginAttempts||[]).length>0;
@@ -5251,7 +5254,8 @@ function renderEODLogsList(){
     return`<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);">
       <div style="flex:1;">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
-          <span style="font-size:14px;font-weight:600;color:var(--text);">📋 ${log.date}</span>
+          <span style="font-size:14px;font-weight:600;color:var(--text);">📋 Log #${logNum}</span>
+          <span style="font-size:10px;color:var(--text3);font-family:var(--mono);">${log.date}</span>
           ${log.autoSaved?'<span style="font-size:9px;background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.2);border-radius:4px;padding:1px 5px;color:var(--accent);font-family:var(--mono);">AUTO</span>':''}
           ${cashIssues.length?`<span style="font-size:9px;background:rgba(244,107,107,0.1);border:1px solid rgba(244,107,107,0.25);border-radius:4px;padding:1px 5px;color:var(--red);font-family:var(--mono);">⚠ CASH ${cashIssues.map(r=>r.diff>0?'+$'+r.diff.toFixed(2):'-$'+Math.abs(r.diff).toFixed(2)).join(', ')}</span>`:''}
           ${hasFailedLogins?'<span style="font-size:9px;background:rgba(244,107,107,0.1);border:1px solid rgba(244,107,107,0.25);border-radius:4px;padding:1px 5px;color:var(--red);font-family:var(--mono);">⚠ LOGIN</span>':''}
@@ -5271,7 +5275,8 @@ function renderEODLogsList(){
 }
 
 function deleteEODLog(i){
-  if(!confirm('Delete this saved log for '+eodLogs[i].date+'?'))return;
+  const logNum=eodLogs.length-i;
+  if(!confirm('Delete Log #'+logNum+' ('+eodLogs[i].date+')?'))return;
   eodLogs.splice(i,1);
   persist();renderEODLogsList();showToast('Log deleted','ok');
 }
@@ -5280,7 +5285,8 @@ let eodPersonFilter='all'; // 'all' or a person name
 function viewEODLog(i,filterPerson){
   const r=eodLogs[i];
   eodPersonFilter=filterPerson||'all';
-  const titleEl=document.getElementById('view-eod-title');titleEl.textContent='End of Day Log — '+r.date;titleEl.dataset.idx=i;
+  const logNum=eodLogs.length-i;
+  const titleEl=document.getElementById('view-eod-title');titleEl.textContent='Log #'+logNum+' — '+r.date;titleEl.dataset.idx=i;
 
   // ── LIVE RECALCULATE profit/commission from current inventory costs ──
   // This ensures EOD always matches dashboard numbers even if stored values are stale
