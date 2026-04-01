@@ -4719,6 +4719,7 @@ function buildEODRecord(dateStr){
     creditsUsed,
     orders:orders.map(e=>({
       type:e.type,
+      source:e.source||(e.webOrderKey?'website':'manual'),
       customer:e.customer||e.name||'',
       items:e.orderItems ? e.orderItems.map(oi=>({...oi})) : (e.name?[{itemName:e.name,qty:e.amount,label:e.label||''}]:[]),
       total:e.amtReceived||0,
@@ -5224,10 +5225,10 @@ function saveEODLog(){
   record.logNumber=eodLogs.length+1;
   eodLogs.unshift(record);
 
-  // Clear confirmed website orders for this day from view (stock deductions stay in log)
+  // Clear ALL confirmed orders for this day from view (stock deductions stay in log)
   let cleared=0;
   log.forEach(e=>{
-    if(e.source==='website'&&e.webOrderKey&&e.date===dl&&!e._cleared){
+    if((e.type==='sell'||e.type==='order'||e.type==='selfbuy')&&e.date===dl&&!e._cleared){
       e._cleared=true;
       cleared++;
     }
@@ -5236,9 +5237,10 @@ function saveEODLog(){
   persist();
   renderEODLogsList();
   renderConfirmedWebOrders();
+  renderDash();
   renderLoginLog();
   renderCancelledOrders();
-  showToast('Log #'+record.logNumber+' saved ✅ ('+record.txCount+' orders, '+fmtP(record.grandTotal)+')'+(cleared?' · '+cleared+' confirmed orders cleared':''),'ok');
+  showToast('Log #'+record.logNumber+' saved ✅ ('+record.txCount+' orders, '+fmtP(record.grandTotal)+')','ok');
 }
 
 function renderEODLogsList(){
@@ -5561,6 +5563,7 @@ function viewEODLog(i,filterPerson){
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <span style="font-size:16px;font-weight:700;color:var(--text);text-transform:capitalize;">${o.customer||'Quick Sell'}</span>
               <span style="font-size:12px;color:var(--text2);font-family:var(--mono);background:var(--bg4);border-radius:6px;padding:2px 8px;">${o.who||''}</span>
+              <span style="font-size:10px;font-weight:600;font-family:var(--mono);border-radius:5px;padding:2px 7px;${o.source==='website'?'background:rgba(79,195,247,0.12);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;':'background:rgba(244,162,74,0.12);border:1px solid rgba(244,162,74,0.3);color:var(--orange);'}">${o.source==='website'?'🌐 Website':'📝 Manual'}</span>
             </div>
             <span style="font-family:var(--mono);font-weight:700;color:var(--green);font-size:20px;">${fmtP(o.total)}</span>
           </div>
