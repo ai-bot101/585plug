@@ -3507,10 +3507,9 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   delete pendingWebOrders[fbKey];
   processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
 
-  // Mark confirmed in Firebase
-  fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({['pending_orders/'+fbKey+'/confirmed']: true})
-  }).catch(()=>{});
+  // DELETE from Firebase pending_orders so it can't come back as pending on reload
+  // (Previously used PATCH to set confirmed=true, but fbPush race condition could overwrite it)
+  fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
 
   persist();
   renderPendingOrders();
@@ -5224,11 +5223,22 @@ function saveEODLog(){
   record.savedAt=new Date().toLocaleString();
   record.logNumber=eodLogs.length+1;
   eodLogs.unshift(record);
+
+  // Clear confirmed website orders for this day from view (stock deductions stay in log)
+  let cleared=0;
+  log.forEach(e=>{
+    if(e.source==='website'&&e.webOrderKey&&e.date===dl&&!e._cleared){
+      e._cleared=true;
+      cleared++;
+    }
+  });
+
   persist();
   renderEODLogsList();
+  renderConfirmedWebOrders();
   renderLoginLog();
   renderCancelledOrders();
-  showToast('Log #'+record.logNumber+' saved ✅ ('+record.txCount+' orders, '+fmtP(record.grandTotal)+')','ok');
+  showToast('Log #'+record.logNumber+' saved ✅ ('+record.txCount+' orders, '+fmtP(record.grandTotal)+')'+(cleared?' · '+cleared+' confirmed orders cleared':''),'ok');
 }
 
 function renderEODLogsList(){
