@@ -980,14 +980,25 @@ function processData(data) {
 
 async function doFetch() {
   try {
-    const res = await fetch(FB_URL + '/inv_d6bb4.json');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    processData(data);
-    // Check shop status on every poll so customers see open/close changes quickly
-    if(data.shopStatus){
-      const isOpen=data.shopStatus.open!==false;
-      applyShopStatus(isOpen,data.shopStatus.message||'');
+    // Only fetch inv, cfg, and shopStatus — NOT logs, pending_orders, eodLogs etc.
+    // This is MUCH smaller and loads way faster on slow phones
+    const [invRes, cfgRes, ssRes] = await Promise.all([
+      fetch(FB_URL + '/inv_d6bb4/inv.json'),
+      fetch(FB_URL + '/inv_d6bb4/cfg.json'),
+      fetch(FB_URL + '/inv_d6bb4/shopStatus.json')
+    ]);
+    const inv = invRes.ok ? await invRes.json() : null;
+    const cfg = cfgRes.ok ? await cfgRes.json() : null;
+    const shopStatus = ssRes.ok ? await ssRes.json() : null;
+    if (inv) {
+      const data = { inv, cfg: cfg || {} };
+      processData(data);
+      // Cache for instant load on next visit
+      try { localStorage.setItem('585_menu_cache', JSON.stringify(data)); } catch(e) {}
+    }
+    if (shopStatus) {
+      const isOpen = shopStatus.open !== false;
+      applyShopStatus(isOpen, shopStatus.message || '');
     }
   } catch(e) {
     console.error('Fetch error:', e);
@@ -997,6 +1008,12 @@ async function doFetch() {
 }
 
 function startLiveSync() {
+  // Show cached menu INSTANTLY while fetching fresh data
+  try {
+    const cached = localStorage.getItem('585_menu_cache');
+    if (cached) { processData(JSON.parse(cached)); }
+  } catch(e) {}
+  // Then fetch fresh data
   doFetch();
   if (fbPollTimer) clearInterval(fbPollTimer);
   fbPollTimer = setInterval(doFetch, 15000);
@@ -1028,8 +1045,7 @@ function buildSortBar() {
     {id:'default', label:'Default', icon:''},
     {id:'newest', label:'✨ Newest', icon:''},
     {id:'low', label:'Low → High', icon:'↑'},
-    {id:'high', label:'High → Low', icon:'↓'},
-    {id:'popular', label:'🔥 Top Selling', icon:''}
+    {id:'high', label:'High → Low', icon:'↓'}
   ];
   bar.innerHTML = pills.map(p =>
     `<button class="sort-pill ${sortMode===p.id?'active':''}" onclick="setSort('${p.id}')">${p.icon?'<span class="sort-arrow">'+p.icon+'</span>':''}${p.label}</button>`
