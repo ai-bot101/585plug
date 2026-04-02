@@ -1751,6 +1751,21 @@ async function sendOrder() {
   // Prevent double-send from rapid taps
   if (_sendingOrder) return;
   _sendingOrder = true;
+
+  // Hard block: check Firebase shop status before allowing ANY order
+  try{
+    const ssRes=await fetch(FB_URL+'/inv_d6bb4/shopStatus.json');
+    if(ssRes.ok){
+      const ss=await ssRes.json();
+      if(ss&&ss.open===false){
+        _sendingOrder=false;
+        applyShopStatus(false,ss.message||'');
+        alert('⚠️ Shop is currently closed. Please try again later!');
+        return;
+      }
+    }
+  }catch(e){}
+
   const pmLabels = {cash:'💵 Cash',cashapp:'💚 CashApp',venmo:'💙 Venmo',applepay:'🍎 Apple Pay',split:'💵💚 Cash+CashApp'};
   const pm = pmLabels[payMethod] || payMethod;
   const sub = getSub();
