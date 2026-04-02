@@ -1043,7 +1043,6 @@ function buildSortBar() {
   const isAll = selectedCat === 'ALL';
   const pills = [
     {id:'default', label:'Default', icon:''},
-    {id:'newest', label:'✨ Newest', icon:''},
     {id:'low', label:'Low → High', icon:'↑'},
     {id:'high', label:'High → Low', icon:'↓'}
   ];
@@ -1746,8 +1745,12 @@ async function confirmAndSend() {
 
 // ── SEND ORDER ──
 let _orderMsg = '';
+let _sendingOrder = false; // guard against double-tap
 
 async function sendOrder() {
+  // Prevent double-send from rapid taps
+  if (_sendingOrder) return;
+  _sendingOrder = true;
   const pmLabels = {cash:'💵 Cash',cashapp:'💚 CashApp',venmo:'💙 Venmo',applepay:'🍎 Apple Pay',split:'💵💚 Cash+CashApp'};
   const pm = pmLabels[payMethod] || payMethod;
   const sub = getSub();
@@ -1793,6 +1796,7 @@ async function sendOrder() {
             const freshFlav=freshItem.flavors.find(f=>(f.name||'').toLowerCase()===fname.toLowerCase());
             if(!freshFlav||freshFlav.stock<fqty){
               alert('⚠️ Sorry! "'+fname+'" for '+c.name+' is no longer available. Please update your cart and try again.');
+              _sendingOrder=false;
               return;
             }
           }
@@ -1817,7 +1821,7 @@ async function sendOrder() {
 
   const orderKey = 'order_' + Date.now();
   const orderBody = JSON.stringify(pendingOrder);
-  // Wait for Firebase save — retry up to 5 times before showing confirmation
+  // Wait for Firebase save — retry up to 5 times, ALWAYS same key so no duplicates
   let orderSaved = false;
   for(let i=0;i<5;i++){
     try{
@@ -1830,16 +1834,9 @@ async function sendOrder() {
     await new Promise(r=>setTimeout(r,500*(i+1)));
   }
   if(!orderSaved){
-    // Last resort — try one more time with a fresh key
-    try{
-      const res2=await fetch(FB_URL+'/inv_d6bb4/pending_orders/order_'+Date.now()+'.json',{
-        method:'PUT',headers:{'Content-Type':'application/json'},body:orderBody
-      });
-      if(res2.ok)orderSaved=true;
-    }catch(e){}
-  }
-  if(!orderSaved){
+    _sendingOrder=false;
     alert('⚠️ Your order could not be saved to our system. Please make sure to text your order so we receive it!');
+    return;
   }
 
   // Send push notification to owner via ntfy
@@ -1862,6 +1859,7 @@ async function sendOrder() {
   document.getElementById('op-copy-btn').innerHTML = '📋 Copy Order';
   document.getElementById('op-copy-btn').classList.remove('copied');
   document.getElementById('order-preview').classList.add('open');
+  _sendingOrder=false;
 }
 
 function copyOrderMsg() {
