@@ -4267,9 +4267,10 @@ function fbPoll(){
 
 
 
+let fbPushInFlight=false; // true while a push is actively sending to Firebase
 async function fbPullNow(){
-  // Skip pull if there's a pending local push — prevents overwriting unsaved edits
-  if(fbPushTimer){return;}
+  // Skip pull if there's a pending or in-flight push — prevents overwriting unsaved edits
+  if(fbPushTimer||fbPushInFlight){return;}
   try{
     const res=await fetch(FB_URL+'.json?t='+Date.now());
     if(!res.ok)return;
@@ -4323,6 +4324,7 @@ function fbPush(){
   if(fbPushTimer)clearTimeout(fbPushTimer);
   // push after 300ms debounce
   fbPushTimer=setTimeout(async()=>{
+    fbPushInFlight=true; // block pulls while push is in-flight
     try{
       // First fetch current pending_orders so we don't wipe them
       let currentPending = null;
@@ -4360,10 +4362,12 @@ function fbPush(){
         body:JSON.stringify(payload)
       });
       fbPushTimer=null; // clear so fbPull resumes
+      fbPushInFlight=false;
       document.getElementById('sdot').className='sdot ok';
       document.getElementById('slabel').textContent='Live — '+tstr();
     }catch(e){
       fbPushTimer=null; // clear so fbPull resumes
+      fbPushInFlight=false;
       document.getElementById('sdot').className='sdot fail';
       document.getElementById('slabel').textContent='Sync failed — check connection';
     }
