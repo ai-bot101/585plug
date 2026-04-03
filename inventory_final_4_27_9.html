@@ -1515,7 +1515,7 @@ async function forceRefresh(){
     cancelledOrders=Array.isArray(data.cancelledOrders)?data.cancelledOrders:[];
     staffDebts=data.staffDebts||{};
     commissionPaused=data.commissionPaused||{};
-    autoDailyDebts=data.autoDailyDebts||{};
+    autoDailyDebts=Array.isArray(data.autoDailyDebts)?data.autoDailyDebts:[];
     // Process any new pending orders
     if(data.pending_orders&&cu){
       processWebsiteOrders(data.pending_orders);
