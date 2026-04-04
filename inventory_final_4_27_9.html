@@ -1100,7 +1100,7 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
     <div id="eod-content"></div>
     <div class="mact">
       <button class="mc" onclick="closeOv('eod-modal')">Close</button>
-      <button class="mp" id="save-eod-btn" style="background:var(--green);color:#0c0c0f;" onclick="try{saveEODLog();closeOv('eod-modal');}catch(e){alert('Error saving log: '+e.message);console.error(e);}">💾 Save Log</button>
+      <button class="mp" id="save-eod-btn" style="background:var(--green);color:#0c0c0f;" onclick="(async()=>{try{const ok=await saveEODLog();if(ok!==false)closeOv('eod-modal');}catch(e){alert('Error saving log: '+e.message);console.error(e);}})()">💾 Save Log</button>
     </div>
   </div>
 </div>
@@ -1148,6 +1148,86 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
 <div class="toast" id="toast"></div>
 <script>
 const GP_HASH='ca1cb21ef8c7bf00826695014fa4505f3b62eb8d9c92bffebdfbcb0636e50dae',CS_HASH='ca1cb21ef8c7bf00826695014fa4505f3b62eb8d9c92bffebdfbcb0636e50dae';
+
+// ── OWNER SESSION SECURITY ──────────────────────────
+// Cryptographic session token system — prevents DevTools/console hacking
+const _ownerSec=(function(){
+  let _token=null;  // random token set at owner login
+  let _hmac=null;   // HMAC of token+role — proves owner actually logged in with password
+  const _key=GP_HASH.slice(0,32); // derive from gate hash (not exposed as _ownerSec._key)
+
+  async function _computeHmac(tok){
+    const enc=new TextEncoder();
+    const key=await crypto.subtle.importKey('raw',enc.encode(_key),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+    const sig=await crypto.subtle.sign('HMAC',key,enc.encode(tok+'|owner'));
+    return Array.from(new Uint8Array(sig)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+
+  return Object.freeze({
+    // Called ONLY during successful owner login
+    async mint(){
+      _token=crypto.getRandomValues(new Uint8Array(32)).reduce((s,b)=>s+b.toString(16).padStart(2,'0'),'');
+      _hmac=await _computeHmac(_token);
+    },
+    // Called on logout or staff login
+    clear(){_token=null;_hmac=null;},
+    // Validates that current session actually logged in as owner
+    async check(){
+      if(!_token||!_hmac)return false;
+      const expected=await _computeHmac(_token);
+      return expected===_hmac;
+    }
+  });
+})();
+
+// Guard function — call at top of every owner-only function
+async function _ownerGuard(){
+  if(!cu||cu.role!=='owner'){showToast('⛔ Owner access required','err');return false;}
+  const valid=await _ownerSec.check();
+  if(!valid){
+    showToast('⛔ Session invalid — log in again','err');
+    // Force back to login screen
+    _ownerSec.clear();
+    cu=null;
+    show('screen-login');
+    return false;
+  }
+  return true;
+}
+// Sync version for places where async isn't practical (uses cached check)
+let _ownerValid=false;
+function _ownerGuardSync(){
+  if(!cu||cu.role!=='owner'||!_ownerValid){
+    showToast('⛔ Owner access required','err');
+    return false;
+  }
+  return true;
+}
+
+// ── ANTI-TAMPER: protect security functions from console override ──
+(function(){
+  const _origGuard=_ownerGuard;
+  const _origSync=_ownerGuardSync;
+  // Detect if someone tries to redefine _ownerGuard or _ownerGuardSync from console
+  setInterval(()=>{
+    if(typeof _ownerGuard!=='function'||_ownerGuard!==_origGuard||
+       typeof _ownerGuardSync!=='function'||_ownerGuardSync!==_origSync){
+      // Someone tampered — force logout
+      _ownerSec.clear();_ownerValid=false;cu=null;
+      try{show('screen-login');}catch(e){}
+      alert('⛔ Security violation detected. You have been logged out.');
+      location.reload();
+    }
+    // Also detect if cu was replaced with a non-frozen object claiming owner
+    if(cu&&cu.role==='owner'&&!Object.isFrozen(cu)){
+      _ownerSec.clear();_ownerValid=false;cu=null;
+      try{show('screen-login');}catch(e){}
+      alert('⛔ Security violation detected. You have been logged out.');
+      location.reload();
+    }
+  },2000);
+})();
+
 const VIRT=['cashapp','venmo','applepay'];
 const PM=[{id:'cash',label:'Cash',icon:'💵'},{id:'cashapp',label:'CashApp',icon:'💚'},{id:'venmo',label:'Venmo',icon:'💙'},{id:'applepay',label:'Apple Pay',icon:'🍎'},{id:'nopay',label:'No Pay',icon:'🚫'},{id:'split',label:'Cash+CashApp',icon:'💵💚'}];
 const UC=['#3b82f6','#f46b6b','#c084fc'],WC=['w0','w1','w2'];
@@ -1375,7 +1455,9 @@ async function tryLogin(){
   if(loginLog.length>200)loginLog=loginLog.slice(0,200);
   persist();
   // login log available via owner dashboard Download button
-  cu={...u,idx:si};document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn','refreshbtn','stockchkbtn','profitbtn','staffbuysbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
+  // Mint or clear owner session token
+  if(isOwner){await _ownerSec.mint();_ownerValid=true;}else{_ownerSec.clear();_ownerValid=false;}
+  cu=Object.freeze({...u,idx:si});document.getElementById('lerr').textContent='';const b=document.getElementById('nbadge');b.textContent=cu.name;const col=UC[si]||UC[0];b.style.color=col;b.style.borderColor=col+'55';b.style.background=col+'18';const own=cu.role==='owner';['pwbtn','catbtn','costbtn','tierbtn','lowbtn','resetbtn','earnbtn','locktimebtn','lockdaybtn','debtbtn','refreshbtn','stockchkbtn','profitbtn','staffbuysbtn'].forEach(id=>document.getElementById(id).style.display=own?'inline-block':'none');
   document.getElementById('cust-tab').style.display=own?'':'none';document.getElementById('dash-tab').style.display=own?'':'none';document.getElementById('log-tab').style.display=own?'none':'';if(own){const et=document.getElementById('earnings-toggle');if(et)et.checked=cfg.showEarnings||false;}show('screen-app');
   updateEarnBtn();
   if(own)scheduleAutoLock();
@@ -1466,7 +1548,7 @@ async function tryLogin(){
   // Force a fresh pull on login to guarantee sync regardless of timestamp
   startAutoSync();}
 function logout(){persist();stopAutoSync();cu=null;si=null;document.getElementById('pass-wrap').style.display='none';document.getElementById('pass-inp').value='';document.getElementById('lerr').textContent='';document.querySelectorAll('.u-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('login-btn').disabled=true;fbLastTimestamp=0;backToCalc();}
-function toggleEarnings(val){cfg.showEarnings=val;persist();renderStaffLog();updateEarnBtn();}
+async function toggleEarnings(val){if(!await _ownerGuard())return;cfg.showEarnings=val;persist();renderStaffLog();updateEarnBtn();}
 function toggleEarningsQuick(){
   cfg.showEarnings=!cfg.showEarnings;
   // sync the dashboard toggle checkbox too
@@ -1493,7 +1575,7 @@ function openTierModal(){renderTierList();document.getElementById('t-min').value
 function renderTierList(){document.getElementById('tier-list').innerHTML=cfg.commissionTiers.map((t,i)=>`<div class="tier-row"><div class="tier-range">$${t.min} – $${t.max}</div><div class="tier-pct">${t.pct}%</div><button class="tier-del" onclick="delTier(${i})">x</button></div>`).join('');}
 function addTier(){const mn=parseFloat(document.getElementById('t-min').value),mx=parseFloat(document.getElementById('t-max').value),pc=parseFloat(document.getElementById('t-pct').value);if(isNaN(mn)||isNaN(mx)||isNaN(pc)){showToast('Fill in all fields','err');return;}cfg.commissionTiers.push({min:mn,max:mx,pct:pc});cfg.commissionTiers.sort((a,b)=>a.min-b.min);renderTierList();showToast('Tier added','ok');}
 function delTier(i){cfg.commissionTiers.splice(i,1);renderTierList();}
-function saveTiers(){cfg.commissionFloorUnder=parseFloat(document.getElementById('t-fu').value)||20;cfg.commissionFloorMin=parseFloat(document.getElementById('t-fm').value)||10;persist();closeOv('tier-modal');showToast('Commission settings saved','ok');}
+async function saveTiers(){if(!await _ownerGuard())return;cfg.commissionFloorUnder=parseFloat(document.getElementById('t-fu').value)||20;cfg.commissionFloorMin=parseFloat(document.getElementById('t-fm').value)||10;persist();closeOv('tier-modal');showToast('Commission settings saved','ok');}
 async function forceRefresh(){
   const btn=document.getElementById('refreshbtn');
   if(btn){btn.textContent='🔄 ...';btn.disabled=true;}
@@ -1688,7 +1770,8 @@ function updCP(){
   else{const p=parseFloat(document.getElementById('ec-paid').value)||0;const q=parseFloat(document.getElementById('ec-qty').value)||0;cpu=q>0?p/q:0;}
   document.getElementById('ec-prev').textContent='Cost per unit: '+(cpu>0?fmtP(cpu):'—');
 }
-function saveItemCost(){
+async function saveItemCost(){
+  if(!await _ownerGuard())return;
   const cat=document.getElementById('ec-cat').value,idx=parseInt(document.getElementById('ec-idx').value);
   const item=(inv[cat]||[])[idx];if(!item)return;
   const mode=document.getElementById('ec-mode').value;
@@ -1989,7 +2072,7 @@ function confirmSale(){if(!pendingSale||!selMethod)return;const amtReceived=pars
 function cancelSale(){pendingSale=null;selMethod=null;document.getElementById('pay-overlay').classList.remove('open');}
 function openCatModal(){renderCatList();document.getElementById('new-cat-inp').value='';document.getElementById('cat-modal').classList.add('open');}
 function renderCatList(){document.getElementById('cat-list').innerHTML=C().map(cat=>{const n=(inv[cat]||[]).length;return`<div class="cat-row-item"><div class="cat-row-name">${cat}</div><div class="cat-row-count">${n} item${n!==1?'s':''}</div><button class="cat-row-del" onclick="deleteCat('${cat}')">Remove</button></div>`;}).join('');}
-function addCat(){const inp=document.getElementById('new-cat-inp');const name=inp.value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'');if(!name){showToast('Enter a name','err');return;}if(C().includes(name)){showToast('Already exists','err');return;}cfg.categories.push(name);if(!inv[name])inv[name]=[];inp.value='';persist();renderCatList();renderAll();showToast('Added: '+name,'ok');}
+async function addCat(){if(!await _ownerGuard())return;const inp=document.getElementById('new-cat-inp');const name=inp.value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'');if(!name){showToast('Enter a name','err');return;}if(C().includes(name)){showToast('Already exists','err');return;}cfg.categories.push(name);if(!inv[name])inv[name]=[];inp.value='';persist();renderCatList();renderAll();showToast('Added: '+name,'ok');}
 function deleteCat(cat){const n=(inv[cat]||[]).length;if(n>0&&!confirm('"'+cat+'" has '+n+' items inside. Delete everything in it?'))return;cfg.categories=C().filter(c=>c!==cat);delete inv[cat];if(activeCat===cat)activeCat='ALL';persist();renderCatList();renderAll();showToast('Removed: '+cat,'err');}
 function renderAll(){renderStats();renderCatTabs();renderItems();if(cu?.role==='owner')renderDash();else renderStaffLog();}
 function renderStats(){const all=C().flatMap(c=>inv[c]||[]);const so=all.filter(i=>gl(i)===0&&i.bought).length;const lw=all.filter(i=>{const p=gp(i);return p<=25&&p>0;}).length;const tS=log.filter(e=>e.date===tday()&&(e.type==='sell'||e.type==='order'));
@@ -2390,7 +2473,8 @@ function clearCredit(key){
 }
 
 
-function deleteLogEntry(idx) {
+async function deleteLogEntry(idx) {
+  if(!await _ownerGuard())return;
   if (idx < 0 || idx >= log.length) return;
   const entry = log[idx];
   const isSale = entry.type === 'sell' || entry.type === 'order';
@@ -2932,7 +3016,8 @@ function getItemImages(prefix){
   return getPhotosArr(prefix).filter(u=>u&&u.trim());
 }
 
-function addItem(){
+async function addItem(){
+  if(!await _ownerGuard())return;
   const name=document.getElementById('m-name').value.trim().toLowerCase();
   const cat=document.getElementById('m-cat').value;
   const bought=parseFloat(document.getElementById('m-bought').value)||null;
@@ -3037,7 +3122,8 @@ function openEdit(cat,idx){
   document.getElementById('edit-modal').classList.add('open');
 }
 
-function saveEdit(){
+async function saveEdit(){
+  if(!await _ownerGuard())return;
   const cat=document.getElementById('em-cat').value,idx=parseInt(document.getElementById('em-idx').value);
   const item=(inv[cat]||[])[idx];
   item.name=document.getElementById('em-name').value.trim().toLowerCase()||item.name;
@@ -3067,7 +3153,8 @@ function saveEdit(){
   // prices saved via getPriceTiers above
   persist();closeOv('edit-modal');renderStats();renderItems();pushInventory();showToast('Item updated','ok');
 }
-function toggleSoldOut(cat,idx){
+async function toggleSoldOut(cat,idx){
+  if(!await _ownerGuard())return;
   const item=(inv[cat]||[])[idx];
   if(!item)return;
   if(item.soldOutAt){
@@ -3082,13 +3169,14 @@ function toggleSoldOut(cat,idx){
     showToast(item.name+' marked SOLD OUT 🚫','err');
   }
 }
-function delItem(cat,idx){const item=(inv[cat]||[])[idx];if(!confirm('Delete "'+item.name+'"?'))return;(inv[cat]||[]).splice(idx,1);persist();renderStats();renderItems();if(cu?.role==='owner')renderDash();showToast('Deleted: '+item.name,'err');}
+async function delItem(cat,idx){if(!await _ownerGuard())return;const item=(inv[cat]||[])[idx];if(!confirm('Delete "'+item.name+'"?'))return;(inv[cat]||[]).splice(idx,1);persist();renderStats();renderItems();if(cu?.role==='owner')renderDash();showToast('Deleted: '+item.name,'err');}
 function setCat(c){activeCat=c;renderCatTabs();renderItems();}
 function filterItems(v){srch=v.toLowerCase();renderItems();}
 function switchView(v){['inv-view','log-view','dash-view','cust-view'].forEach(id=>document.getElementById(id).style.display='none');const map={inv:'inv-view',log:'log-view',dash:'dash-view',cust:'cust-view'};document.getElementById(map[v]).style.display='block';document.querySelectorAll('.vtab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.vtab').forEach(t=>{if((v==='inv'&&t.textContent.trim()==='Inventory')||(v==='log'&&t.textContent.trim()==='Sales Log')||(v==='dash'&&t.textContent.trim()==='Dashboard')||(v==='cust'&&t.textContent.trim()==='Customers'))t.classList.add('active');});if(v==='dash')renderDash();if(v==='log')renderStaffLog();}
 function openPwModal(){selPw=null;document.getElementById('pw-new').value='';document.getElementById('pw-conf').value='';document.getElementById('pwfields').style.display='none';document.getElementById('pwlist').innerHTML=cfg.users.map((u,i)=>`<div class="pwbtn" id="pwb${i}" onclick="pickPw(${i})"><div style="width:28px;height:28px;border-radius:7px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;background:${UC[i]}22;color:${UC[i]}">${u.name.charAt(0).toUpperCase()}</div><div><div class="pwn">${u.name}</div><div class="pwr">${u.role==='owner'?'Owner':'Staff'}</div></div></div>`).join('');document.getElementById('pw-modal').classList.add('open');}
 function pickPw(i){selPw=i;document.querySelectorAll('.pwbtn').forEach((b,j)=>b.classList.toggle('sel',j===i));document.getElementById('pwfields').style.display='block';document.getElementById('pw-new').focus();}
 async function savePw(){
+  if(!await _ownerGuard())return;
   if(selPw===null){showToast('Select a person first','err');return;}
   const np=document.getElementById('pw-new').value.trim(),cp=document.getElementById('pw-conf').value.trim();
   if(!np){showToast('Enter a passphrase','err');return;}
@@ -4515,7 +4603,8 @@ function renderFailedAttempts(){
     </div>`;
 }
 
-function clearFailedAttempts(){
+async function clearFailedAttempts(){
+  if(!await _ownerGuard())return;
   if(!confirm('Clear all failed login attempts?'))return;
   failedAttempts=[];persist();renderFailedAttempts();showToast('Cleared','ok');
 }
@@ -4619,7 +4708,8 @@ function downloadFullLoginLog(){
   setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(a.href);},500);
   showToast('Login log downloaded','ok');
 }
-function clearLoginLog(){
+async function clearLoginLog(){
+  if(!await _ownerGuard())return;
   if(!confirm('Clear the full login log?'))return;
   loginLog=[];persist();renderLoginLog();showToast('Login log cleared','ok');
 }
@@ -5220,7 +5310,8 @@ function saveAddEODOrder(){
   addEODLogIdx=null;
 }
 
-function saveEODLog(){
+async function saveEODLog(){
+  if(!await _ownerGuard())return false;
   const dl=selDay==='today'?tday():selDay;
   const record=buildEODRecord(dl);
   // unique snapshot ID so each save creates its own log
@@ -5290,7 +5381,8 @@ function renderEODLogsList(){
   }).join('');
 }
 
-function deleteEODLog(i){
+async function deleteEODLog(i){
+  if(!await _ownerGuard())return;
   const logNum=eodLogs.length-i;
   if(!confirm('Delete Log #'+logNum+' ('+eodLogs[i].date+')?'))return;
   eodLogs.splice(i,1);
@@ -5879,7 +5971,8 @@ function updateLockPreview(){
   document.getElementById('locktime-preview').textContent='Logs lock at '+h12+':'+(m<10?'0':'')+m+' '+ampm+' every morning';
 }
 
-function saveLockTime(){
+async function saveLockTime(){
+  if(!await _ownerGuard())return;
   cfg.lockHour=parseInt(document.getElementById('lock-hour').value)||8;
   cfg.lockMin=parseInt(document.getElementById('lock-min').value)||30;
   persist();
@@ -5996,7 +6089,8 @@ function updRestockPreview(){
     prev.style.display='none';
   }
 }
-function confirmRestock(){
+async function confirmRestock(){
+  if(!await _ownerGuard())return;
   const cat=document.getElementById('restock-cat').value;
   const ri=parseInt(document.getElementById('restock-idx').value);
   const item=(inv[cat]||[])[ri];if(!item)return;
