@@ -1888,7 +1888,8 @@ function pickFlavor(cat,ri,flavorName,fi){
   const label=pt.label||'';
   const price=pt.price||0;
   _pendingPriceTier=null;
-  orderItems.push({cat,ri,itemName:item.name,qty,label,price,flavorText:flavorName});
+  const flavorObj=flavorName?{[flavorName]:qty}:null;
+  orderItems.push({cat,ri,itemName:item.name,qty,label,price,flavorText:flavorName,flavors:flavorObj});
   document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');
   if(orderItems.length===1&&price>0){const totalInp=document.getElementById('ord-total');if(totalInp&&!totalInp.value)totalInp.value=price;}
   renderOrdItems();calcComm();
@@ -1976,7 +1977,7 @@ function confirmOrder(){
     const pendingData={
       source:'manual',
       customerPhone:customer,
-      orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,label:o.label||'',price:o.price||0,flavorText:o.flavorText||''})),
+      orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,label:o.label||'',price:o.price||0,flavors:o.flavors||null,flavorText:o.flavorText||''})),
       total,
       payMethod:orderPayMethod,
       payMethodLabel:ml,
@@ -2044,7 +2045,7 @@ function confirmOrder(){
   const effectiveAmt=total-extra-creditApplied;
   const profit=calcProfit(objs.map(o=>({item:o.item,qty:o.qty})),effectiveAmt,vFee2);
   const{commission,deducted}=calcComm2(effectiveAmt,profit,cu.name);
-  const e={type:'order',customer,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,label:o.label||'',price:o.price||0,flavorText:o.flavorText||''})),total,payMethod:orderPayMethod,payMethodLabel:ml,amtReceived:total,profit,commission,creditApplied,extraCredit:extra,shortPaid:short,note,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
+  const e={type:'order',customer,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,label:o.label||'',price:o.price||0,flavors:o.flavors||null,flavorText:o.flavorText||''})),total,payMethod:orderPayMethod,payMethodLabel:ml,amtReceived:total,profit,commission,creditApplied,extraCredit:extra,shortPaid:short,note,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
   if(orderPayMethod==='split'){e.splitCash=splitCash;e.splitVirtual=splitVirtual;}
   log.unshift(e);persist();closeOrder();
   renderStats();renderItems();
@@ -2491,10 +2492,18 @@ async function deleteLogEntry(idx) {
           const found = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
           if (found) {
             found.left = Math.round((gl(found) + qty)*10)/10;
-            // Restore flavor stock
-            if (oi.flavorText && Array.isArray(found.flavors)) {
-              const fl = found.flavors.find(f => f.name === oi.flavorText);
-              if (fl) fl.stock = (fl.stock||0) + qty;
+            // Restore flavor stock — handle both object format (website) and string format (manual)
+            if (Array.isArray(found.flavors)) {
+              if (oi.flavors && typeof oi.flavors === 'object') {
+                Object.entries(oi.flavors).forEach(([fname, fqty]) => {
+                  if (fqty <= 0) return;
+                  const flav = found.flavors.find(fl => fl.name && fl.name.toLowerCase() === fname.toLowerCase());
+                  if (flav) flav.stock = (flav.stock||0) + fqty;
+                });
+              } else if (oi.flavorText && oi.flavorText.indexOf(',') === -1) {
+                const fl = found.flavors.find(f => f.name === oi.flavorText);
+                if (fl) fl.stock = (fl.stock||0) + qty;
+              }
             }
             break;
           }
@@ -3554,7 +3563,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
     type: 'order',
     source: 'website',
     customer: order.customerPhone || 'Website Customer',
-    orderItems: (order.orderItems||[]).map(i => ({cat:i.cat||'', itemName:i.itemName||i.name||'', qty:(i.label && labelToQty(i.label) > 1) ? labelToQty(i.label) : (i.qty||1), label:i.label||'', price:i.price||0, flavorText:i.flavorText||''})),
+    orderItems: (order.orderItems||[]).map(i => ({cat:i.cat||'', itemName:i.itemName||i.name||'', qty:(i.label && labelToQty(i.label) > 1) ? labelToQty(i.label) : (i.qty||1), label:i.label||'', price:i.price||0, flavors:i.flavors||null, flavorText:i.flavorText||''})),
     total, payMethod,
     payMethodLabel: order.payMethodLabel || 'Cash',
     amtReceived: total, profit, commission,
@@ -3722,10 +3731,18 @@ function doReverseConfirmed(fbKey) {
       const found = (inv[realCat]||[]).find(item => (item.name||'').toLowerCase() === itemName);
       if (found) { found.left = Math.round((gl(found) + qty)*10)/10; foundItem = found; }
     }
-    // Restore flavor stock
-    if (foundItem && oi.flavorText && Array.isArray(foundItem.flavors)) {
-      const fl = foundItem.flavors.find(f => f.name === oi.flavorText);
-      if (fl) fl.stock = (fl.stock||0) + qty;
+    // Restore flavor stock — handle both object format (website) and string format (manual)
+    if (foundItem && Array.isArray(foundItem.flavors)) {
+      if (oi.flavors && typeof oi.flavors === 'object') {
+        Object.entries(oi.flavors).forEach(([fname, fqty]) => {
+          if (fqty <= 0) return;
+          const flav = foundItem.flavors.find(fl => fl.name && fl.name.toLowerCase() === fname.toLowerCase());
+          if (flav) flav.stock = (flav.stock||0) + fqty;
+        });
+      } else if (oi.flavorText) {
+        const fl = foundItem.flavors.find(f => f.name === oi.flavorText);
+        if (fl) fl.stock = (fl.stock||0) + qty;
+      }
     }
   });
 
