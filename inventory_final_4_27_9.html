@@ -1530,11 +1530,10 @@ async function tryLogin(){
     const freshPayload={
       inv,log,cfg,
       customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
-      pending_orders:pendingWebOrders||{},
       updatedAt:Date.now()
     };
     fbLastTimestamp=freshPayload.updatedAt;
-    fetch(FB_URL+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(freshPayload)}).then(()=>{
+    fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(freshPayload)}).then(()=>{
       persistEncrypted().catch(()=>{});
     }).catch(()=>{});
     localStorage.setItem('585_fresh_start_v3','done');
@@ -4431,38 +4430,18 @@ function fbPush(){
   fbPushTimer=setTimeout(async()=>{
     fbPushInFlight=true; // block pulls while push is in-flight
     try{
-      // First fetch current pending_orders so we don't wipe them
-      let currentPending = null;
-      try {
-        const poRes = await fetch(FB_URL+'/pending_orders.json');
-        if (poRes.ok) currentPending = await poRes.json();
-      } catch(e) {}
-
+      // Use PATCH to update only inventory data — NEVER touch pending_orders
+      // This prevents a race condition where PUT overwrites orders that arrived
+      // between our read and our write. pending_orders are managed individually
+      // via targeted PUT/DELETE/PATCH calls on specific order keys.
       const payload={
         inv,log,cfg,
         customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
         updatedAt:Date.now()
       };
-      // ALWAYS include pending_orders so PUT never wipes them
-      if (currentPending && typeof currentPending === 'object' && Object.keys(currentPending).length) {
-        // Merge local _stockDeducted flags so async PATCH can't be overwritten by this PUT
-        Object.entries(pendingWebOrders).forEach(([key, localOrder]) => {
-          if ((localOrder._stockDeducted || localOrder._stockDeductedLocally) && currentPending[key]) {
-            currentPending[key]._stockDeducted = true;
-            currentPending[key]._stockDeductedV2 = true;
-          }
-        });
-        payload.pending_orders = currentPending;
-      } else if (Object.keys(pendingWebOrders).length) {
-        // Fallback: if Firebase fetch failed, use local pending orders so they don't get wiped
-        payload.pending_orders = pendingWebOrders;
-      } else {
-        // Even if empty, include the key so PUT doesn't delete orders that arrived between fetch and PUT
-        payload.pending_orders = currentPending || {};
-      }
       fbLastTimestamp=payload.updatedAt; // prevent echo pull
       await fetch(FB_URL+'.json',{
-        method:'PUT',
+        method:'PATCH',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify(payload)
       });
