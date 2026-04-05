@@ -4812,11 +4812,14 @@ function buildEODRecord(dateStr){
       source:e.source||(e.webOrderKey?'website':'manual'),
       customer:e.customer||e.name||'',
       items:e.orderItems ? e.orderItems.map(oi=>({...oi})) : (e.name?[{itemName:e.name,qty:e.amount,label:e.label||''}]:[]),
-      total:e.amtReceived||0,
+      total:e.amtReceived||e.total||0,
+      amtReceived:e.amtReceived||e.total||0,
       profit:e.profit||0,
       payMethod:e.payMethod||'cash',
       commission:e.commission||0,
       creditApplied:e.creditApplied||0,
+      splitCash:e.splitCash||0,
+      splitVirtual:e.splitVirtual||0,
       note:e.note||'',
       who:e.who,
       time:e.time||''
@@ -5430,7 +5433,8 @@ function viewEODLog(i,filterPerson){
     source:e.source||(e.webOrderKey?'website':'manual'),
     customer:e.customer||e.name||'',
     items:e.orderItems ? e.orderItems.map(oi=>({...oi})) : (e.name?[{itemName:e.name,qty:e.amount,label:e.label||''}]:[]),
-    total:e.amtReceived||0,
+    total:e.amtReceived||e.total||0,
+    amtReceived:e.amtReceived||e.total||0,
     profit:e.profit||0,
     payMethod:e.payMethod||'cash',
     commission:e.commission||0,
@@ -5480,13 +5484,8 @@ function viewEODLog(i,filterPerson){
 
   // recalculate totals for filtered view using LIVE values
   const fTotal=filtered.reduce((s,o)=>s+(o.total||0),0);
-  let fCash=0,fVirt=0;
-  filtered.forEach(o=>{
-    const pm=(o.payMethod||'cash').toLowerCase();
-    if(pm==='split'){fCash+=(o.splitCash||0);fVirt+=(o.splitVirtual||0);}
-    else if(!o.payMethod||pm==='cash'||pm==='nopay'||pm==='no pay'){fCash+=(o.total||0);}
-    else{fVirt+=(o.total||0);}
-  });
+  const _cv=calcCashVirt(filtered);
+  let fCash=_cv.cash,fVirt=_cv.virt;
   const fProfit=filtered.reduce((s,o)=>s+(o._liveProfit||0),0);
   const fComm=filtered.reduce((s,o)=>s+(o._liveComm||0),0);
 
