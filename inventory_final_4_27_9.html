@@ -2394,7 +2394,7 @@ function toggleStaffCommDay(d){
   renderStaffCommHistory();
 }
 function setSD(d){staffSelDay=d;renderStaffLog();}
-function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today'?today:selDay;document.getElementById('dtabs').innerHTML=`<div class="dtab ${selDay==='alltime'?'active':''}" onclick="setDay('alltime')" style="${selDay==='alltime'?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`+days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setDay('${d}')">${it?'Today':d}</div>`;}).join('');const isAllTime=selDay==='alltime';const dayLog=isAllTime?log:log.filter(e=>e.date===dl);const _eodForDay=(!isAllTime)?eodLogs.find(r=>r.date===dl):null;const sells=(_eodForDay&&_eodForDay.orders&&_eodForDay.orders.length>0)?_eodForDay.orders.map(o=>({...o,amtReceived:o.amtReceived||o.total||0,type:o.type||'order',name:o.customer||''})):dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');document.getElementById('owner-totals').innerHTML=isAllTime?totBanner(sells,'All Time',false,true):totBanner(sells,dl,dl===today,true);const bd={};PM.forEach(m=>{bd[m.id]={total:0,count:0,label:m.label,icon:m.icon};});sells.forEach(e=>{const mid=e.payMethod||'cash';if(!bd[mid])bd[mid]={total:0,count:0,label:e.payMethodLabel||mid,icon:'💰'};bd[mid].total+=(e.amtReceived||0);bd[mid].count++;});document.getElementById('pay-breakdown').innerHTML=Object.entries(bd).map(([id,d])=>`<div class="pb-card"><div class="pb-icon">${d.icon}</div><div class="pb-method">${d.label}</div><div class="pb-total">${fmtP(d.total)}</div><div class="pb-count">${d.count} sale${d.count!==1?'s':''}</div></div>`).join('');document.getElementById('dact').innerHTML=isAllTime ? buildLog(log.slice(0,100),false,true) : buildLog(dayLog,false,true);
+function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today'?today:selDay;document.getElementById('dtabs').innerHTML=`<div class="dtab ${selDay==='alltime'?'active':''}" onclick="setDay('alltime')" style="${selDay==='alltime'?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`+days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setDay('${d}')">${it?'Today':d}</div>`;}).join('');const isAllTime=selDay==='alltime';const dayLog=isAllTime?log:log.filter(e=>e.date===dl);const _eodForDay=(!isAllTime)?eodLogs.find(r=>r.date===dl):null;const sells=(_eodForDay&&_eodForDay.orders&&_eodForDay.orders.length>0)?_eodForDay.orders.map(o=>({...o,amtReceived:o.total||0,type:o.type||'order',name:o.customer||''})):dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');document.getElementById('owner-totals').innerHTML=isAllTime?totBanner(sells,'All Time',false,true):totBanner(sells,dl,dl===today,true);const bd={};PM.forEach(m=>{bd[m.id]={total:0,count:0,label:m.label,icon:m.icon};});sells.forEach(e=>{const mid=e.payMethod||'cash';if(!bd[mid])bd[mid]={total:0,count:0,label:e.payMethodLabel||mid,icon:'💰'};bd[mid].total+=(e.amtReceived||0);bd[mid].count++;});document.getElementById('pay-breakdown').innerHTML=Object.entries(bd).map(([id,d])=>`<div class="pb-card"><div class="pb-icon">${d.icon}</div><div class="pb-method">${d.label}</div><div class="pb-total">${fmtP(d.total)}</div><div class="pb-count">${d.count} sale${d.count!==1?'s':''}</div></div>`).join('');document.getElementById('dact').innerHTML=isAllTime ? buildLog(log.slice(0,100),false,true) : buildLog(dayLog,false,true);
   renderCredits();
   loadDayNote(dl);
   renderEODLogsList();
@@ -4813,7 +4813,6 @@ function buildEODRecord(dateStr){
       customer:e.customer||e.name||'',
       items:e.orderItems ? e.orderItems.map(oi=>({...oi})) : (e.name?[{itemName:e.name,qty:e.amount,label:e.label||''}]:[]),
       total:e.amtReceived||e.total||0,
-      amtReceived:e.amtReceived||e.total||0,
       profit:e.profit||0,
       payMethod:e.payMethod||'cash',
       commission:e.commission||0,
@@ -5434,8 +5433,8 @@ function viewEODLog(i,filterPerson){
     who:e.who,
     time:e.time||''
   }));
-  // Use live log if it has orders for this date, otherwise fall back to saved snapshot
-  const allOrders=liveLogOrders.length>0?liveLogOrders:(r.orders||[]);
+  // Use saved EOD orders (source of truth after edits) — only fall back to live log if no saved orders
+  const allOrders=(r.orders&&r.orders.length>0)?r.orders:liveLogOrders;
   // ── NORMALIZE payMethod: old records stored labels ("Cash") instead of IDs ("cash") ──
   let eodDirty=false;
   allOrders.forEach(o=>{
@@ -5472,8 +5471,10 @@ function viewEODLog(i,filterPerson){
   const filtered=eodPersonFilter==='all'?allOrders:allOrders.filter(o=>o.who===eodPersonFilter);
 
   // recalculate totals for filtered view using LIVE values
+  // Normalize: EOD orders use 'total' as the corrected value — override amtReceived so calcCashVirt uses it
   const fTotal=filtered.reduce((s,o)=>s+(o.total||0),0);
-  const _cv=calcCashVirt(filtered);
+  const _cvInput=filtered.map(o=>({...o,amtReceived:o.total||0}));
+  const _cv=calcCashVirt(_cvInput);
   let fCash=_cv.cash,fVirt=_cv.virt;
   const fProfit=filtered.reduce((s,o)=>s+(o._liveProfit||0),0);
   const fComm=filtered.reduce((s,o)=>s+(o._liveComm||0),0);
