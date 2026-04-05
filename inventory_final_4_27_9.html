@@ -2394,7 +2394,7 @@ function toggleStaffCommDay(d){
   renderStaffCommHistory();
 }
 function setSD(d){staffSelDay=d;renderStaffLog();}
-function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today'?today:selDay;document.getElementById('dtabs').innerHTML=`<div class="dtab ${selDay==='alltime'?'active':''}" onclick="setDay('alltime')" style="${selDay==='alltime'?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`+days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setDay('${d}')">${it?'Today':d}</div>`;}).join('');const isAllTime=selDay==='alltime';const dayLog=isAllTime?log:log.filter(e=>e.date===dl);const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');document.getElementById('owner-totals').innerHTML=isAllTime?totBanner(sells,'All Time',false,true):totBanner(sells,dl,dl===today,true);const bd={};PM.forEach(m=>{bd[m.id]={total:0,count:0,label:m.label,icon:m.icon};});sells.forEach(e=>{const mid=e.payMethod||'cash';if(!bd[mid])bd[mid]={total:0,count:0,label:e.payMethodLabel||mid,icon:'💰'};bd[mid].total+=(e.amtReceived||0);bd[mid].count++;});document.getElementById('pay-breakdown').innerHTML=Object.entries(bd).map(([id,d])=>`<div class="pb-card"><div class="pb-icon">${d.icon}</div><div class="pb-method">${d.label}</div><div class="pb-total">${fmtP(d.total)}</div><div class="pb-count">${d.count} sale${d.count!==1?'s':''}</div></div>`).join('');document.getElementById('dact').innerHTML=isAllTime ? buildLog(log.slice(0,100),false,true) : buildLog(dayLog,false,true);
+function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today'?today:selDay;document.getElementById('dtabs').innerHTML=`<div class="dtab ${selDay==='alltime'?'active':''}" onclick="setDay('alltime')" style="${selDay==='alltime'?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`+days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setDay('${d}')">${it?'Today':d}</div>`;}).join('');const isAllTime=selDay==='alltime';const dayLog=isAllTime?log:log.filter(e=>e.date===dl);const _eodForDay=(!isAllTime)?eodLogs.find(r=>r.date===dl):null;const sells=(_eodForDay&&_eodForDay.orders&&_eodForDay.orders.length>0)?_eodForDay.orders.map(o=>({...o,amtReceived:o.amtReceived||o.total||0,type:o.type||'order',name:o.customer||''})):dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');document.getElementById('owner-totals').innerHTML=isAllTime?totBanner(sells,'All Time',false,true):totBanner(sells,dl,dl===today,true);const bd={};PM.forEach(m=>{bd[m.id]={total:0,count:0,label:m.label,icon:m.icon};});sells.forEach(e=>{const mid=e.payMethod||'cash';if(!bd[mid])bd[mid]={total:0,count:0,label:e.payMethodLabel||mid,icon:'💰'};bd[mid].total+=(e.amtReceived||0);bd[mid].count++;});document.getElementById('pay-breakdown').innerHTML=Object.entries(bd).map(([id,d])=>`<div class="pb-card"><div class="pb-icon">${d.icon}</div><div class="pb-method">${d.label}</div><div class="pb-total">${fmtP(d.total)}</div><div class="pb-count">${d.count} sale${d.count!==1?'s':''}</div></div>`).join('');document.getElementById('dact').innerHTML=isAllTime ? buildLog(log.slice(0,100),false,true) : buildLog(dayLog,false,true);
   renderCredits();
   loadDayNote(dl);
   renderEODLogsList();
@@ -5086,23 +5086,18 @@ function deleteEODOrder(logIdx,orderIdx){
   // ── REMOVE ORDER FROM EOD ──
   r.orders.splice(orderIdx,1);
 
-  // ── RECALCULATE EOD TOTALS ──
-  let grandTotal=0,cashTotal=0,virtTotal=0;
+  // ── RECALCULATE EOD TOTALS (using calcCashVirt for consistency) ──
+  const _delCV=calcCashVirt(r.orders);
+  const grandTotal=r.orders.reduce((s,ord)=>s+(ord.amtReceived||ord.total||0),0);
   const newCommByPerson={};
   cfg.users.forEach(u=>{newCommByPerson[u.name]=0;});
   r.orders.forEach(ord=>{
-    grandTotal+=ord.total||0;
-    if(ord.payMethod&&(ord.payMethod.toLowerCase().includes('cashapp')||ord.payMethod.toLowerCase().includes('venmo')||ord.payMethod.toLowerCase().includes('zelle'))){
-      virtTotal+=ord.total||0;
-    }else{
-      cashTotal+=ord.total||0;
-    }
     if(!newCommByPerson[ord.who])newCommByPerson[ord.who]=0;
     newCommByPerson[ord.who]+=(ord.commission||0);
   });
   r.grandTotal=grandTotal;
-  r.cashTotal=cashTotal;
-  r.virtTotal=virtTotal;
+  r.cashTotal=_delCV.cash;
+  r.virtTotal=_delCV.virt;
   r.commByPerson=newCommByPerson;
   r.totalProfit=r.orders.reduce((s,ord)=>s+(ord.profit||0),0);
   const staffComm=cfg.users.filter(u=>u.role==='staff').reduce((s,u)=>s+(newCommByPerson[u.name]||0),0);
@@ -5284,22 +5279,16 @@ function saveAddEODOrder(){
   if(!r.orders)r.orders=[];
   r.orders.push(newOrder);
 
-  // recalculate EOD totals
-  let grandTotal=0,cashTotal=0,virtTotal=0;
+  // recalculate EOD totals (using calcCashVirt for consistency)
+  const _addCV=calcCashVirt(r.orders);
+  const grandTotal=r.orders.reduce((s,ord)=>s+(ord.amtReceived||ord.total||0),0);
   const newCommByPerson={};
   cfg.users.forEach(u=>{newCommByPerson[u.name]=0;});
   r.orders.forEach(ord=>{
-    grandTotal+=ord.total||0;
-    if(ord.payMethod==='split'){
-      cashTotal+=(ord.splitCash||0);
-      virtTotal+=(ord.splitVirtual||0);
-    }else if(ord.payMethod&&(ord.payMethod.toLowerCase().includes('cashapp')||ord.payMethod.toLowerCase().includes('venmo')||ord.payMethod.toLowerCase().includes('zelle'))){
-      virtTotal+=ord.total||0;
-    }else{cashTotal+=ord.total||0;}
     if(!newCommByPerson[ord.who])newCommByPerson[ord.who]=0;
     newCommByPerson[ord.who]+=(ord.commission||0);
   });
-  r.grandTotal=grandTotal;r.cashTotal=cashTotal;r.virtTotal=virtTotal;
+  r.grandTotal=grandTotal;r.cashTotal=_addCV.cash;r.virtTotal=_addCV.virt;
   r.commByPerson=newCommByPerson;
   r.totalProfit=r.orders.reduce((s,ord)=>s+(ord.profit||0),0);
   const staffComm=cfg.users.filter(u=>u.role==='staff').reduce((s,u)=>s+(newCommByPerson[u.name]||0),0);
