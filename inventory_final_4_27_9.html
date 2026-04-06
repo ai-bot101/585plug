@@ -3962,12 +3962,13 @@ function renderConfirmedWebOrders() {
             <div style="font-size:11px;color:var(--text3);line-height:1.8;">
               ${o.customer?'📱 '+o.customer+'<br>':''}
               💳 ${o.payMethodLabel||o.payMethod||'Cash'}
+              ${o.who?'<br>👤 Confirmed by <span style="color:'+(cfg.users.find(u=>u.name===o.who)?.role==='owner'?'var(--green)':'#c084fc')+';">'+o.who+'</span>':''}
               ${o.note?'<br>📍 '+o.note:''}
             </div>
           </div>
           <div style="text-align:right;flex-shrink:0;">
             <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--green);">$${o.total||0}</div>
-            <div style="font-size:10px;color:var(--text3);margin-top:2px;">${o.time||''}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px;">${o.time||''} · ${o.date||''}</div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
