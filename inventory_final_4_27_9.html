@@ -469,6 +469,15 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       </div>
       <div class="dcard" style="margin-bottom:14px"><h3>Top Selling Items</h3><div id="dtop"></div></div>
 
+      <!-- staff buy for me -->
+      <div class="dcard" id="staff-buys-section" style="margin-bottom:14px;border-color:rgba(244,162,74,0.25);background:rgba(244,162,74,0.03);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <h3 style="margin-bottom:0;color:var(--orange);">🛒 Staff Buys (Buy For Me)</h3>
+          <span id="staff-buys-count" style="font-size:10px;color:var(--text3);font-family:var(--mono);"></span>
+        </div>
+        <div id="staff-buys-list"></div>
+      </div>
+
       <!-- saved EOD logs -->
       <div class="dcard" style="margin-bottom:20px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
@@ -1335,6 +1344,48 @@ function persist(){
   fbPush(); // instant push to Firebase on every change
 }
 function restore(){restoreEncrypted().catch(e=>console.error('restore',e));}
+
+// ── SAVE DATA BEFORE PAGE CLOSES ──
+// Without this, the 300ms debounce in fbPush can get cancelled when you close/exit the page
+window.addEventListener('beforeunload',()=>{
+  if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+  try{
+    const payload={
+      inv,log,cfg,
+      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,
+      failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,
+      commissionPaused,autoDailyDebts,
+      updatedAt:Date.now()
+    };
+    fetch(FB_URL+'.json',{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload),
+      keepalive:true
+    });
+  }catch(e){}
+});
+// Also push immediately when tab becomes hidden (covers minimize, app switch, etc.)
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden'){
+    if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+    try{
+      const payload={
+        inv,log,cfg,
+        customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,
+        failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,
+        commissionPaused,autoDailyDebts,
+        updatedAt:Date.now()
+      };
+      fetch(FB_URL+'.json',{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
+        keepalive:true
+      });
+    }catch(e){}
+  }
+});
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function getDays(){const d=[...new Set(log.map(e=>e.date))];d.sort((a,b)=>new Date(b)-new Date(a));if(!d.includes(tday()))d.unshift(tday());return d;}
 function cpuItem(item){
@@ -2396,6 +2447,7 @@ function toggleStaffCommDay(d){
 function setSD(d){staffSelDay=d;renderStaffLog();}
 function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today'?today:selDay;document.getElementById('dtabs').innerHTML=`<div class="dtab ${selDay==='alltime'?'active':''}" onclick="setDay('alltime')" style="${selDay==='alltime'?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`+days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setDay('${d}')">${it?'Today':d}</div>`;}).join('');const isAllTime=selDay==='alltime';const dayLog=isAllTime?log:log.filter(e=>e.date===dl);const _eodForDay=(!isAllTime)?eodLogs.find(r=>r.date===dl):null;const sells=(_eodForDay&&_eodForDay.orders&&_eodForDay.orders.length>0)?_eodForDay.orders.map(o=>({...o,amtReceived:o.total||0,type:o.type||'order',name:o.customer||''})):dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');document.getElementById('owner-totals').innerHTML=isAllTime?totBanner(sells,'All Time',false,true):totBanner(sells,dl,dl===today,true);const bd={};PM.forEach(m=>{bd[m.id]={total:0,count:0,label:m.label,icon:m.icon};});sells.forEach(e=>{const mid=e.payMethod||'cash';if(!bd[mid])bd[mid]={total:0,count:0,label:e.payMethodLabel||mid,icon:'💰'};bd[mid].total+=(e.amtReceived||0);bd[mid].count++;});document.getElementById('pay-breakdown').innerHTML=Object.entries(bd).map(([id,d])=>`<div class="pb-card"><div class="pb-icon">${d.icon}</div><div class="pb-method">${d.label}</div><div class="pb-total">${fmtP(d.total)}</div><div class="pb-count">${d.count} sale${d.count!==1?'s':''}</div></div>`).join('');document.getElementById('dact').innerHTML=isAllTime ? buildLog(log.slice(0,100),false,true) : buildLog(dayLog,false,true);
   renderCredits();
+  renderStaffBuys();
   loadDayNote(dl);
   renderEODLogsList();
   renderLoginLog();
@@ -2435,6 +2487,58 @@ function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today
       </div>
     </div>`;
   }).join('');const is={};sells.forEach(e=>{if(e.type==='order'){(e.orderItems||[]).forEach(o=>{if(!is[o.itemName])is[o.itemName]=0;is[o.itemName]+=(e.amtReceived||0)/Math.max(1,(e.orderItems||[]).length);});}else{if(!is[e.name])is[e.name]=0;is[e.name]+=(e.amtReceived||0);}});const sorted=Object.entries(is).sort((a,b)=>b[1]-a[1]).slice(0,8),mx=sorted[0]?.[1]||1;document.getElementById('dtop').innerHTML=sorted.length?sorted.map(([n,a])=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)"><span style="flex:1;font-size:12px;color:var(--text);text-transform:capitalize">${n}</span><div style="flex:2;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden"><div style="height:100%;width:${(a/mx*100).toFixed(1)}%;background:var(--green);border-radius:2px"></div></div><span style="font-family:var(--mono);font-size:11px;color:var(--green);min-width:40px;text-align:right">${fmtP(a)}</span></div>`).join(''):'<div class="empty">No sales recorded</div>';}
+function renderStaffBuys(){
+  const el=document.getElementById('staff-buys-list');
+  const cnt=document.getElementById('staff-buys-count');
+  const sec=document.getElementById('staff-buys-section');
+  if(!el||!sec)return;
+  const isAllTime=selDay==='alltime';
+  const today=tday();
+  const dl=selDay==='today'?today:selDay;
+  const staffNames=cfg.users.filter(u=>u.role==='staff').map(u=>u.name);
+  const buys=isAllTime
+    ?log.filter(e=>e.type==='selfbuy'&&staffNames.includes(e.who))
+    :log.filter(e=>e.type==='selfbuy'&&e.date===dl&&staffNames.includes(e.who));
+  if(!buys.length){
+    el.innerHTML='<div class="empty" style="padding:12px 0;">No staff purchases '+(isAllTime?'recorded':'this day')+'</div>';
+    if(cnt)cnt.textContent='';
+    return;
+  }
+  if(cnt)cnt.textContent=buys.length+' purchase'+(buys.length!==1?'s':'');
+  // Group by staff
+  const byStaff={};
+  staffNames.forEach(n=>{byStaff[n]=[];});
+  buys.forEach(b=>{
+    if(!byStaff[b.who])byStaff[b.who]=[];
+    byStaff[b.who].push(b);
+  });
+  let html='';
+  staffNames.forEach((name,si)=>{
+    const pbuys=byStaff[name]||[];
+    const col=si===0?'#f46b6b':'#c084fc';
+    const totalOwed=pbuys.reduce((s,b)=>s+(b.totalOwed||b.amtReceived||0),0);
+    const totalItems=pbuys.reduce((s,b)=>s+((b.items||[]).reduce((ss,it)=>ss+(it.qty||0),0)),0);
+    html+=`<div style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <div style="width:26px;height:26px;border-radius:7px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;background:${col}22;color:${col}">${name.charAt(0).toUpperCase()}</div>
+        <div style="font-size:14px;font-weight:600;color:${col}">${name}</div>
+        <div style="margin-left:auto;font-family:var(--mono);font-size:16px;font-weight:700;color:var(--orange);">${fmtP(totalOwed)}</div>
+        <div style="font-size:10px;color:var(--text3);font-family:var(--mono);">${pbuys.length} buy${pbuys.length!==1?'s':''} · ${fmt(totalItems)} items</div>
+      </div>`;
+    pbuys.forEach(b=>{
+      const items=(b.items||[]).map(it=>(it.qty||1)+'x '+it.itemName).join(', ');
+      html+=`<div style="background:var(--bg2);border:1px solid var(--border2);border-radius:9px;padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
+        <div style="flex:1;">
+          <div style="font-size:12px;color:var(--text);text-transform:capitalize;">${items||'No items'}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px;">${b.date||''} · ${b.time||''}</div>
+        </div>
+        <div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--orange);">${fmtP(b.totalOwed||b.amtReceived||0)}</div>
+      </div>`;
+    });
+    html+='</div>';
+  });
+  el.innerHTML=html;
+}
 function renderCredits(){
   const entries=Object.entries(customerCredits);
   const el=document.getElementById('credits-list');
@@ -3834,9 +3938,8 @@ function clearConfirmedOrders(){
 function renderConfirmedWebOrders() {
   const el = document.getElementById('confirmed-orders-section');
   if (!el) return;
-  // Find today's confirmed website orders in the log
-  const today = tday();
-  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && e.date === today && !e._cleared);
+  // Find all confirmed website orders that haven't been cleared (by EOD save or manual clear)
+  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && !e._cleared);
   if (!webOrders.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
 
   el.style.display = 'block';
