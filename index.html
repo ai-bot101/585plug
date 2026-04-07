@@ -410,8 +410,6 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
     <div class="stats-row" id="srow"></div>
     <!-- GLOBAL confirmed orders banner — visible on ALL views -->
     <div id="confirmed-orders-global" style="display:none;margin-bottom:14px;"></div>
-    <!-- DEBUG: Pending orders tracker (temporary) -->
-    <div id="debug-pending" style="display:none;background:rgba(255,255,0,0.1);border:1px solid rgba(255,255,0,0.3);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-family:monospace;font-size:10px;color:#ffcc00;max-height:120px;overflow-y:auto;"></div>
     <div id="inv-view">
       <div class="swrap"><span class="sico">&#x2315;</span><input type="text" placeholder="Search items..." oninput="filterItems(this.value)"></div>
       <div class="cat-row" id="ctabs"></div>
@@ -1302,13 +1300,8 @@ let cu=null,activeCat='ALL',srch='',selDay='today',staffSelDay='today',selPw=nul
 let inv={STRAINS:[],DISPOS:[],EDIBLES:[],PREROLLS:[],NICOTINE:[]};
 let log=[],pendingSale=null,selMethod=null,orderItems=[],orderPayMethod=null;
 let pendingWebOrders={}; // website orders waiting for confirmation
-let _debugPendingLog=[]; // debug log for tracking order changes
+// Debug logger — outputs to console only (no visible panel)
 function _debugPending(action,key,detail){
-  const entry=new Date().toLocaleTimeString()+' '+action+': '+key+(detail?' ('+detail+')':'');
-  _debugPendingLog.unshift(entry);
-  if(_debugPendingLog.length>20)_debugPendingLog.length=20;
-  const el=document.getElementById('debug-pending');
-  if(el){el.style.display='block';el.innerHTML='<b>🔍 Pending Order Debug:</b><br>'+_debugPendingLog.join('<br>');}
   console.log('[PENDING-DEBUG]',action,key,detail||'');
 }
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
@@ -2101,7 +2094,18 @@ function deleteCat(cat){const n=(inv[cat]||[]).length;if(n>0&&!confirm('"'+cat+'
 function renderAll(){renderStats();renderCatTabs();renderItems();renderConfirmedWebOrders();if(cu?.role==='owner')renderDash();else renderStaffLog();}
 function renderStats(){const all=C().flatMap(c=>inv[c]||[]);const so=all.filter(i=>gl(i)===0&&i.bought).length;const lw=all.filter(i=>{const p=gp(i);return p<=25&&p>0;}).length;const tS=log.filter(e=>e.date===tday()&&(e.type==='sell'||e.type==='order'));
 const webOrders=log.filter(e=>e.date===tday()&&e.source==='website');const ts=tS.reduce((s,e)=>s+(e.amtReceived||0),0);const isOwn2=cu?.role==='owner';
-document.getElementById('srow').innerHTML=`<div class="scard"><div class="sl">Total Items</div><div class="sv">${all.length}</div><div class="ss">${C().filter(c=>(inv[c]||[]).length>0).length} cats</div></div><div class="scard red"><div class="sl">Sold Out</div><div class="sv">${so}</div><div class="ss">need restock</div></div><div class="scard orange"><div class="sl">Running Low</div><div class="sv">${lw}</div><div class="ss">under 25%</div></div><div class="scard green"><div class="sl">Today Revenue</div><div class="sv">${fmtP(ts)}</div><div class="ss">${tS.length} sales</div></div><div class="add-order-btn" onclick="openOrderSheet()"><div class="ao-icon">+</div><div class="ao-label">Add Order</div></div>${!isOwn2?'<div class="add-order-btn" onclick="openSelfBuy()" style="border-color:rgba(244,162,74,0.3);background:rgba(244,162,74,0.08);"><div class="ao-icon">🛒</div><div class="ao-label" style="color:var(--orange);">Buy For Me</div></div>':''}`;}
+document.getElementById('srow').innerHTML=`<div class="scard"><div class="sl">Total Items</div><div class="sv">${all.length}</div><div class="ss">${C().filter(c=>(inv[c]||[]).length>0).length} cats</div></div><div class="scard red"><div class="sl">Sold Out</div><div class="sv">${so}</div><div class="ss">need restock</div></div><div class="scard orange"><div class="sl">Running Low</div><div class="sv">${lw}</div><div class="ss">under 25%</div></div><div class="scard green"><div class="sl">Today Revenue</div><div class="sv">${fmtP(ts)}</div><div class="ss">${tS.length} sales${isOwn2&&tS.length?'&ensp;<span onclick="clearTodaySales(event)" style="background:rgba(244,107,107,0.12);border:1px solid rgba(244,107,107,0.25);border-radius:5px;padding:1px 7px;font-size:9px;font-weight:700;color:var(--red);cursor:pointer;letter-spacing:.5px;">CLEAR</span>':''}</div></div><div class="add-order-btn" onclick="openOrderSheet()"><div class="ao-icon">+</div><div class="ao-label">Add Order</div></div>${!isOwn2?'<div class="add-order-btn" onclick="openSelfBuy()" style="border-color:rgba(244,162,74,0.3);background:rgba(244,162,74,0.08);"><div class="ao-icon">🛒</div><div class="ao-label" style="color:var(--orange);">Buy For Me</div></div>':''}`;}
+function clearTodaySales(e){
+  e.stopPropagation();
+  const today=tday();
+  const todaySales=log.filter(x=>x.date===today&&(x.type==='sell'||x.type==='order'));
+  if(!todaySales.length){showToast('No sales to clear','err');return;}
+  if(!confirm('Clear all '+todaySales.length+' sales from today?\n\nThis removes them from the log and sets today revenue to $0.\n\nStock will NOT be restored — only the log entries are removed.\n\nThis cannot be undone.')){return;}
+  log=log.filter(x=>!(x.date===today&&(x.type==='sell'||x.type==='order')));
+  persist();renderStats();renderItems();
+  if(cu?.role==='owner')renderDash();else renderStaffLog();
+  showToast('Today sales cleared — revenue reset to $0','ok');
+}
 function renderCatTabs(){const allN=C().flatMap(c=>inv[c]||[]).length;document.getElementById('ctabs').innerHTML=`<div class="ctab ${activeCat==='ALL'?'active':''}" onclick="setCat('ALL')">ALL <span class="cnt">${allN}</span></div>`+C().map(c=>`<div class="ctab ${activeCat===c?'active':''}" onclick="setCat('${c}')">${c} <span class="cnt">${(inv[c]||[]).length}</span></div>`).join('');}
 function renderItems(){const area=document.getElementById('iarea'),own=cu?.role==='owner';const show2=activeCat==='ALL'?C():[activeCat];const mcat=document.getElementById('m-cat');if(mcat)mcat.innerHTML=C().map(c=>`<option value="${c}">${c}</option>`).join('');let html='';for(const cat of show2){let items=(inv[cat]||[]);if(srch)items=items.filter(i=>i.name.toLowerCase().includes(srch));if(!items.length&&!own)continue;html+=`<div class="sec-head"><h2>${cat}</h2><span class="cnt">${items.length}</span></div><div class="igrid">`;items.forEach(item=>{const ri=(inv[cat]||[]).indexOf(item);const left=gl(item),bought=item.bought||0,pct=gp(item);const so2=left===0&&bought>0,isLow=pct<=25&&pct>0&&bought>0,fc=pct<=10?'crit':pct<=25?'low':'';const prices=item.prices||[];const pa=''; // price pills removed// cost display for owner
 const cpu2=cpuItem(item);
