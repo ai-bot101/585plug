@@ -1327,7 +1327,10 @@ function calcCashVirt(sells){
   let cash=0,virt=0,cCount=0,vCount=0;
   sells.forEach(e=>{
     const pm=(e.payMethod||'cash').toLowerCase();
-    if(pm==='split'){
+    if(pm==='nopay'){
+      // nopay = no payment received — don't count toward cash or virtual
+      return;
+    }else if(pm==='split'){
       cash+=(e.splitCash||0);virt+=(e.splitVirtual||0);cCount++;vCount++;
     }else if(VIRT.includes(pm)){
       virt+=(e.amtReceived||e.total||0);vCount++;
@@ -1336,6 +1339,34 @@ function calcCashVirt(sells){
     }
   });
   return{cash,virt,cCount,vCount};
+}
+// Helper: restore flavor stock for an order item on the found inventory item
+function _restoreFlavorStock(foundItem,oi,qty){
+  if(!foundItem||!Array.isArray(foundItem.flavors))return;
+  if(oi.flavors&&typeof oi.flavors==='object'){
+    Object.entries(oi.flavors).forEach(([fname,fqty])=>{
+      if(fqty<=0)return;
+      const flav=foundItem.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
+      if(flav)flav.stock=(flav.stock||0)+fqty;
+    });
+  }else if(oi.flavorText){
+    const fl=foundItem.flavors.find(f=>f.name===oi.flavorText);
+    if(fl)fl.stock=(fl.stock||0)+(qty||0);
+  }
+}
+// Helper: deduct flavor stock for an order item from the found inventory item
+function _deductFlavorStock(foundItem,oi,qty){
+  if(!foundItem||!Array.isArray(foundItem.flavors))return;
+  if(oi.flavors&&typeof oi.flavors==='object'){
+    Object.entries(oi.flavors).forEach(([fname,fqty])=>{
+      if(fqty<=0)return;
+      const flav=foundItem.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
+      if(flav)flav.stock=Math.max(0,(flav.stock||0)-fqty);
+    });
+  }else if(oi.flavorText){
+    const fl=foundItem.flavors.find(f=>f.name===oi.flavorText);
+    if(fl)fl.stock=Math.max(0,(fl.stock||0)-(qty||0));
+  }
 }
 function uIdx(name){return cfg.users.findIndex(u=>u.name===name);}
 function wcls(name){const i=uIdx(name);return i>=0?WC[i]:'w0';}
@@ -1346,8 +1377,10 @@ function persist(){
 function restore(){restoreEncrypted().catch(e=>console.error('restore',e));}
 
 // ── SAVE DATA BEFORE PAGE CLOSES ──
-// Without this, the 300ms debounce in fbPush can get cancelled when you close/exit the page
-window.addEventListener('beforeunload',()=>{
+// Guard: only push if data has been fully loaded (prevents wiping Firebase with empty defaults)
+let _dataLoaded=false;
+function _emergencyPush(){
+  if(!_dataLoaded||!cu)return; // don't push if not logged in or data not loaded
   if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
   try{
     const payload={
@@ -1364,28 +1397,9 @@ window.addEventListener('beforeunload',()=>{
       keepalive:true
     });
   }catch(e){}
-});
-// Also push immediately when tab becomes hidden (covers minimize, app switch, etc.)
-document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='hidden'){
-    if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
-    try{
-      const payload={
-        inv,log,cfg,
-        customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,
-        failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,
-        commissionPaused,autoDailyDebts,
-        updatedAt:Date.now()
-      };
-      fetch(FB_URL+'.json',{
-        method:'PATCH',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(payload),
-        keepalive:true
-      });
-    }catch(e){}
-  }
-});
+}
+window.addEventListener('beforeunload',_emergencyPush);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')_emergencyPush();});
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function getDays(){const d=[...new Set(log.map(e=>e.date))];d.sort((a,b)=>new Date(b)-new Date(a));if(!d.includes(tday()))d.unshift(tday());return d;}
 function cpuItem(item){
@@ -1522,82 +1536,19 @@ async function tryLogin(){
     document.getElementById('log-tab').style.display='';
   }
   renderAll();updateSync();
-  // One-time cleanup: remove all auto daily debt data
-  if(!localStorage.getItem('585_debt_cleanup_v2')){
-    // Clear all staff debts from auto daily system
-    staffDebts={};
-    // Remove debt log entries created by auto daily system
-    log=log.filter(e=>!(e.type==='debt'&&(e.reason||'').includes('Auto daily')));
-    // Clear autoDailyDebts in case it was loaded from Firebase
-    autoDailyDebts=[];
-    // Fix saved EOD logs — remove daily deductions and restore payouts
-    eodLogs.forEach(r=>{
-      if(r.dailyDeductions&&r.dailyDeductions.length){
-        r.dailyDeductions=[];
-        r.totalDailyDeductions=0;
-      }
-      if(r.payouts){
-        Object.keys(r.payouts).forEach(name=>{
-          const p=r.payouts[name];
-          if(p&&p.deduction>0){
-            p.payout=p.earned; // restore full commission
-            p.deduction=0;
-          }
-        });
-      }
-    });
-    persist();
-    localStorage.setItem('585_debt_cleanup_v2','1');
-  }
-  // One-time fix: add missing labels to old EOD log items
-  if(!localStorage.getItem('585_eod_label_fix')){
-    eodLogs.forEach(r=>{
-      (r.orders||[]).forEach(o=>{
-        (o.items||[]).forEach(it=>{
-          if(!it.label && it.qty===1 && it.itemName){
-            // Try to find the matching log entry to get the label
-            const match=log.find(e=>(e.type==='sell'||e.type==='order')&&e.date===r.date&&
-              ((e.orderItems||[]).some(oi=>(oi.itemName||'').toLowerCase()===it.itemName.toLowerCase()&&oi.label)));
-            if(match){
-              const oi=(match.orderItems||[]).find(x=>(x.itemName||'').toLowerCase()===it.itemName.toLowerCase()&&x.label);
-              if(oi){it.label=oi.label;it.qty=labelToQty(oi.label)||it.qty;}
-            }
-          }
-        });
-      });
-    });
-    persist();
-    localStorage.setItem('585_eod_label_fix','1');
-  }
-  // One-time fresh start v3: clear all sales/logs but keep current left/bought values
-  if(!localStorage.getItem('585_fresh_start_v3')){
-    // Remove all sell, order, selfbuy, and adjustment entries from activity log
-    log=log.filter(e=>e.type!=='sell'&&e.type!=='order'&&e.type!=='selfbuy'&&e.type!=='adjustment');
-    // Clear EOD logs and cancelled orders
-    eodLogs=[];
-    cancelledOrders=[];
-    // DO NOT reset left=bought — user will manually set these
-    // Push IMMEDIATELY to Firebase before sync can pull old data back
-    const freshPayload={
-      inv,log,cfg,
-      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
-      updatedAt:Date.now()
-    };
-    fbLastTimestamp=freshPayload.updatedAt;
-    fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(freshPayload)}).then(()=>{
-      persistEncrypted().catch(()=>{});
-    }).catch(()=>{});
-    localStorage.setItem('585_fresh_start_v3','done');
-  }
+  // ALL one-time migrations REMOVED — they depended on localStorage which can be cleared by the browser,
+  // causing them to re-run and wipe data. No code should EVER auto-delete orders, logs, or EOD data.
   // Repair commissions on every login
   repairAllCommissions();
   // Recalculate stock levels from activity logs, pending orders, and manual adjustments
   repairStock(false);
   repairPassHashes();
   repairEODtoLog();
+  // Mark data as fully loaded — allows beforeunload/visibilitychange to safely push
+  _dataLoaded=true;
   // Force a fresh pull on login to guarantee sync regardless of timestamp
   startAutoSync();}
-function logout(){persist();stopAutoSync();cu=null;si=null;document.getElementById('pass-wrap').style.display='none';document.getElementById('pass-inp').value='';document.getElementById('lerr').textContent='';document.querySelectorAll('.u-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('login-btn').disabled=true;fbLastTimestamp=0;backToCalc();}
+function logout(){persist();stopAutoSync();_dataLoaded=false;cu=null;si=null;document.getElementById('pass-wrap').style.display='none';document.getElementById('pass-inp').value='';document.getElementById('lerr').textContent='';document.querySelectorAll('.u-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('login-btn').disabled=true;fbLastTimestamp=0;backToCalc();}
 async function toggleEarnings(val){if(!await _ownerGuard())return;cfg.showEarnings=val;persist();renderStaffLog();updateEarnBtn();}
 function toggleEarningsQuick(){
   cfg.showEarnings=!cfg.showEarnings;
@@ -3324,15 +3275,17 @@ function processWebsiteOrders(pendingOrders) {
       // Check if it was a confirmed order (has a log entry)
       const logIdx = log.findIndex(e => e.webOrderKey === fbKey);
       if (logIdx > -1) {
-        // Confirmed order cancelled — reverse stock from log
+        // Confirmed order cancelled — reverse stock + flavors from log
         const logEntry = log[logIdx];
         (logEntry.orderItems||[]).forEach(oi => {
           const itemName = (oi.itemName||'').toLowerCase();
           const qty = labelToQty(oi.label);
+          let foundItem=null;
           for (const c of C()) {
-            const found = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
-            if (found) { found.left = Math.round((gl(found) + qty)*10)/10; break; }
+            const f = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
+            if (f) { f.left = Math.round((gl(f) + qty)*10)/10; foundItem=f; break; }
           }
+          _restoreFlavorStock(foundItem,oi,qty);
         });
         log.splice(logIdx, 1);
       } else if (pendingWebOrders[fbKey]) {
@@ -3351,13 +3304,7 @@ function processWebsiteOrders(pendingOrders) {
             const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
             if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
           }
-          if(foundItem&&foundItem.flavors&&oi.flavors&&typeof oi.flavors==='object'){
-            Object.entries(oi.flavors).forEach(([fname,fqty])=>{
-              if(fqty<=0)return;
-              const flav=foundItem.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
-              if(flav)flav.stock=(flav.stock||0)+fqty;
-            });
-          }
+          _restoreFlavorStock(foundItem,oi,qty);
         });
         delete pendingWebOrders[fbKey];
       } else if (order._stockDeducted) {
@@ -3376,13 +3323,7 @@ function processWebsiteOrders(pendingOrders) {
             if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
           }
           // Restore flavor stock too
-          if(foundItem&&foundItem.flavors&&oi.flavors&&typeof oi.flavors==='object'){
-            Object.entries(oi.flavors).forEach(([fname,fqty])=>{
-              if(fqty<=0)return;
-              const flav=foundItem.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
-              if(flav)flav.stock=(flav.stock||0)+fqty;
-            });
-          }
+          _restoreFlavorStock(foundItem,oi,qty);
         });
       }
       // Mark as reversed so we don't do it again
@@ -3419,13 +3360,7 @@ function processWebsiteOrders(pendingOrders) {
             if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);foundItem=f;}
           }
           // Deduct flavor stock
-          if(foundItem&&foundItem.flavors&&oi.flavors&&typeof oi.flavors==='object'){
-            Object.entries(oi.flavors).forEach(([fname,fqty])=>{
-              if(fqty<=0)return;
-              const flav=foundItem.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
-              if(flav)flav.stock=Math.max(0,(flav.stock||0)-fqty);
-            });
-          }
+          _deductFlavorStock(foundItem,oi,qty);
         });
         // Mark in Firebase with V2 flag so other devices/reloads know deduction is reliable
         fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
@@ -3750,14 +3685,8 @@ function cancelWebOrder(fbKey) {
       const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
       if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
     }
-    // Restore flavor stock
-    if(foundItem&&foundItem.flavors&&oi.flavors&&typeof oi.flavors==='object'){
-      Object.entries(oi.flavors).forEach(([fname,fqty])=>{
-        if(fqty<=0)return;
-        const flav=foundItem.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
-        if(flav)flav.stock=(flav.stock||0)+fqty;
-      });
-    }
+    // Restore flavor stock (handles both object and string formats)
+    _restoreFlavorStock(foundItem,oi,qty);
   });
 
   delete pendingWebOrders[fbKey];
