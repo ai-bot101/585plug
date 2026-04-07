@@ -1349,29 +1349,31 @@ function calcCashVirt(sells){
 // Helper: restore flavor stock for an order item on the found inventory item
 function _restoreFlavorStock(foundItem,oi,qty){
   if(!foundItem||!Array.isArray(foundItem.flavors))return;
+  // Flavors are physical units — always restore by 1 per item, not by gram weight
   if(oi.flavors&&typeof oi.flavors==='object'){
     Object.entries(oi.flavors).forEach(([fname,fqty])=>{
       if(fqty<=0)return;
       const flav=foundItem.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
-      if(flav)flav.stock=(flav.stock||0)+fqty;
+      if(flav)flav.stock=Math.round((flav.stock||0)+fqty);
     });
   }else if(oi.flavorText){
     const fl=foundItem.flavors.find(f=>f.name===oi.flavorText);
-    if(fl)fl.stock=(fl.stock||0)+(qty||0);
+    if(fl)fl.stock=Math.round((fl.stock||0)+1); // 1 physical unit, not gram weight
   }
 }
 // Helper: deduct flavor stock for an order item from the found inventory item
 function _deductFlavorStock(foundItem,oi,qty){
   if(!foundItem||!Array.isArray(foundItem.flavors))return;
+  // Flavors are physical units — always deduct by 1 per item, not by gram weight
   if(oi.flavors&&typeof oi.flavors==='object'){
     Object.entries(oi.flavors).forEach(([fname,fqty])=>{
       if(fqty<=0)return;
       const flav=foundItem.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
-      if(flav)flav.stock=Math.max(0,(flav.stock||0)-fqty);
+      if(flav)flav.stock=Math.max(0,Math.round((flav.stock||0)-fqty));
     });
   }else if(oi.flavorText){
     const fl=foundItem.flavors.find(f=>f.name===oi.flavorText);
-    if(fl)fl.stock=Math.max(0,(fl.stock||0)-(qty||0));
+    if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-1)); // 1 physical unit, not gram weight
   }
 }
 function uIdx(name){return cfg.users.findIndex(u=>u.name===name);}
@@ -1920,7 +1922,9 @@ function pickFlavor(cat,ri,flavorName,fi){
   const label=pt.label||'';
   const price=pt.price||0;
   _pendingPriceTier=null;
-  const flavorObj=flavorName?{[flavorName]:qty}:null;
+  // Flavor count is always 1 per order line — flavors are physical units, not grams
+  // If user orders 3x of the same flavor, they add 3 separate order lines or change qty
+  const flavorObj=flavorName?{[flavorName]:1}:null;
   orderItems.push({cat,ri,itemName:item.name,qty,label,price,flavorText:flavorName,flavors:flavorObj});
   document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');
   if(orderItems.length===1&&price>0){const totalInp=document.getElementById('ord-total');if(totalInp&&!totalInp.value)totalInp.value=price;}
@@ -2031,7 +2035,7 @@ function confirmOrder(){
         item.left=Math.max(0,Math.round((gl(item)-qty)*10)/10);
         if(flavorText&&Array.isArray(item.flavors)){
           const fl=item.flavors.find(f=>f.name===flavorText);
-          if(fl)fl.stock=Math.max(0,fl.stock-qty);
+          if(fl)fl.stock=Math.max(0,Math.round(fl.stock-1)); // always 1 physical unit per order line
         }
       });
     }catch(stockErr){console.error('Stock deduction error (order still saved):',stockErr);}
@@ -2075,10 +2079,10 @@ function confirmOrder(){
   objs.forEach(({item,qty,flavorText})=>{
     if(!item)return;
     item.left=Math.round((gl(item)-qty)*10)/10;
-    // deduct from flavor stock if a flavor was selected
+    // deduct from flavor stock if a flavor was selected — always 1 physical unit
     if(flavorText&&Array.isArray(item.flavors)){
       const fl=item.flavors.find(f=>f.name===flavorText);
-      if(fl)fl.stock=Math.max(0,fl.stock-qty);
+      if(fl)fl.stock=Math.max(0,Math.round(fl.stock-1));
     }
   });
   const vFee2=isV(orderPayMethod)||orderPayMethod==='split';
@@ -2131,20 +2135,28 @@ function resetAllSold(e){
     const deficit=item.bought-gl(item); // how much was sold
     item.left=item.bought; // reset left to bought
     fixCount++;
-    // Restock flavors proportionally
+    // Restock flavors — always whole numbers
     if(Array.isArray(item.flavors)&&item.flavors.length>0&&deficit>0){
       const totalFlavorStock=item.flavors.reduce((s,f)=>s+(f.stock||0),0);
+      let remaining=Math.round(deficit);
       if(totalFlavorStock>0){
-        // Distribute deficit proportionally based on current stock ratios
+        // Distribute proportionally, rounding to whole numbers
         item.flavors.forEach(f=>{
           const ratio=(f.stock||0)/totalFlavorStock;
-          f.stock=Math.round(((f.stock||0)+deficit*ratio)*10)/10;
+          const add=Math.round(deficit*ratio);
+          f.stock=Math.round((f.stock||0)+add);
+          remaining-=add;
         });
+        // Give any leftover to the first flavor with stock
+        if(remaining>0){const first=item.flavors.find(f=>f.stock>0)||item.flavors[0];if(first)first.stock+=remaining;}
       }else{
-        // All flavors at 0 — split evenly
-        const each=Math.round((deficit/item.flavors.length)*10)/10;
-        item.flavors.forEach(f=>{f.stock=(f.stock||0)+each;});
+        // All flavors at 0 — split evenly with whole numbers
+        const each=Math.floor(remaining/item.flavors.length);
+        let leftover=remaining-each*item.flavors.length;
+        item.flavors.forEach(f=>{f.stock=(f.stock||0)+each;if(leftover>0){f.stock++;leftover--;}});
       }
+      // Ensure all flavor stocks are whole numbers
+      item.flavors.forEach(f=>{f.stock=Math.round(f.stock||0);});
     }
   });
   persist();renderStats();renderItems();renderCatTabs();
