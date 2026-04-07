@@ -2006,8 +2006,13 @@ function confirmOrder(){
     });
     pendingData._stockDeducted=true;
     pendingData._stockDeductedV2=true;
-    // Write to Firebase pending_orders
-    fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(pendingData)}).catch(()=>{});
+    // Write to Firebase pending_orders — retry on failure so order doesn't vanish
+    (async function putPending(retries){
+      try{
+        const r=await fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(pendingData)});
+        if(!r.ok&&retries>0)setTimeout(()=>putPending(retries-1),2000);
+      }catch(e){if(retries>0)setTimeout(()=>putPending(retries-1),2000);}
+    })(3);
     // Also add to local pending list so it shows immediately
     pendingData.fbKey=fbKey;
     pendingData.heldAt=Date.now();
@@ -3373,15 +3378,16 @@ function processWebsiteOrders(pendingOrders) {
       }
     }
   });
-  // Remove orders that were deleted from Firebase — BUT keep locally-created orders
-  // that may not have reached Firebase yet (PUT still in-flight)
+  // Remove orders from local map ONLY if they were deleted/cancelled from Firebase
+  // AND they were NOT created locally (locally-created orders stay until manually confirmed/cancelled)
   Object.keys(pendingWebOrders).forEach(k => {
     if (!pendingOrders[k]) {
       const held = pendingWebOrders[k];
-      // Keep if created less than 15 seconds ago (PUT may still be in-flight)
-      if (held && held.heldAt && (Date.now() - held.heldAt) < 15000) return;
-      // Keep if we already processed it (confirmed/cancelled locally)
+      // NEVER auto-remove orders that were created locally (source='manual' or _stockDeductedLocally)
+      if (held && (held.source === 'manual' || held._stockDeductedLocally)) return;
+      // NEVER auto-remove orders we explicitly confirmed/cancelled
       if (processedOrderIds.has(k)) return;
+      // Only remove website orders that disappeared from Firebase (admin deleted from menu site)
       delete pendingWebOrders[k];
     }
   });
