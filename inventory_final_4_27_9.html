@@ -3378,19 +3378,9 @@ function processWebsiteOrders(pendingOrders) {
       }
     }
   });
-  // Remove orders from local map ONLY if they were deleted/cancelled from Firebase
-  // AND they were NOT created locally (locally-created orders stay until manually confirmed/cancelled)
-  Object.keys(pendingWebOrders).forEach(k => {
-    if (!pendingOrders[k]) {
-      const held = pendingWebOrders[k];
-      // NEVER auto-remove orders that were created locally (source='manual' or _stockDeductedLocally)
-      if (held && (held.source === 'manual' || held._stockDeductedLocally)) return;
-      // NEVER auto-remove orders we explicitly confirmed/cancelled
-      if (processedOrderIds.has(k)) return;
-      // Only remove website orders that disappeared from Firebase (admin deleted from menu site)
-      delete pendingWebOrders[k];
-    }
-  });
+  // NEVER auto-remove pending orders from local map.
+  // Orders are ONLY removed by explicit user action: confirm or cancel buttons.
+  // This prevents the poll from wiping orders before Firebase sync completes.
   renderPendingOrders();
   if (newCount > 0) {
     showToast('🚨 ' + newCount + ' NEW ORDER' + (newCount>1?'S':'') + ' WAITING!', 'ok');
