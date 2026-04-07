@@ -362,6 +362,32 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .ap-perm-del-btn:hover{background:rgba(244,162,74,0.2);border-color:var(--orange,#f4a24a);}
 .ap-order.cancelled{opacity:0.5;border-style:dashed;}
 
+/* NEW DROP MODAL */
+#new-drop-modal{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);}
+#new-drop-modal.open{display:flex;}
+.nd-card{background:var(--black2);border:1px solid rgba(204,31,31,0.2);border-radius:16px;width:100%;max-width:340px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(204,31,31,0.15);}
+.nd-header{background:linear-gradient(135deg, rgba(204,31,31,0.1) 0%, rgba(0,0,0,0.2) 100%);border-bottom:1px solid rgba(204,31,31,0.2);padding:20px 16px;text-align:center;}
+.nd-title{font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--red);letter-spacing:3px;line-height:1;margin-bottom:4px;}
+.nd-subtitle{font-family:'Oswald',sans-serif;font-size:12px;color:var(--white3);text-transform:uppercase;letter-spacing:2px;}
+.nd-carousel-wrap{flex:1;overflow:hidden;padding:16px;display:flex;flex-direction:column;}
+#nd-items{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px;scroll-behavior:smooth;}
+.nd-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);border:none;padding:0;cursor:pointer;transition:background .3s;}
+.nd-dot.active{background:var(--red);}
+#nd-dots{display:none;gap:6px;justify-content:center;padding-top:12px;border-top:1px solid rgba(204,31,31,0.2);}
+.nd-btn{width:100%;background:var(--red);border:none;border-radius:0;padding:16px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:18px;cursor:pointer;letter-spacing:2px;transition:background .2s;text-transform:uppercase;}
+.nd-btn:hover{background:var(--red3);}
+.nd-check{margin-right:8px;cursor:pointer;width:18px;height:18px;accent-color:var(--red);}
+.nd-item-list{list-style:none;max-height:300px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.nd-item-row{display:flex;align-items:center;padding:10px;border-bottom:1px solid var(--border);background:var(--black3);margin-bottom:4px;border-radius:6px;}
+.nd-item-name{flex:1;font-family:'Oswald',sans-serif;font-size:13px;color:var(--white);text-transform:capitalize;}
+.nd-section{margin-bottom:12px;}
+.nd-section-title{font-family:'Oswald',sans-serif;font-size:12px;color:var(--white3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding:0 12px;}
+.nd-status-box{background:rgba(0,0,0,0.3);border:1px solid rgba(204,31,31,0.2);border-radius:8px;padding:10px 12px;margin:0 12px 12px;font-family:'Oswald',sans-serif;font-size:11px;color:var(--white3);}
+.nd-status-active{color:var(--green);}
+.nd-btn-row{display:flex;gap:8px;padding:12px 12px 0;}
+.nd-btn-secondary{flex:1;background:rgba(204,31,31,0.1);border:1px solid rgba(204,31,31,0.3);border-radius:8px;padding:10px;color:var(--red);font-family:'Oswald',sans-serif;font-size:12px;cursor:pointer;font-weight:600;letter-spacing:1px;text-transform:uppercase;transition:all .15s;}
+.nd-btn-secondary:hover{background:rgba(204,31,31,0.2);border-color:var(--red);}
+
 /* TOAST */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--black3);border:1px solid var(--border2);border-radius:10px;padding:12px 20px;font-family:'Oswald',sans-serif;font-size:14px;color:var(--white);z-index:999;transition:transform .3s;white-space:nowrap;}
 .toast.show{transform:translateX(-50%) translateY(0);}
@@ -519,6 +545,21 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
 
 <!-- MAIN APP -->
 <div id="app">
+  <!-- NEW DROP MODAL -->
+  <div id="new-drop-modal">
+    <div class="nd-card">
+      <div class="nd-header">
+        <div class="nd-title">NEW DROPS</div>
+        <div class="nd-subtitle">Just Dropped</div>
+      </div>
+      <div class="nd-carousel-wrap">
+        <div id="nd-items"></div>
+        <div id="nd-dots"></div>
+      </div>
+      <button class="nd-btn" onclick="dismissNewDrop()">Check It Out</button>
+    </div>
+  </div>
+
   <header>
     <div class="header-inner">
       <div class="logo-wrap">
@@ -668,6 +709,17 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
   </div>
   <div class="ap-list" id="ap-list">
     <div class="ap-empty">Loading orders...</div>
+  </div>
+  <!-- NEW DROPS MANAGER -->
+  <div style="border-top:1px solid var(--border);padding:12px 16px;background:var(--black);">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--red);letter-spacing:2px;margin-bottom:10px;">NEW DROPS MANAGER</div>
+    <div id="nd-status-admin" style="background:rgba(0,0,0,0.5);border:1px solid rgba(204,31,31,0.2);border-radius:8px;padding:10px;margin-bottom:10px;font-family:'Oswald',sans-serif;font-size:11px;color:var(--white3);">Status: Loading...</div>
+    <div style="font-family:'Oswald',sans-serif;font-size:12px;color:var(--white3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Select items:</div>
+    <div id="nd-items-admin" style="max-height:150px;overflow-y:auto;margin-bottom:10px;-webkit-overflow-scrolling:touch;"></div>
+    <div style="display:flex;gap:6px;">
+      <button class="nd-btn-secondary" style="flex:1;" onclick="activateNewDrop()">Activate Drop</button>
+      <button class="nd-btn-secondary" style="flex:1;background:rgba(200,200,200,0.1);color:var(--white3);border-color:rgba(200,200,200,0.3);" onclick="deactivateNewDrop()">Deactivate</button>
+    </div>
   </div>
 </div>
 
@@ -890,9 +942,95 @@ function processData(data) {
   menuItems = built;
   buildCatTabs();
   renderMenu();
+  checkNewDrops(data);
   const ss = document.getElementById('sync-status');
   if (ss) ss.innerHTML = '<span style="color:#3ecf8e;font-size:10px;font-family:monospace;letter-spacing:1px;">● LIVE</span>';
 }
+
+// ── NEW DROP MODAL ──
+let _newDropData = null;
+let _newDropShownThisSession = false;
+
+function checkNewDrops(data) {
+  // Called from processData with the full Firebase data
+  const drops = data.newDrops;
+  if (!drops || !drops.active || !Array.isArray(drops.items) || !drops.items.length) return;
+
+  // Auto-expire: only show if created within last 24 hours
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  if (Date.now() - (drops.createdAt || 0) > ONE_DAY) return;
+
+  // Don't show if user already dismissed this drop (stored by createdAt timestamp)
+  const dismissKey = 'nd_' + drops.createdAt;
+  if (localStorage.getItem(dismissKey) === '1') return;
+
+  // Don't show twice in same session
+  if (_newDropShownThisSession) return;
+
+  _newDropData = drops;
+  _newDropShownThisSession = true;
+
+  // Small delay so menu loads first
+  setTimeout(() => showNewDropModal(drops), 800);
+}
+
+function showNewDropModal(drops) {
+  const modal = document.getElementById('new-drop-modal');
+  const container = document.getElementById('nd-items');
+
+  container.innerHTML = drops.items.map((item, i) => {
+    const imgSrc = item.img || '';
+    const imgHtml = imgSrc ? `<img src="${imgSrc}" style="width:100%;height:140px;object-fit:cover;border-radius:10px 10px 0 0;">` : `<div style="width:100%;height:140px;background:#1a1a1a;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:center;font-size:40px;">🍁</div>`;
+    return `<div style="min-width:160px;max-width:160px;background:#1a1a1a;border:1px solid rgba(204,31,31,0.3);border-radius:10px;overflow:hidden;flex-shrink:0;">
+      ${imgHtml}
+      <div style="padding:10px;text-align:center;">
+        <div style="font-family:'Oswald',sans-serif;font-size:13px;font-weight:600;color:#f0f0f0;text-transform:capitalize;">${item.name}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Build dots
+  const dotsEl = document.getElementById('nd-dots');
+  if (drops.items.length > 2) {
+    const dotCount = Math.ceil(drops.items.length / 2);
+    dotsEl.innerHTML = Array.from({length: dotCount}, (_, i) =>
+      `<div class="nd-dot${i===0?' active':''}" data-idx="${i}"></div>`
+    ).join('');
+    dotsEl.style.display = 'flex';
+  } else {
+    dotsEl.style.display = 'none';
+  }
+
+  modal.classList.add('open');
+  document.body.classList.add('no-scroll');
+}
+
+function dismissNewDrop() {
+  const modal = document.getElementById('new-drop-modal');
+  modal.classList.remove('open');
+  document.body.classList.remove('no-scroll');
+  // Remember dismissal for this specific drop
+  if (_newDropData && _newDropData.createdAt) {
+    localStorage.setItem('nd_' + _newDropData.createdAt, '1');
+  }
+}
+
+// Touch scroll for carousel + dot tracking
+document.addEventListener('DOMContentLoaded', () => {
+  const container = document.getElementById('nd-items');
+  if (container) {
+    container.addEventListener('scroll', () => {
+      const dotsEl = document.getElementById('nd-dots');
+      if (!dotsEl) return;
+      const dots = dotsEl.querySelectorAll('.nd-dot');
+      if (!dots.length) return;
+      const scrollPos = container.scrollLeft;
+      const cardWidth = 168; // 160 + 8 gap
+      const activeIdx = Math.round(scrollPos / (cardWidth * 2));
+      dots.forEach((d, i) => d.classList.toggle('active', i === activeIdx));
+    });
+  }
+});
 
 async function doFetch() {
   try {
@@ -1981,6 +2119,113 @@ function renderSalesSummary() {
 
   el.innerHTML = html;
 }
+
+// ── NEW DROPS ADMIN ──
+async function loadNewDropsAdmin() {
+  const statusEl = document.getElementById('nd-status-admin');
+  const itemsEl = document.getElementById('nd-items-admin');
+
+  if (!statusEl || !itemsEl) return;
+
+  try {
+    // Get current new drops state
+    const res = await fetch(FB_URL + '/inv_d6bb4/newDrops.json');
+    const drops = res.ok ? await res.json() : null;
+    const isActive = drops && drops.active;
+
+    // Show status
+    if (isActive && drops.createdAt) {
+      const createdDate = new Date(drops.createdAt);
+      const hourAgo = Date.now() - drops.createdAt > 60*60*1000;
+      statusEl.innerHTML = `<span style="color:var(--green);">● ACTIVE</span> - Created ${createdDate.toLocaleString()} ${hourAgo ? '(expires soon)' : ''}`;
+    } else {
+      statusEl.innerHTML = '<span style="color:var(--white3);">● Inactive</span>';
+    }
+
+    // Build item list from menu
+    let html = '';
+    if (menuItems && menuItems.length) {
+      menuItems.forEach(item => {
+        const checked = drops && drops.items && drops.items.find(d => d.name === item.name) ? 'checked' : '';
+        html += `<div class="nd-item-row">
+          <input type="checkbox" class="nd-check" data-name="${item.name}" data-img="${item.img}" ${checked} />
+          <div class="nd-item-name">${item.name}</div>
+        </div>`;
+      });
+    } else {
+      html = '<div style="padding:10px;text-align:center;color:var(--white3);font-family:Oswald,sans-serif;font-size:12px;">No items available</div>';
+    }
+    itemsEl.innerHTML = html;
+  } catch(e) {
+    statusEl.innerHTML = '<span style="color:var(--red);">Error loading status</span>';
+    itemsEl.innerHTML = '<div style="padding:10px;text-align:center;color:var(--red);font-family:Oswald,sans-serif;font-size:12px;">Failed to load</div>';
+  }
+}
+
+async function activateNewDrop() {
+  const checkboxes = document.querySelectorAll('.nd-check:checked');
+  const items = [];
+
+  checkboxes.forEach(cb => {
+    items.push({
+      name: cb.dataset.name,
+      img: cb.dataset.img || '',
+      addedAt: Date.now()
+    });
+  });
+
+  if (!items.length) {
+    alert('Select at least one item');
+    return;
+  }
+
+  try {
+    const payload = {
+      items,
+      createdAt: Date.now(),
+      active: true
+    };
+
+    const res = await fetch(FB_URL + '/inv_d6bb4/newDrops.json', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    showToast('New drop activated!', 'green');
+    loadNewDropsAdmin();
+  } catch(e) {
+    console.error('Error activating drop:', e);
+    showToast('Failed to activate drop', 'red-t');
+  }
+}
+
+async function deactivateNewDrop() {
+  try {
+    const res = await fetch(FB_URL + '/inv_d6bb4/newDrops/active.json', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(false)
+    });
+
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    showToast('New drop deactivated', 'green');
+    loadNewDropsAdmin();
+  } catch(e) {
+    console.error('Error deactivating drop:', e);
+    showToast('Failed to deactivate drop', 'red-t');
+  }
+}
+
+// Initialize new drops admin on panel open
+const _origOpenAdmin = openAdmin;
+openAdmin = function() {
+  _origOpenAdmin();
+  setTimeout(() => loadNewDropsAdmin(), 100);
+};
 
 // ── TOAST ──
 function showToast(msg, type='') {
