@@ -408,6 +408,8 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
     </div>
     <div class="sync-bar"><div class="sdot" id="sdot"></div><span id="slabel">Connecting to Firebase...</span><button class="sbtn-sync" onclick="syncNow()">Sync</button></div>
     <div class="stats-row" id="srow"></div>
+    <!-- GLOBAL confirmed orders banner — visible on ALL views -->
+    <div id="confirmed-orders-global" style="display:none;margin-bottom:14px;"></div>
     <div id="inv-view">
       <div class="swrap"><span class="sico">&#x2315;</span><input type="text" placeholder="Search items..." oninput="filterItems(this.value)"></div>
       <div class="cat-row" id="ctabs"></div>
@@ -3648,6 +3650,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
 
   persist();
   renderPendingOrders();
+  renderConfirmedWebOrders(); // always re-render confirmed section immediately
   renderStats();
   renderItems();
   if (cu?.role==='owner') renderDash(); else renderStaffLog();
@@ -3866,15 +3869,18 @@ function clearConfirmedOrders(){
 // ── CONFIRMED WEBSITE ORDERS (reversible) ──
 function renderConfirmedWebOrders() {
   const el = document.getElementById('confirmed-orders-section');
-  if (!el) return;
+  const globalEl = document.getElementById('confirmed-orders-global');
   // Find all confirmed website orders that haven't been cleared (by EOD save or manual clear)
   const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && !e._cleared);
-  if (!webOrders.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  if (!webOrders.length) {
+    if(el){ el.style.display = 'none'; el.innerHTML = ''; }
+    if(globalEl){ globalEl.style.display = 'none'; globalEl.innerHTML = ''; }
+    return;
+  }
 
-  el.style.display = 'block';
-  el.innerHTML = `<div style="background:rgba(62,207,142,0.06);border:1px solid rgba(62,207,142,0.3);border-radius:14px;padding:16px;margin-bottom:4px;">
+  const html = `<div style="background:rgba(62,207,142,0.06);border:1px solid rgba(62,207,142,0.3);border-radius:14px;padding:16px;margin-bottom:4px;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
-      <h3 style="margin-bottom:0;color:var(--green);">✅ Confirmed Website Orders</h3>
+      <h3 style="margin-bottom:0;color:var(--green);">✅ Confirmed Orders</h3>
       <span style="background:var(--green);color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-family:var(--mono);font-weight:700;">${webOrders.length}</span>
       <button onclick="clearConfirmedOrders()" style="margin-left:auto;background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:6px 14px;color:var(--red);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;">🗑 Clear All</button>
     </div>
@@ -3907,6 +3913,11 @@ function renderConfirmedWebOrders() {
       </div>`;
     }).join('')}
   </div>`;
+
+  // Show on dashboard section
+  if(el){ el.innerHTML = html; el.style.display = 'block'; }
+  // Show on global banner (visible on all tabs including inventory)
+  if(globalEl){ globalEl.innerHTML = html; globalEl.style.display = 'block'; }
 }
 
 // ── CANCELLED ORDERS LOG (Owner only) ──
@@ -4444,6 +4455,7 @@ async function fbPullNow(){
       renderCatTabs();
       renderItems();
       renderPendingOrders();
+      renderConfirmedWebOrders(); // always update confirmed orders on all tabs
       if(cu.role==='owner'&&document.getElementById('dash-view').style.display!=='none')renderDash();
       else if(document.getElementById('log-view').style.display!=='none')renderStaffLog();
     }
