@@ -410,6 +410,8 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
     <div class="stats-row" id="srow"></div>
     <!-- GLOBAL confirmed orders banner — visible on ALL views -->
     <div id="confirmed-orders-global" style="display:none;margin-bottom:14px;"></div>
+    <!-- DEBUG: Pending orders tracker (temporary) -->
+    <div id="debug-pending" style="display:none;background:rgba(255,255,0,0.1);border:1px solid rgba(255,255,0,0.3);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-family:monospace;font-size:10px;color:#ffcc00;max-height:120px;overflow-y:auto;"></div>
     <div id="inv-view">
       <div class="swrap"><span class="sico">&#x2315;</span><input type="text" placeholder="Search items..." oninput="filterItems(this.value)"></div>
       <div class="cat-row" id="ctabs"></div>
@@ -1300,6 +1302,15 @@ let cu=null,activeCat='ALL',srch='',selDay='today',staffSelDay='today',selPw=nul
 let inv={STRAINS:[],DISPOS:[],EDIBLES:[],PREROLLS:[],NICOTINE:[]};
 let log=[],pendingSale=null,selMethod=null,orderItems=[],orderPayMethod=null;
 let pendingWebOrders={}; // website orders waiting for confirmation
+let _debugPendingLog=[]; // debug log for tracking order changes
+function _debugPending(action,key,detail){
+  const entry=new Date().toLocaleTimeString()+' '+action+': '+key+(detail?' ('+detail+')':'');
+  _debugPendingLog.unshift(entry);
+  if(_debugPendingLog.length>20)_debugPendingLog.length=20;
+  const el=document.getElementById('debug-pending');
+  if(el){el.style.display='block';el.innerHTML='<b>🔍 Pending Order Debug:</b><br>'+_debugPendingLog.join('<br>');}
+  console.log('[PENDING-DEBUG]',action,key,detail||'');
+}
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
 let commissionPaused={}; // {staffName: true} — commission disabled for this staff member
@@ -1994,30 +2005,33 @@ function confirmOrder(){
       confirmed:false
     };
     if(orderPayMethod==='split'){pendingData.splitCash=splitCash;pendingData.splitVirtual=splitVirtual;}
-    // Deduct inventory immediately (restored if cancelled)
-    const objs2=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||''}));
-    objs2.forEach(({item,qty,flavorText})=>{
-      if(!item)return;
-      item.left=Math.max(0,Math.round((gl(item)-qty)*10)/10);
-      if(flavorText&&Array.isArray(item.flavors)){
-        const fl=item.flavors.find(f=>f.name===flavorText);
-        if(fl)fl.stock=Math.max(0,fl.stock-qty);
-      }
-    });
+    // Deduct inventory immediately (restored if cancelled) — wrapped in try/catch so order still saves even if deduction fails
+    try{
+      const objs2=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||''}));
+      objs2.forEach(({item,qty,flavorText})=>{
+        if(!item)return;
+        item.left=Math.max(0,Math.round((gl(item)-qty)*10)/10);
+        if(flavorText&&Array.isArray(item.flavors)){
+          const fl=item.flavors.find(f=>f.name===flavorText);
+          if(fl)fl.stock=Math.max(0,fl.stock-qty);
+        }
+      });
+    }catch(stockErr){console.error('Stock deduction error (order still saved):',stockErr);}
     pendingData._stockDeducted=true;
     pendingData._stockDeductedV2=true;
-    // Write to Firebase pending_orders — retry on failure so order doesn't vanish
+    // Add to local pending list FIRST so it shows immediately
+    pendingData.fbKey=fbKey;
+    pendingData.heldAt=Date.now();
+    pendingData._stockDeductedLocally=true;
+    pendingWebOrders[fbKey]=pendingData;
+    _debugPending('CREATED',fbKey,pendingData.orderItems.map(i=>i.itemName).join(', ')+' $'+pendingData.total);
+    // Write to Firebase pending_orders — retry on failure
     (async function putPending(retries){
       try{
         const r=await fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(pendingData)});
         if(!r.ok&&retries>0)setTimeout(()=>putPending(retries-1),2000);
       }catch(e){if(retries>0)setTimeout(()=>putPending(retries-1),2000);}
     })(3);
-    // Also add to local pending list so it shows immediately
-    pendingData.fbKey=fbKey;
-    pendingData.heldAt=Date.now();
-    pendingData._stockDeductedLocally=true;
-    pendingWebOrders[fbKey]=pendingData;
     closeOrder();
     persist();
     renderPendingOrders();
@@ -3275,11 +3289,22 @@ function processWebsiteOrders(pendingOrders) {
   if (!pendingOrders || typeof pendingOrders !== 'object') return;
   let newCount = 0;
   Object.entries(pendingOrders).forEach(([fbKey, order]) => {
+    try{
     if (!order) return;
     // Skip orders we already confirmed/cancelled locally (prevents race condition with SSE)
     if (processedOrderIds.has(fbKey)) return;
     // Check if admin cancelled from the website menu
     if (order.cancelled && !order._reversedByAdmin) {
+      // PROTECT: If this is a manual order held locally for less than 60s, ignore external cancel
+      // This prevents race conditions where menu code may mark new orders as cancelled
+      const localOrder = pendingWebOrders[fbKey];
+      if (localOrder && localOrder.source === 'manual' && localOrder.heldAt && (Date.now() - localOrder.heldAt) < 60000) {
+        _debugPending('BLOCKED-CANCEL',fbKey,'manual order <60s — protected! cancelled flag in Firebase removed');
+        // Remove the cancelled flag from Firebase so it doesn't keep triggering
+        fetch(FB_URL + '/pending_orders/' + fbKey + '/cancelled.json', {method:'DELETE'}).catch(()=>{});
+        return;
+      }
+      _debugPending('EXTERNAL-CANCEL',fbKey,'source:'+(order.source||'website')+' cancelled:'+order.cancelled+' reversedByAdmin:'+order._reversedByAdmin);
       // Check if it was a confirmed order (has a log entry)
       const logIdx = log.findIndex(e => e.webOrderKey === fbKey);
       if (logIdx > -1) {
@@ -3314,6 +3339,7 @@ function processWebsiteOrders(pendingOrders) {
           }
           _restoreFlavorStock(foundItem,oi,qty);
         });
+        _debugPending('DELETED-BY-EXTERNAL-CANCEL',fbKey,'held order cancelled from menu');
         delete pendingWebOrders[fbKey];
       } else if (order._stockDeducted) {
         // Order wasn't held locally but stock WAS deducted — restore from order data
@@ -3341,9 +3367,13 @@ function processWebsiteOrders(pendingOrders) {
       persist(); renderStats(); renderItems(); renderPendingOrders();
       showToast('Order cancelled from menu — stock restored 🔄', 'err');
     }
-    if (order.confirmed || order.cancelled) return;
+    if (order.confirmed || order.cancelled) {
+      if(pendingWebOrders[fbKey]) _debugPending('FB-SKIP-FLAGGED',fbKey,'confirmed:'+order.confirmed+' cancelled:'+order.cancelled+' — local still in map');
+      return;
+    }
     if (!pendingWebOrders[fbKey]) {
       pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:false};
+      console.log('[PENDING] New order from Firebase:', fbKey, 'source:', order.source||'website', 'total:', order.total);
       newCount++;
       // Deduct stock if not already done reliably.
       // _stockDeductedV2 means the fix is in place (processWebsiteOrders runs AFTER inv update).
@@ -3377,10 +3407,22 @@ function processWebsiteOrders(pendingOrders) {
         persist();renderStats();renderItems();
       }
     }
+    }catch(orderErr){console.error('[PENDING] Error processing order:', fbKey, orderErr);}
   });
   // NEVER auto-remove pending orders from local map.
   // Orders are ONLY removed by explicit user action: confirm or cancel buttons.
   // This prevents the poll from wiping orders before Firebase sync completes.
+
+  // DEBUG: verify all local orders still exist after processing
+  const localKeys = Object.keys(pendingWebOrders);
+  const fbKeys = Object.keys(pendingOrders);
+  console.log('[PENDING-AUDIT] Local orders:', localKeys.length, 'Firebase orders:', fbKeys.length);
+  localKeys.forEach(k => {
+    if (!pendingOrders[k] && !processedOrderIds.has(k)) {
+      console.warn('[PENDING-AUDIT] Local order NOT in Firebase (yet):', k, 'source:', pendingWebOrders[k]?.source);
+    }
+  });
+
   renderPendingOrders();
   if (newCount > 0) {
     showToast('🚨 ' + newCount + ' NEW ORDER' + (newCount>1?'S':'') + ' WAITING!', 'ok');
@@ -3408,7 +3450,16 @@ function processWebsiteOrders(pendingOrders) {
 }
 
 function renderPendingOrders() {
-  const orders = Object.values(pendingWebOrders).filter(o => !o.confirmed && !o.cancelled);
+  const allOrders = Object.values(pendingWebOrders);
+  const orders = allOrders.filter(o => !o.confirmed && !o.cancelled);
+  // DEBUG: log every render with counts
+  if(allOrders.length !== orders.length){
+    const filtered = allOrders.filter(o => o.confirmed || o.cancelled);
+    console.warn('[RENDER-PENDING] Filtered out', filtered.length, 'orders:', filtered.map(o=>({key:o.fbKey,confirmed:o.confirmed,cancelled:o.cancelled,source:o.source})));
+  }
+  if(allOrders.length>0||orders.length>0){
+    _debugPending('RENDER','count='+orders.length+'/'+allOrders.length, allOrders.map(o=>o.fbKey?.substr(0,15)+'['+(o.confirmed?'C':'')+(o.cancelled?'X':'')+']').join(', '));
+  }
   const ownerEl = document.getElementById('pending-orders-section');
   const staffEl = document.getElementById('pending-orders-staff');
 
@@ -3646,6 +3697,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   }
 
   log.unshift(e);
+  _debugPending('CONFIRMED',fbKey,'moved to sales log');
   delete pendingWebOrders[fbKey];
   processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
 
@@ -3697,6 +3749,7 @@ function cancelWebOrder(fbKey) {
     _restoreFlavorStock(foundItem,oi,qty);
   });
 
+  _debugPending('CANCELLED',fbKey,'user cancelled — stock restored');
   delete pendingWebOrders[fbKey];
   processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
 
