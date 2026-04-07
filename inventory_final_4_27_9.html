@@ -1576,7 +1576,15 @@ async function tryLogin(){
     }catch(e){console.error('Post-login sync failed:',e);}
     // NOW run repairs with fresh Firebase data — no poll can interfere
     repairAllCommissions();
-    repairStock(false);
+    // repairStock REMOVED from auto-login — it was overriding manual LEFT/BOUGHT edits
+    // ONE-TIME cleanup: wipe all stale sale log entries that were causing phantom sold numbers
+    // After this runs once, new sales from pending orders / confirmed orders / EOD / sells will track normally
+    if(!localStorage.getItem('logCleanV1')){
+      log = [];
+      localStorage.setItem('logCleanV1','done');
+      persist();
+      console.log('[LOGIN] One-time log cleanup done — stale entries wiped');
+    }
     repairEODtoLog();
     renderAll();
     // ONLY start autoSync AFTER repairs are done and persisted
