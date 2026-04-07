@@ -2130,7 +2130,11 @@ function resetAllSold(e){
   const all=C().flatMap(c=>inv[c]||[]).filter(i=>i.bought>0);
   const needsReset=all.filter(i=>gl(i)!==i.bought);
   if(!needsReset.length){showToast('All items already at full stock','ok');return;}
-  if(!confirm('Reset '+needsReset.length+' items to full stock?\n\n• Sets Left = Bought (Sold → 0)\n• Restocks all flavor/variant quantities\n\nThis does NOT touch the sales log.')){return;}
+  // Count sale-related log entries that would bring sold numbers back
+  const saleLogCount=log.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy'||e.type==='adjustment').length;
+  if(!confirm('Reset '+needsReset.length+' items to full stock?\n\n• Sets Left = Bought (Sold → 0)\n• Restocks all flavor/variant quantities'+(saleLogCount?'\n• Clears '+saleLogCount+' sale log entries so sold stays at 0':'')+'\n\nThis cannot be undone.')){return;}
+  // Remove ALL sale-related log entries so repairStock won't recalculate sold numbers
+  log=log.filter(e=>e.type!=='sell'&&e.type!=='order'&&e.type!=='selfbuy'&&e.type!=='adjustment');
   let fixCount=0;
   needsReset.forEach(item=>{
     const deficit=item.bought-gl(item); // how much was sold
@@ -4437,15 +4441,20 @@ function repairStock(manual){
 
   let fixed = 0;
   const fixes = [];
+  console.log('[repairStock] soldMap:', JSON.stringify(soldMap));
+  console.log('[repairStock] adjMap:', JSON.stringify(adjMap));
+  console.log('[repairStock] log entries:', log.length, 'types:', [...new Set(log.map(e=>e.type))]);
   C().forEach(cat => {
     (inv[cat]||[]).forEach(item => {
       if (!item.name || !item.bought) return;
       const key = item.name.toLowerCase();
       const totalSold = soldMap[key] || 0;
-      const correctLeft = Math.round(Math.max(0, item.bought - totalSold - (adjMap[key]||0)) * 10) / 10;
+      const adj = adjMap[key] || 0;
+      const correctLeft = Math.min(item.bought, Math.round(Math.max(0, item.bought - totalSold - adj)));
       const currentLeft = gl(item);
       // Fix if current stock doesn't match calculated stock (too low from double-deduction OR too high from missed deduction)
       if (Math.abs(currentLeft - correctLeft) > 0.05) {
+        console.log('[repairStock] FIX', item.name, ':', currentLeft, '→', correctLeft, '(bought:', item.bought, 'sold:', totalSold, 'adj:', adj, ')');
         fixes.push(item.name + ': ' + currentLeft + ' → ' + correctLeft);
         item.left = correctLeft;
         fixed++;
