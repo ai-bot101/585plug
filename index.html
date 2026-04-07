@@ -1550,8 +1550,7 @@ async function tryLogin(){
   // Mark data as fully loaded — allows beforeunload/visibilitychange to safely push
   _dataLoaded=true;
   // CRITICAL: Pull fresh data from Firebase FIRST, then run repairs.
-  // Running repairs before sync would use stale cached data and corrupt stock levels.
-  startAutoSync();
+  // DO NOT start autoSync until this is done — otherwise the poll overwrites repaired values.
   (async function postLoginSync(){
     try{
       const res=await fetch(FB_URL+'.json?t='+Date.now());
@@ -1575,11 +1574,13 @@ async function tryLogin(){
         }
       }
     }catch(e){console.error('Post-login sync failed:',e);}
-    // NOW run repairs with fresh Firebase data
+    // NOW run repairs with fresh Firebase data — no poll can interfere
     repairAllCommissions();
     repairStock(false);
     repairEODtoLog();
     renderAll();
+    // ONLY start autoSync AFTER repairs are done and persisted
+    startAutoSync();
   })();}
 function logout(){persist();stopAutoSync();_dataLoaded=false;cu=null;si=null;document.getElementById('pass-wrap').style.display='none';document.getElementById('pass-inp').value='';document.getElementById('lerr').textContent='';document.querySelectorAll('.u-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('login-btn').disabled=true;fbLastTimestamp=0;backToCalc();}
 async function toggleEarnings(val){if(!await _ownerGuard())return;cfg.showEarnings=val;persist();renderStaffLog();updateEarnBtn();}
