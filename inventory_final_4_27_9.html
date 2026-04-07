@@ -2005,6 +2005,7 @@ function confirmOrder(){
       }
     });
     pendingData._stockDeducted=true;
+    pendingData._stockDeductedV2=true;
     // Write to Firebase pending_orders
     fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(pendingData)}).catch(()=>{});
     // Also add to local pending list so it shows immediately
@@ -3372,9 +3373,17 @@ function processWebsiteOrders(pendingOrders) {
       }
     }
   });
-  // Remove orders that were deleted from Firebase
+  // Remove orders that were deleted from Firebase — BUT keep locally-created orders
+  // that may not have reached Firebase yet (PUT still in-flight)
   Object.keys(pendingWebOrders).forEach(k => {
-    if (!pendingOrders[k]) delete pendingWebOrders[k];
+    if (!pendingOrders[k]) {
+      const held = pendingWebOrders[k];
+      // Keep if created less than 15 seconds ago (PUT may still be in-flight)
+      if (held && held.heldAt && (Date.now() - held.heldAt) < 15000) return;
+      // Keep if we already processed it (confirmed/cancelled locally)
+      if (processedOrderIds.has(k)) return;
+      delete pendingWebOrders[k];
+    }
   });
   renderPendingOrders();
   if (newCount > 0) {
