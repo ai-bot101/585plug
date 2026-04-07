@@ -1544,16 +1544,41 @@ async function tryLogin(){
   renderAll();updateSync();
   // ALL one-time migrations REMOVED — they depended on localStorage which can be cleared by the browser,
   // causing them to re-run and wipe data. No code should EVER auto-delete orders, logs, or EOD data.
-  // Repair commissions on every login
-  repairAllCommissions();
-  // Recalculate stock levels from activity logs, pending orders, and manual adjustments
-  repairStock(false);
   repairPassHashes();
-  repairEODtoLog();
   // Mark data as fully loaded — allows beforeunload/visibilitychange to safely push
   _dataLoaded=true;
-  // Force a fresh pull on login to guarantee sync regardless of timestamp
-  startAutoSync();}
+  // CRITICAL: Pull fresh data from Firebase FIRST, then run repairs.
+  // Running repairs before sync would use stale cached data and corrupt stock levels.
+  startAutoSync();
+  (async function postLoginSync(){
+    try{
+      const res=await fetch(FB_URL+'.json?t='+Date.now());
+      if(res.ok){
+        const data=await res.json();
+        if(data){
+          if(data.inv)inv=data.inv;
+          C().forEach(c=>{if(!inv[c])inv[c]=[];});
+          if(Array.isArray(data.log))log=data.log;
+          if(data.cfg){const savedCu=cu;cfg=data.cfg;cu=savedCu;}
+          customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
+          dayNotes=data.dayNotes||{};
+          eodLogs=Array.isArray(data.eodLogs)?data.eodLogs:[];
+          failedAttempts=Array.isArray(data.failedAttempts)?data.failedAttempts:[];
+          loginLog=Array.isArray(data.loginLog)?data.loginLog:[];
+          cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
+          staffDebts=data.staffDebts||{};
+          commissionPaused=data.commissionPaused||{};
+          fbLastTimestamp=data.updatedAt||0;
+          if(data.pending_orders&&cu)processWebsiteOrders(data.pending_orders);
+        }
+      }
+    }catch(e){console.error('Post-login sync failed:',e);}
+    // NOW run repairs with fresh Firebase data
+    repairAllCommissions();
+    repairStock(false);
+    repairEODtoLog();
+    renderAll();
+  })();}
 function logout(){persist();stopAutoSync();_dataLoaded=false;cu=null;si=null;document.getElementById('pass-wrap').style.display='none';document.getElementById('pass-inp').value='';document.getElementById('lerr').textContent='';document.querySelectorAll('.u-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('login-btn').disabled=true;fbLastTimestamp=0;backToCalc();}
 async function toggleEarnings(val){if(!await _ownerGuard())return;cfg.showEarnings=val;persist();renderStaffLog();updateEarnBtn();}
 function toggleEarningsQuick(){
@@ -2094,7 +2119,38 @@ function deleteCat(cat){const n=(inv[cat]||[]).length;if(n>0&&!confirm('"'+cat+'
 function renderAll(){renderStats();renderCatTabs();renderItems();renderConfirmedWebOrders();if(cu?.role==='owner')renderDash();else renderStaffLog();}
 function renderStats(){const all=C().flatMap(c=>inv[c]||[]);const so=all.filter(i=>gl(i)===0&&i.bought).length;const lw=all.filter(i=>{const p=gp(i);return p<=25&&p>0;}).length;const tS=log.filter(e=>e.date===tday()&&(e.type==='sell'||e.type==='order'));
 const webOrders=log.filter(e=>e.date===tday()&&e.source==='website');const ts=tS.reduce((s,e)=>s+(e.amtReceived||0),0);const isOwn2=cu?.role==='owner';
-document.getElementById('srow').innerHTML=`<div class="scard"><div class="sl">Total Items</div><div class="sv">${all.length}</div><div class="ss">${C().filter(c=>(inv[c]||[]).length>0).length} cats</div></div><div class="scard red"><div class="sl">Sold Out</div><div class="sv">${so}</div><div class="ss">need restock</div></div><div class="scard orange"><div class="sl">Running Low</div><div class="sv">${lw}</div><div class="ss">under 25%</div></div><div class="scard green"><div class="sl">Today Revenue</div><div class="sv">${fmtP(ts)}</div><div class="ss">${tS.length} sales${isOwn2&&tS.length?'&ensp;<span onclick="clearTodaySales(event)" style="background:rgba(244,107,107,0.12);border:1px solid rgba(244,107,107,0.25);border-radius:5px;padding:1px 7px;font-size:9px;font-weight:700;color:var(--red);cursor:pointer;letter-spacing:.5px;">CLEAR</span>':''}</div></div><div class="add-order-btn" onclick="openOrderSheet()"><div class="ao-icon">+</div><div class="ao-label">Add Order</div></div>${!isOwn2?'<div class="add-order-btn" onclick="openSelfBuy()" style="border-color:rgba(244,162,74,0.3);background:rgba(244,162,74,0.08);"><div class="ao-icon">🛒</div><div class="ao-label" style="color:var(--orange);">Buy For Me</div></div>':''}`;}
+document.getElementById('srow').innerHTML=`<div class="scard"><div class="sl">Total Items</div><div class="sv">${all.length}</div><div class="ss">${C().filter(c=>(inv[c]||[]).length>0).length} cats</div></div><div class="scard red"><div class="sl">Sold Out</div><div class="sv">${so}</div><div class="ss">need restock${isOwn2?'&ensp;<span onclick="resetAllSold(event)" style="background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:5px;padding:1px 7px;font-size:9px;font-weight:700;color:var(--accent);cursor:pointer;letter-spacing:.5px;">RESET SOLD</span>':''}</div></div><div class="scard orange"><div class="sl">Running Low</div><div class="sv">${lw}</div><div class="ss">under 25%</div></div><div class="scard green"><div class="sl">Today Revenue</div><div class="sv">${fmtP(ts)}</div><div class="ss">${tS.length} sales${isOwn2&&tS.length?'&ensp;<span onclick="clearTodaySales(event)" style="background:rgba(244,107,107,0.12);border:1px solid rgba(244,107,107,0.25);border-radius:5px;padding:1px 7px;font-size:9px;font-weight:700;color:var(--red);cursor:pointer;letter-spacing:.5px;">CLEAR</span>':''}</div></div><div class="add-order-btn" onclick="openOrderSheet()"><div class="ao-icon">+</div><div class="ao-label">Add Order</div></div>${!isOwn2?'<div class="add-order-btn" onclick="openSelfBuy()" style="border-color:rgba(244,162,74,0.3);background:rgba(244,162,74,0.08);"><div class="ao-icon">🛒</div><div class="ao-label" style="color:var(--orange);">Buy For Me</div></div>':''}`;}
+function resetAllSold(e){
+  if(e)e.stopPropagation();
+  const all=C().flatMap(c=>inv[c]||[]).filter(i=>i.bought>0);
+  const needsReset=all.filter(i=>gl(i)!==i.bought);
+  if(!needsReset.length){showToast('All items already at full stock','ok');return;}
+  if(!confirm('Reset '+needsReset.length+' items to full stock?\n\n• Sets Left = Bought (Sold → 0)\n• Restocks all flavor/variant quantities\n\nThis does NOT touch the sales log.')){return;}
+  let fixCount=0;
+  needsReset.forEach(item=>{
+    const deficit=item.bought-gl(item); // how much was sold
+    item.left=item.bought; // reset left to bought
+    fixCount++;
+    // Restock flavors proportionally
+    if(Array.isArray(item.flavors)&&item.flavors.length>0&&deficit>0){
+      const totalFlavorStock=item.flavors.reduce((s,f)=>s+(f.stock||0),0);
+      if(totalFlavorStock>0){
+        // Distribute deficit proportionally based on current stock ratios
+        item.flavors.forEach(f=>{
+          const ratio=(f.stock||0)/totalFlavorStock;
+          f.stock=Math.round(((f.stock||0)+deficit*ratio)*10)/10;
+        });
+      }else{
+        // All flavors at 0 — split evenly
+        const each=Math.round((deficit/item.flavors.length)*10)/10;
+        item.flavors.forEach(f=>{f.stock=(f.stock||0)+each;});
+      }
+    }
+  });
+  persist();renderStats();renderItems();renderCatTabs();
+  if(cu?.role==='owner')renderDash();else renderStaffLog();
+  showToast(fixCount+' items reset to full stock ✅','ok');
+}
 function clearTodaySales(e){
   e.stopPropagation();
   const today=tday();
@@ -3375,6 +3431,16 @@ function processWebsiteOrders(pendingOrders) {
       if(pendingWebOrders[fbKey]) _debugPending('FB-SKIP-FLAGGED',fbKey,'confirmed:'+order.confirmed+' cancelled:'+order.cancelled+' — local still in map');
       return;
     }
+    // CRITICAL: Check if this order was already confirmed (exists in sales log).
+    // This prevents orders from coming back as pending after refresh/relog
+    // when the Firebase DELETE of pending_orders failed.
+    const alreadyInLog = log.some(e => e.webOrderKey === fbKey);
+    if (alreadyInLog) {
+      _debugPending('SKIP-ALREADY-CONFIRMED',fbKey,'found in sales log — deleting stale Firebase entry');
+      // Clean up stale Firebase entry so it doesn't keep triggering
+      fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
+      return;
+    }
     if (!pendingWebOrders[fbKey]) {
       pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:false};
       console.log('[PENDING] New order from Firebase:', fbKey, 'source:', order.source||'website', 'total:', order.total);
@@ -3705,9 +3771,16 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   delete pendingWebOrders[fbKey];
   processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
 
-  // DELETE from Firebase pending_orders so it can't come back as pending on reload
-  // (Previously used PATCH to set confirmed=true, but fbPush race condition could overwrite it)
-  fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
+  // Mark as confirmed in Firebase FIRST (safety net), then DELETE
+  // If DELETE fails, the confirmed flag prevents re-processing on next refresh
+  fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({confirmed:true})}).then(()=>{
+    // Now delete — if this fails, the confirmed flag still protects us
+    fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
+  }).catch(()=>{
+    // PATCH failed — try DELETE anyway
+    fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
+  });
 
   persist();
   renderPendingOrders();
@@ -3757,8 +3830,13 @@ function cancelWebOrder(fbKey) {
   delete pendingWebOrders[fbKey];
   processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
 
-  // Delete from Firebase pending_orders so it disappears from menu admin too
-  fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
+  // Mark cancelled in Firebase FIRST, then DELETE — double protection
+  fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({cancelled:true})}).then(()=>{
+    fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
+  }).catch(()=>{
+    fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
+  });
 
   persist();
   renderPendingOrders();
@@ -3919,14 +3997,17 @@ function revertToPending(fbKey) {
 
 function clearConfirmedOrders(){
   if(!confirm('Clear all confirmed orders from this view?\n\nStock deductions will stay — this just hides them from the confirmed list.'))return;
-  const today=tday();
+  const cleared=[];
   log.forEach(e=>{
-    if(e.source==='website'&&e.webOrderKey&&e.date===today){
+    if(e.source==='website'&&e.webOrderKey&&!e._cleared){
       e._cleared=true;
+      cleared.push(e.webOrderKey);
+      // Also delete from Firebase pending_orders so they can't come back on relog
+      fetch(FB_URL+'/pending_orders/'+e.webOrderKey+'.json',{method:'DELETE'}).catch(()=>{});
     }
   });
   persist();renderConfirmedWebOrders();
-  showToast('Confirmed orders cleared ✅','ok');
+  showToast(cleared.length+' confirmed orders cleared ✅','ok');
 }
 // ── CONFIRMED WEBSITE ORDERS (reversible) ──
 function renderConfirmedWebOrders() {
