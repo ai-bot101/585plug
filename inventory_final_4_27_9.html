@@ -1570,20 +1570,9 @@ async function tryLogin(){
           staffDebts=data.staffDebts||{};
           commissionPaused=data.commissionPaused||{};
           fbLastTimestamp=data.updatedAt||0;
-          // ONE-TIME cleanup: wipe stale log + reset all LEFT=BOUGHT BEFORE processing orders
-          // This prevents alreadyInLog from deleting legitimate pending orders
-          if(!localStorage.getItem('logCleanV2')){
-            log = [];
-            // Reset LEFT = BOUGHT for all items so sold = 0
-            C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{
-              if(item.bought>0){ item.left=item.bought; }
-              // Reset all flavor stocks to whole numbers
-              if(Array.isArray(item.flavors)){item.flavors.forEach(f=>{f.stock=Math.round(f.stock||0);});}
-            });});
-            localStorage.setItem('logCleanV2','done');
-            persist();
-            console.log('[LOGIN] One-time cleanup done — log wiped + all items reset to full stock');
-          }
+          // Auto-cleanup REMOVED — was wiping confirmed orders on other devices
+          // repairStock is already disabled at login so LEFT values won't be overridden
+          // Use RESET SOLD button manually if you need to zero out sold numbers
           if(data.pending_orders&&cu)processWebsiteOrders(data.pending_orders);
         }
       }
