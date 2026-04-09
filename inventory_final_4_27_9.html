@@ -1899,6 +1899,10 @@ function pickPriceTier(cat,ri,ti){
 }
 let _pendingPriceTier=null;
 function showFlavorPicker(cat,ri,item,flavors){
+  const pt=_pendingPriceTier||{};
+  const qty=pt.qty||1;
+  // If qty > 1, show multi-flavor picker instead
+  if(qty>1){return showMultiFlavorPicker(cat,ri,item,flavors,qty);}
   const existing=document.getElementById('flavor-pick-modal');if(existing)existing.remove();
   const d=document.createElement('div');d.id='flavor-pick-modal';
   d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -1913,6 +1917,118 @@ function showFlavorPicker(cat,ri,item,flavors){
     <button onclick="document.getElementById('flavor-pick-modal').remove()" style="width:100%;margin-top:12px;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text3);font-size:13px;cursor:pointer;">Cancel</button>
   </div>`;
   document.body.appendChild(d);
+}
+let _mfpState=null;
+function showMultiFlavorPicker(cat,ri,item,flavors,totalQty){
+  const existing=document.getElementById('flavor-pick-modal');if(existing)existing.remove();
+  _mfpState={cat,ri,item,flavors,totalQty,picks:{}};
+  const d=document.createElement('div');d.id='flavor-pick-modal';
+  d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;';
+  _renderMultiFlavorInner(d);
+  document.body.appendChild(d);
+}
+function _renderMultiFlavorInner(container){
+  const s=_mfpState;if(!s)return;
+  const assigned=Object.values(s.picks).reduce((a,b)=>a+b,0);
+  const remaining=s.totalQty-assigned;
+  const isDone=remaining===0;
+  let flavorRows=s.flavors.map((f,i)=>{
+    const cnt=s.picks[f.name]||0;
+    const canAdd=remaining>0&&f.stock>cnt;
+    const canSub=cnt>0;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;margin-bottom:8px;background:${cnt>0?'rgba(108,99,255,0.08)':'var(--bg3)'};border:1px solid ${cnt>0?'rgba(108,99,255,0.3)':'var(--border)'};border-radius:12px;transition:all 0.2s;">
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;color:var(--text);">${f.name}</div>
+        <div style="font-size:11px;color:var(--text3);">${f.stock} in stock</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button onclick="_mfpAdj('${f.name.replace(/'/g,"\\'")}',${i},-1)" style="width:32px;height:32px;border-radius:50%;border:1px solid ${canSub?'var(--red)':'var(--border)'};background:${canSub?'rgba(255,77,77,0.1)':'var(--bg3)'};color:${canSub?'var(--red)':'var(--text3)'};font-size:18px;font-weight:700;cursor:${canSub?'pointer':'default'};display:flex;align-items:center;justify-content:center;"${canSub?'':' disabled'}>−</button>
+        <span style="min-width:28px;text-align:center;font-size:16px;font-weight:700;color:${cnt>0?'var(--accent)':'var(--text3)'};">${cnt}</span>
+        <button onclick="_mfpAdj('${f.name.replace(/'/g,"\\'")}',${i},1)" style="width:32px;height:32px;border-radius:50%;border:1px solid ${canAdd?'var(--green)':'var(--border)'};background:${canAdd?'rgba(0,200,83,0.1)':'var(--bg3)'};color:${canAdd?'var(--green)':'var(--text3)'};font-size:18px;font-weight:700;cursor:${canAdd?'pointer':'default'};display:flex;align-items:center;justify-content:center;"${canAdd?'':' disabled'}>+</button>
+      </div>
+    </div>`;
+  }).join('');
+  // Summary of picks
+  let pickSummary='';
+  const pickEntries=Object.entries(s.picks).filter(([,v])=>v>0);
+  if(pickEntries.length){
+    pickSummary=pickEntries.map(([name,qty])=>`<span style="display:inline-block;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:6px;padding:2px 8px;margin:2px 4px 2px 0;font-size:11px;color:var(--accent);font-weight:600;">${name} ×${qty}</span>`).join('');
+  }
+  container.innerHTML=`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:400px;width:100%;max-height:85vh;overflow-y:auto;">
+    <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:2px;">${s.item.name}</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:6px;">Pick flavors for your ${s.totalQty} items</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;margin-bottom:14px;background:${isDone?'rgba(0,200,83,0.08)':'rgba(108,99,255,0.06)'};border:1px solid ${isDone?'rgba(0,200,83,0.25)':'rgba(108,99,255,0.15)'};border-radius:10px;">
+      <span style="font-size:13px;color:var(--text);">Assigned: <b style="color:${isDone?'var(--green)':'var(--accent)'};">${assigned}</b> / ${s.totalQty}</span>
+      <span style="font-size:12px;color:${isDone?'var(--green)':'var(--text3)'};">${isDone?'✓ All assigned':remaining+' remaining'}</span>
+    </div>
+    ${pickSummary?'<div style="margin-bottom:12px;">'+pickSummary+'</div>':''}
+    <div>${flavorRows}</div>
+    <div onclick="_mfpSkip()" style="text-align:center;padding:10px;margin-top:4px;color:var(--text3);font-size:12px;cursor:pointer;border:1px dashed var(--border);border-radius:10px;">No flavor / Skip</div>
+    <button onclick="_mfpDone()" style="width:100%;margin-top:12px;padding:14px;background:${isDone?'var(--accent)':'var(--bg3)'};border:1px solid ${isDone?'var(--accent)':'var(--border)'};border-radius:10px;color:${isDone?'#fff':'var(--text3)'};font-size:14px;font-weight:700;cursor:${isDone?'pointer':'default'};opacity:${isDone?'1':'0.5'};transition:all 0.2s;"${isDone?'':' disabled'}>
+      ${isDone?'✓ Add to Order':'Assign all '+s.totalQty+' items to continue'}
+    </button>
+    <button onclick="_mfpCancel()" style="width:100%;margin-top:8px;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text3);font-size:13px;cursor:pointer;">Cancel</button>
+  </div>`;
+}
+function _mfpAdj(flavorName,fi,delta){
+  if(!_mfpState)return;
+  const s=_mfpState;
+  const current=s.picks[flavorName]||0;
+  const newVal=current+delta;
+  if(newVal<0)return;
+  const assigned=Object.values(s.picks).reduce((a,b)=>a+b,0);
+  if(delta>0&&assigned>=s.totalQty)return;
+  // Don't exceed stock
+  const flav=s.flavors[fi];
+  if(delta>0&&flav&&newVal>flav.stock)return;
+  if(newVal===0){delete s.picks[flavorName];}else{s.picks[flavorName]=newVal;}
+  const container=document.getElementById('flavor-pick-modal');
+  if(container)_renderMultiFlavorInner(container);
+}
+function _mfpDone(){
+  if(!_mfpState)return;
+  const s=_mfpState;
+  const assigned=Object.values(s.picks).reduce((a,b)=>a+b,0);
+  if(assigned!==s.totalQty)return;
+  document.getElementById('flavor-pick-modal')?.remove();
+  const item=(inv[s.cat]||[])[s.ri];if(!item)return;
+  const pt=_pendingPriceTier||{};
+  const qty=pt.qty||s.totalQty;
+  const label=pt.label||'';
+  const price=pt.price||0;
+  _pendingPriceTier=null;
+  // Build flavors object and display text
+  const flavorsObj={};
+  const textParts=[];
+  Object.entries(s.picks).forEach(([name,cnt])=>{
+    if(cnt>0){flavorsObj[name]=cnt;textParts.push(name+' ×'+cnt);}
+  });
+  const flavorText=textParts.join(', ');
+  orderItems.push({cat:s.cat,ri:s.ri,itemName:item.name,qty,label,price,flavorText,flavors:flavorsObj});
+  document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');
+  if(orderItems.length===1&&price>0){const totalInp=document.getElementById('ord-total');if(totalInp&&!totalInp.value)totalInp.value=price;}
+  renderOrdItems();calcComm();
+  _mfpState=null;
+}
+function _mfpSkip(){
+  if(!_mfpState)return;
+  document.getElementById('flavor-pick-modal')?.remove();
+  const s=_mfpState;
+  const item=(inv[s.cat]||[])[s.ri];if(!item)return;
+  const pt=_pendingPriceTier||{};
+  const qty=pt.qty||s.totalQty;
+  const label=pt.label||'';
+  const price=pt.price||0;
+  _pendingPriceTier=null;
+  orderItems.push({cat:s.cat,ri:s.ri,itemName:item.name,qty,label,price,flavorText:'',flavors:null});
+  document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');
+  if(orderItems.length===1&&price>0){const totalInp=document.getElementById('ord-total');if(totalInp&&!totalInp.value)totalInp.value=price;}
+  renderOrdItems();calcComm();
+  _mfpState=null;
+}
+function _mfpCancel(){
+  _mfpState=null;_pendingPriceTier=null;
+  document.getElementById('flavor-pick-modal')?.remove();
 }
 function pickFlavor(cat,ri,flavorName,fi){
   document.getElementById('flavor-pick-modal')?.remove();
@@ -2032,13 +2148,20 @@ function confirmOrder(){
     if(orderPayMethod==='split'){pendingData.splitCash=splitCash;pendingData.splitVirtual=splitVirtual;}
     // Deduct inventory immediately (restored if cancelled) — wrapped in try/catch so order still saves even if deduction fails
     try{
-      const objs2=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||''}));
-      objs2.forEach(({item,qty,flavorText})=>{
+      const objs2=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||'',flavors:o.flavors||null}));
+      objs2.forEach(({item,qty,flavorText,flavors})=>{
         if(!item)return;
         item.left=Math.max(0,Math.round((gl(item)-qty)*10)/10);
-        if(flavorText&&Array.isArray(item.flavors)){
+        // Deduct flavor stock using flavors object (multi-flavor) or flavorText (single)
+        if(flavors&&typeof flavors==='object'&&Array.isArray(item.flavors)){
+          Object.entries(flavors).forEach(([fname,fqty])=>{
+            if(fqty<=0)return;
+            const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===fname.toLowerCase());
+            if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-fqty));
+          });
+        }else if(flavorText&&Array.isArray(item.flavors)){
           const fl=item.flavors.find(f=>f.name===flavorText);
-          if(fl)fl.stock=Math.max(0,Math.round(fl.stock-1)); // always 1 physical unit per order line
+          if(fl)fl.stock=Math.max(0,Math.round(fl.stock-1));
         }
       });
     }catch(stockErr){console.error('Stock deduction error (order still saved):',stockErr);}
@@ -3374,12 +3497,11 @@ function processWebsiteOrders(pendingOrders) {
     if (processedOrderIds.has(fbKey)) return;
     // Check if admin cancelled from the website menu
     if (order.cancelled && !order._reversedByAdmin) {
-      // PROTECT: If this is a manual order held locally for less than 60s, ignore external cancel
-      // This prevents race conditions where menu code may mark new orders as cancelled
+      // PROTECT: If this order was created locally (manual or otherwise), protect it from external cancel
+      // This prevents race conditions where another device/menu may mark orders as cancelled
       const localOrder = pendingWebOrders[fbKey];
-      if (localOrder && localOrder.source === 'manual' && localOrder.heldAt && (Date.now() - localOrder.heldAt) < 60000) {
-        _debugPending('BLOCKED-CANCEL',fbKey,'manual order <60s — protected! cancelled flag in Firebase removed');
-        // Remove the cancelled flag from Firebase so it doesn't keep triggering
+      if (localOrder && localOrder._stockDeductedLocally) {
+        _debugPending('BLOCKED-CANCEL',fbKey,'locally-created order protected — cancelled flag removed from Firebase');
         fetch(FB_URL + '/pending_orders/' + fbKey + '/cancelled.json', {method:'DELETE'}).catch(()=>{});
         return;
       }
@@ -3447,7 +3569,7 @@ function processWebsiteOrders(pendingOrders) {
       showToast('Order cancelled from menu — stock restored 🔄', 'err');
     }
     if (order.confirmed || order.cancelled) {
-      if(pendingWebOrders[fbKey]) _debugPending('FB-SKIP-FLAGGED',fbKey,'confirmed:'+order.confirmed+' cancelled:'+order.cancelled+' — local still in map');
+      console.log('[PENDING-TRACE] SKIPPING', fbKey.substr(0,20), '— confirmed:', order.confirmed, 'cancelled:', order.cancelled, 'inLocal:', !!pendingWebOrders[fbKey]);
       return;
     }
     // CRITICAL: Check if this order was already confirmed (exists in sales log).
@@ -3455,11 +3577,11 @@ function processWebsiteOrders(pendingOrders) {
     // when the Firebase DELETE of pending_orders failed.
     const alreadyInLog = log.some(e => e.webOrderKey === fbKey);
     if (alreadyInLog) {
-      _debugPending('SKIP-ALREADY-CONFIRMED',fbKey,'found in sales log — deleting stale Firebase entry');
-      // Clean up stale Firebase entry so it doesn't keep triggering
+      console.log('[PENDING-TRACE] SKIP-IN-LOG', fbKey.substr(0,20), '— found matching webOrderKey in log, DELETING from Firebase');
       fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
       return;
     }
+    console.log('[PENDING-TRACE] PROCESSING', fbKey.substr(0,20), '— inLocal:', !!pendingWebOrders[fbKey], 'source:', order.source||'website', 'stockV2:', order._stockDeductedV2);
     if (!pendingWebOrders[fbKey]) {
       pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:false};
       console.log('[PENDING] New order from Firebase:', fbKey, 'source:', order.source||'website', 'total:', order.total);
@@ -3541,13 +3663,13 @@ function processWebsiteOrders(pendingOrders) {
 function renderPendingOrders() {
   const allOrders = Object.values(pendingWebOrders);
   const orders = allOrders.filter(o => !o.confirmed && !o.cancelled);
-  // DEBUG: log every render with counts
+  // DEBUG: ALWAYS log render calls to trace disappearing orders
+  console.log('[RENDER-PENDING] Total in map:', allOrders.length, 'Showing:', orders.length,
+    'Keys:', Object.keys(pendingWebOrders).map(k=>k.substr(0,20)).join(', '),
+    'Filtered:', allOrders.filter(o=>o.confirmed||o.cancelled).map(o=>o.fbKey?.substr(0,15)+'[C:'+o.confirmed+' X:'+o.cancelled+']').join(', '));
   if(allOrders.length !== orders.length){
     const filtered = allOrders.filter(o => o.confirmed || o.cancelled);
     console.warn('[RENDER-PENDING] Filtered out', filtered.length, 'orders:', filtered.map(o=>({key:o.fbKey,confirmed:o.confirmed,cancelled:o.cancelled,source:o.source})));
-  }
-  if(allOrders.length>0||orders.length>0){
-    _debugPending('RENDER','count='+orders.length+'/'+allOrders.length, allOrders.map(o=>o.fbKey?.substr(0,15)+'['+(o.confirmed?'C':'')+(o.cancelled?'X':'')+']').join(', '));
   }
   const ownerEl = document.getElementById('pending-orders-section');
   const staffEl = document.getElementById('pending-orders-staff');
