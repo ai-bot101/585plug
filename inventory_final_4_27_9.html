@@ -436,6 +436,17 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       <div id="staff-comm-history" style="margin-top:18px;"></div>
     </div>
     <div id="dash-view" style="display:none">
+      <!-- DEBUG CONSOLE (owner only, toggle via 🐛 button) -->
+      <div id="debug-overlay-box" style="display:none;margin-bottom:14px;background:rgba(50,45,0,0.92);border:2px solid #ffd600;border-radius:14px;padding:14px;max-height:250px;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,214,0,0.3);">
+          <span style="font-weight:700;color:#ffd600;font-size:12px;font-family:monospace;">🐛 DEBUG CONSOLE</span>
+          <div>
+            <button onclick="_debugOverlayClear()" style="background:rgba(255,214,0,0.15);border:1px solid rgba(255,214,0,0.3);color:#ffd600;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:6px;font-family:var(--sans);">Clear</button>
+            <button onclick="_debugOverlayToggle()" style="background:rgba(255,77,77,0.15);border:1px solid rgba(255,77,77,0.3);color:#ff4d4d;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;font-family:var(--sans);">Close</button>
+          </div>
+        </div>
+        <div id="debug-overlay-body" style="font-family:monospace;font-size:11px;color:#ffe082;"></div>
+      </div>
       <!-- PENDING WEBSITE ORDERS -->
       <div id="pending-orders-section" style="display:none;margin-bottom:14px;"></div>
       <!-- CONFIRMED WEBSITE ORDERS — now shown via global banner above, this one disabled -->
@@ -1306,46 +1317,35 @@ function _debugPending(action,key,detail){
   _debugOverlayLog('[PENDING] '+action+' '+((key||'').substr(0,18))+' '+(detail||''));
 }
 // ── ON-SCREEN DEBUG OVERLAY (yellow box) ──
-let _debugOverlayEl=null;
 let _debugOverlayLines=[];
 const _DEBUG_MAX_LINES=40;
 let _debugOverlayVisible=false;
 function _debugOverlayLog(msg){
-  if(!_debugOverlayEl){
-    _debugOverlayEl=document.createElement('div');
-    _debugOverlayEl.id='debug-overlay';
-    _debugOverlayEl.style.cssText='position:fixed;bottom:0;left:0;right:0;max-height:35vh;overflow-y:auto;background:rgba(50,45,0,0.92);border-top:3px solid #ffd600;z-index:9999;font-family:monospace;font-size:11px;color:#ffe082;padding:8px 10px;display:none;';
-    const hdr=document.createElement('div');
-    hdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(255,214,0,0.3);';
-    hdr.innerHTML='<span style="font-weight:700;color:#ffd600;font-size:12px;">DEBUG CONSOLE</span><div><button onclick="_debugOverlayClear()" style="background:rgba(255,214,0,0.15);border:1px solid rgba(255,214,0,0.3);color:#ffd600;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:6px;">Clear</button><button onclick="_debugOverlayToggle()" style="background:rgba(255,77,77,0.15);border:1px solid rgba(255,77,77,0.3);color:#ff4d4d;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;">Hide</button></div>';
-    _debugOverlayEl.appendChild(hdr);
-    const body=document.createElement('div');
-    body.id='debug-overlay-body';
-    _debugOverlayEl.appendChild(body);
-    document.body.appendChild(_debugOverlayEl);
-  }
-  if(_debugOverlayVisible)_debugOverlayEl.style.display='block';
   const ts=new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
   _debugOverlayLines.push(ts+' '+msg);
   if(_debugOverlayLines.length>_DEBUG_MAX_LINES)_debugOverlayLines.shift();
+  _renderDebugBody();
+}
+function _renderDebugBody(){
   const body=document.getElementById('debug-overlay-body');
-  if(body){body.innerHTML=_debugOverlayLines.map(l=>{
+  if(!body)return;
+  body.innerHTML=_debugOverlayLines.map(l=>{
     let color='#ffe082';
     if(l.includes('ERROR')||l.includes('CANCEL')||l.includes('DELETE'))color='#ff6b6b';
-    else if(l.includes('CREATED')||l.includes('CONFIRMED')||l.includes('NEW'))color='#69f0ae';
+    else if(l.includes('CREATED')||l.includes('CONFIRMED')||l.includes('NEW')||l.includes('PROTECT'))color='#69f0ae';
     else if(l.includes('SKIP')||l.includes('BLOCK'))color='#ffab40';
     else if(l.includes('RENDER'))color='#80d8ff';
     return'<div style="color:'+color+';padding:1px 0;border-bottom:1px solid rgba(255,255,255,0.05);">'+l.replace(/</g,'&lt;')+'</div>';
-  }).join('');body.scrollTop=body.scrollHeight;}
+  }).join('');
+  body.scrollTop=body.scrollHeight;
 }
-function _debugOverlayClear(){_debugOverlayLines=[];const b=document.getElementById('debug-overlay-body');if(b)b.innerHTML='';}
+function _debugOverlayClear(){_debugOverlayLines=[];_renderDebugBody();}
 function _debugOverlayToggle(){
   _debugOverlayVisible=!_debugOverlayVisible;
-  // Create the element if it doesn't exist yet
-  if(!_debugOverlayEl)_debugOverlayLog('Debug console opened');
-  if(_debugOverlayEl)_debugOverlayEl.style.display=_debugOverlayVisible?'block':'none';
+  const box=document.getElementById('debug-overlay-box');
+  if(box)box.style.display=_debugOverlayVisible?'block':'none';
   const btn=document.getElementById('debug-toggle-btn');
-  if(btn)btn.style.background=_debugOverlayVisible?'rgba(255,214,0,0.35)':'rgba(255,214,0,0.15)';
+  if(btn){btn.style.background=_debugOverlayVisible?'rgba(255,214,0,0.35)':'rgba(255,214,0,0.15)';btn.textContent=_debugOverlayVisible?'🐛 Hide Debug':'🐛 Debug';}
 }
 // Intercept console.log for PENDING-TRACE and RENDER-PENDING
 (function(){
@@ -4771,7 +4771,18 @@ async function fbPullNow(){
       fbLastTimestamp=data.updatedAt;
       // always overwrite ALL fields so resets/clears propagate to all devices
       inv=data.inv||{};C().forEach(c=>{if(!inv[c])inv[c]=[];});
-      log=Array.isArray(data.log)?data.log:[];
+      // PROTECT locally-confirmed orders from being lost during log overwrite
+      // If we confirmed an order locally but our push hasn't reached Firebase yet,
+      // the incoming log won't have the entry — merge it back in
+      const incomingLog=Array.isArray(data.log)?data.log:[];
+      const localConfirmed=log.filter(e=>e.webOrderKey&&processedOrderIds.has(e.webOrderKey));
+      const missingFromIncoming=localConfirmed.filter(lc=>!incomingLog.some(il=>il.webOrderKey===lc.webOrderKey));
+      if(missingFromIncoming.length>0){
+        _debugOverlayLog('[PROTECT] Preserved '+missingFromIncoming.length+' locally-confirmed orders from log overwrite: '+missingFromIncoming.map(e=>(e.webOrderKey||'').substr(0,18)).join(', '));
+        // Insert at the front (newest first) so they show in confirmed orders
+        incomingLog.unshift(...missingFromIncoming);
+      }
+      log=incomingLog;
       if(data.cfg){const savedCu=cu;cfg=data.cfg;cu=savedCu;}
       customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
       dayNotes=data.dayNotes||{};
