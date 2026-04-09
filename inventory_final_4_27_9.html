@@ -1303,7 +1303,51 @@ let pendingWebOrders={}; // website orders waiting for confirmation
 // Debug logger — outputs to console only (no visible panel)
 function _debugPending(action,key,detail){
   console.log('[PENDING-DEBUG]',action,key,detail||'');
+  _debugOverlayLog('[PENDING] '+action+' '+((key||'').substr(0,18))+' '+(detail||''));
 }
+// ── ON-SCREEN DEBUG OVERLAY (yellow box) ──
+let _debugOverlayEl=null;
+let _debugOverlayLines=[];
+const _DEBUG_MAX_LINES=40;
+function _debugOverlayLog(msg){
+  if(!_debugOverlayEl){
+    _debugOverlayEl=document.createElement('div');
+    _debugOverlayEl.id='debug-overlay';
+    _debugOverlayEl.style.cssText='position:fixed;bottom:0;left:0;right:0;max-height:35vh;overflow-y:auto;background:rgba(50,45,0,0.92);border-top:3px solid #ffd600;z-index:9999;font-family:monospace;font-size:11px;color:#ffe082;padding:8px 10px;display:none;';
+    const hdr=document.createElement('div');
+    hdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(255,214,0,0.3);';
+    hdr.innerHTML='<span style="font-weight:700;color:#ffd600;font-size:12px;">DEBUG CONSOLE</span><div><button onclick="_debugOverlayClear()" style="background:rgba(255,214,0,0.15);border:1px solid rgba(255,214,0,0.3);color:#ffd600;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;margin-right:6px;">Clear</button><button onclick="_debugOverlayToggle()" style="background:rgba(255,77,77,0.15);border:1px solid rgba(255,77,77,0.3);color:#ff4d4d;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;">Hide</button></div>';
+    _debugOverlayEl.appendChild(hdr);
+    const body=document.createElement('div');
+    body.id='debug-overlay-body';
+    _debugOverlayEl.appendChild(body);
+    document.body.appendChild(_debugOverlayEl);
+  }
+  _debugOverlayEl.style.display='block';
+  const ts=new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  _debugOverlayLines.push(ts+' '+msg);
+  if(_debugOverlayLines.length>_DEBUG_MAX_LINES)_debugOverlayLines.shift();
+  const body=document.getElementById('debug-overlay-body');
+  if(body){body.innerHTML=_debugOverlayLines.map(l=>{
+    let color='#ffe082';
+    if(l.includes('ERROR')||l.includes('CANCEL')||l.includes('DELETE'))color='#ff6b6b';
+    else if(l.includes('CREATED')||l.includes('CONFIRMED')||l.includes('NEW'))color='#69f0ae';
+    else if(l.includes('SKIP')||l.includes('BLOCK'))color='#ffab40';
+    else if(l.includes('RENDER'))color='#80d8ff';
+    return'<div style="color:'+color+';padding:1px 0;border-bottom:1px solid rgba(255,255,255,0.05);">'+l.replace(/</g,'&lt;')+'</div>';
+  }).join('');body.scrollTop=body.scrollHeight;}
+}
+function _debugOverlayClear(){_debugOverlayLines=[];const b=document.getElementById('debug-overlay-body');if(b)b.innerHTML='';}
+function _debugOverlayToggle(){if(_debugOverlayEl)_debugOverlayEl.style.display=_debugOverlayEl.style.display==='none'?'block':'none';}
+// Intercept console.log for PENDING-TRACE and RENDER-PENDING
+(function(){
+  const _origLog=console.log;
+  console.log=function(){
+    _origLog.apply(console,arguments);
+    const msg=Array.prototype.slice.call(arguments).join(' ');
+    if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
+  };
+})();
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
 let commissionPaused={}; // {staffName: true} — commission disabled for this staff member
