@@ -1382,6 +1382,8 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
+const _APP_VERSION='EOD-FIX-v5';
+setTimeout(()=>_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded'),1000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
 let commissionPaused={}; // {staffName: true} — commission disabled for this staff member
@@ -5809,7 +5811,8 @@ async function saveEODLog(){
   renderDash();
   renderLoginLog();
   renderCancelledOrders();
-  showToast('Log #'+record.logNumber+' saved ✅ ('+record.txCount+' orders, '+fmtP(record.grandTotal)+')','ok');
+  const _totalForDay=log.filter(e=>e.date===dl&&(e.type==='sell'||e.type==='order'||e.type==='selfbuy')).length;
+  showToast('['+_APP_VERSION+'] Log #'+record.logNumber+' saved ✅ ('+record.txCount+' of '+_totalForDay+' orders, '+fmtP(record.grandTotal)+')','ok');
 }
 
 function renderEODLogsList(){
@@ -5870,8 +5873,8 @@ function viewEODLog(i,filterPerson){
   const logNum=eodLogs.length-i;
   const titleEl=document.getElementById('view-eod-title');titleEl.textContent='Log #'+logNum+' — '+r.date;titleEl.dataset.idx=i;
 
-  // ── LIVE REBUILD: pull orders from activity log instead of frozen snapshot ──
-  // This ensures EOD always matches dashboard numbers even after editing orders
+  // ── Use ONLY saved orders — no live rebuild ──
+  // Each EOD log stores exactly the orders it captured. Never pull from activity log.
   const eodItemLookup={};
   C().forEach(cat=>{
     (inv[cat]||[]).forEach(item=>{
@@ -5879,27 +5882,7 @@ function viewEODLog(i,filterPerson){
     });
   });
   const ownerNames=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
-  // Rebuild orders from the live activity log for this date (includes edits/adds/deletes)
-  // Include _cleared orders too — EOD log should show ALL orders for the day
-  const liveLogOrders=log.filter(e=>e.date===r.date&&(e.type==='sell'||e.type==='order'||e.type==='selfbuy')).map(e=>({
-    type:e.type,
-    source:e.source||(e.webOrderKey?'website':'manual'),
-    customer:e.customer||e.name||'',
-    items:e.orderItems ? e.orderItems.map(oi=>({...oi})) : (e.name?[{itemName:e.name,qty:e.amount,label:e.label||''}]:[]),
-    total:e.amtReceived||e.total||0,
-    amtReceived:e.amtReceived||e.total||0,
-    profit:e.profit||0,
-    payMethod:e.payMethod||'cash',
-    commission:e.commission||0,
-    creditApplied:e.creditApplied||0,
-    splitCash:e.splitCash||0,
-    splitVirtual:e.splitVirtual||0,
-    note:e.note||'',
-    who:e.who,
-    time:e.time||''
-  }));
-  // Use saved EOD orders (source of truth after edits) — only fall back to live log if no saved orders
-  const allOrders=(r.orders&&r.orders.length>0)?r.orders:liveLogOrders;
+  const allOrders=r.orders||[];
   // ── NORMALIZE payMethod: old records stored labels ("Cash") instead of IDs ("cash") ──
   let eodDirty=false;
   allOrders.forEach(o=>{
