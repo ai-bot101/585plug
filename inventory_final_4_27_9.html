@@ -5163,40 +5163,30 @@ function loadDayNote(dateStr){
 
 // ── EOD LOGS ──────────────────────────────────────
 
-// ── EOD DEDUP: localStorage tracker (Firebase can NEVER overwrite this) ──
-// Stores timestamps of every order captured in any EOD log
-function _eodGetCaptured(){
-  try{return new Set(JSON.parse(localStorage.getItem('_eodCapturedTs')||'[]'));}catch(e){return new Set();}
-}
-function _eodSaveCaptured(setObj){
-  try{localStorage.setItem('_eodCapturedTs',JSON.stringify([...setObj]));}catch(e){}
-}
-
 function buildEODRecord(dateStr){
   const dl=dateStr||tday();
-  // ── TRIPLE DEDUP PROTECTION ──
-  // 1) localStorage captured-timestamps (survives Firebase sync)
-  const capturedTs=_eodGetCaptured();
-  // 2) Cross-ref existing EOD log orders
-  const eodFingerprints=new Set();
-  eodLogs.forEach(existingLog=>{
-    if(!existingLog.orders)return;
-    existingLog.orders.forEach(o=>{
-      if(o.timestamp)capturedTs.add(o.timestamp);
-      eodFingerprints.add((o.time||'')+'|'+(o.who||'')+'|'+Math.round((o.amtReceived||o.total||0)*100));
-    });
-  });
+  // ── SIMPLE CUTOFF DEDUP ──
+  // When an EOD log is saved, we store the save-timestamp in localStorage per date.
+  // Next EOD only captures orders created AFTER that cutoff.
+  // localStorage is NEVER touched by Firebase sync, so this is bulletproof.
+  const lsCutoff=parseInt(localStorage.getItem('_eodCutoff_'+dl)||'0');
+  // Also check eodLogs snapshotId as backup
+  const eodCutoff=eodLogs.filter(l=>l.date===dl).reduce((max,l)=>Math.max(max,l.snapshotId||0),0);
+  const cutoff=Math.max(lsCutoff,eodCutoff);
+
+  _debugOverlayLog('[EOD-BUILD] date='+dl+' lsCutoff='+lsCutoff+' eodCutoff='+eodCutoff+' cutoff='+cutoff);
+
   const dayLog=log.filter(e=>{
     if(e.date!==dl)return false;
-    // 3) _cleared flag (may survive Firebase sync)
-    if(e._cleared)return false;
-    // Check localStorage captured timestamps
-    if(e.timestamp&&capturedTs.has(e.timestamp))return false;
-    // Check EOD log fingerprints
-    if(eodFingerprints.has((e.time||'')+'|'+(e.who||'')+'|'+Math.round((e.amtReceived||e.total||0)*100)))return false;
+    if(!(e.type==='sell'||e.type==='order'||e.type==='selfbuy'))return false;
+    // If there was a previous EOD save for this date, only include orders created AFTER it
+    if(cutoff>0&&(e.timestamp||0)<=cutoff)return false;
     return true;
   });
-  const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');
+
+  _debugOverlayLog('[EOD-BUILD] total log entries for date: '+log.filter(e=>e.date===dl&&(e.type==='sell'||e.type==='order'||e.type==='selfbuy')).length+' | after cutoff filter: '+dayLog.length);
+
+  const sells=dayLog;
   const grandTotal=sells.reduce((s,e)=>s+(e.amtReceived||0),0);
   const eodCV=calcCashVirt(sells);
   const cashTotal=eodCV.cash;
@@ -5238,7 +5228,7 @@ function buildEODRecord(dateStr){
   });
 
   // every order detail
-  const orders=dayLog.filter(e=>e.type==='sell'||e.type==='order');
+  const orders=dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');
 
   // snapshot of all inventory at time of saving
   const inventorySnapshot=[];
@@ -5799,16 +5789,10 @@ async function saveEODLog(){
   record.logNumber=eodLogs.length+1;
   eodLogs.unshift(record);
 
-  // ── Save captured order timestamps to localStorage (Firebase-proof) ──
-  const capturedTs=_eodGetCaptured();
-  (record.orders||[]).forEach(o=>{if(o.timestamp)capturedTs.add(o.timestamp);});
-  // Also mark ALL sell/order/selfbuy entries for this day as captured
-  log.forEach(e=>{
-    if((e.type==='sell'||e.type==='order'||e.type==='selfbuy')&&e.date===dl&&e.timestamp){
-      capturedTs.add(e.timestamp);
-    }
-  });
-  _eodSaveCaptured(capturedTs);
+  // ── Store cutoff timestamp in localStorage (Firebase can NEVER touch this) ──
+  const saveTime=Date.now();
+  try{localStorage.setItem('_eodCutoff_'+dl,String(saveTime));}catch(e){}
+  _debugOverlayLog('[EOD-SAVE] Stored cutoff for '+dl+': '+saveTime+' | orders captured: '+record.txCount);
 
   // Clear ALL confirmed orders for this day from view (stock deductions stay in log)
   let cleared=0;
