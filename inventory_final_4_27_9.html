@@ -1382,8 +1382,8 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='EOD-FIX-v5';
-setTimeout(()=>_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded'),1000);
+const _APP_VERSION='EOD-FIX-v7';
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v7]';},1000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
 let commissionPaused={}; // {staffName: true} — commission disabled for this staff member
@@ -4556,8 +4556,8 @@ function repairAllCommissions(){
     if(e.type==='order'&&e.orderItems){
       e.orderItems.forEach(oi=>{
         const found=itemLookup[(oi.itemName||'').toLowerCase()];
-        // Use labelToQty for web orders where qty is 1 but label has real quantity
-        let qty = (oi.label && labelToQty(oi.label) > 1) ? labelToQty(oi.label) : (oi.qty||0);
+        // Use actual qty first, fall back to label for web orders where qty is 1 but label has real quantity
+        let qty = oi.qty||(oi.label && labelToQty(oi.label) > 1 ? labelToQty(oi.label) : 0);
         // Recovery: if qty<=1 and no usable label, try to match price to a tier
         if(qty<=1 && found && found.prices && found.prices.length){
           const itemPrice=oi.price||0;
@@ -4672,7 +4672,7 @@ function repairStock(manual){
     } else if (e.type === 'order') {
       (e.orderItems||[]).forEach(oi => {
         const key = (oi.itemName||'').toLowerCase();
-        const qty = (oi.label && labelToQty(oi.label) > 1) ? labelToQty(oi.label) : (oi.qty||0);
+        const qty = oi.qty||(oi.label && labelToQty(oi.label) > 1 ? labelToQty(oi.label) : 0);
         if (key) soldMap[key] = (soldMap[key]||0) + qty;
       });
     } else if (e.type === 'selfbuy') {
@@ -4691,7 +4691,7 @@ function repairStock(manual){
   Object.values(pendingWebOrders).forEach(order => {
     (order.orderItems||[]).forEach(oi => {
       const key = (oi.itemName||oi.name||'').toLowerCase();
-      const qty = (oi.label && labelToQty(oi.label) > 1) ? labelToQty(oi.label) : (oi.qty||0);
+      const qty = oi.qty||(oi.label && labelToQty(oi.label) > 1 ? labelToQty(oi.label) : 0);
       if (key) soldMap[key] = (soldMap[key]||0) + qty;
     });
   });
@@ -5533,10 +5533,15 @@ function saveEODOrderEdit(){
   if(matchingLog){
     if(matchingLog.orderItems){
       matchingLog.orderItems.forEach((oi,ii)=>{
-        if(o.items&&o.items[ii])oi.qty=o.items[ii].qty;
+        if(o.items&&o.items[ii]){
+          oi.qty=o.items[ii].qty;
+          oi.label=o.items[ii].label;
+        }
       });
     }
     if(matchingLog.amount!==undefined&&o.items&&o.items[0])matchingLog.amount=o.items[0].qty;
+    // For 'sell' type entries, update the amount field which repairStock uses
+    if(matchingLog.type==='sell'&&o.items&&o.items[0])matchingLog.amount=o.items[0].qty;
     matchingLog.amtReceived=newTotal;
     matchingLog.profit=o.profit;
     matchingLog.commission=o.commission;
