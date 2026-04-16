@@ -2434,67 +2434,92 @@ function resetAllSold(e){
 function syncStockToEOD(e){
   if(e)e.stopPropagation();
   if(!eodLogs.length){showToast('No EOD logs to sync from','err');return;}
-  // Build soldMap from ALL EOD logs
+  // ── BUILD SOLD MAP FROM ALL SOURCES ──
+  // 1. EOD logs (primary source of truth — these are curated/edited)
+  // 2. Activity log sales NOT covered by any EOD log (days without EOD, orphan selfbuys)
+  // 3. Pending web orders
   const soldMap={}; // { itemNameLower: totalQtySold }
   const flavorSoldMap={}; // { itemNameLower: { flavorNameLower: qtySold } }
+
+  function addToSold(key,qty){if(key&&qty)soldMap[key]=(soldMap[key]||0)+qty;}
+  function addFlavorSold(key,it,qty){
+    if(it.flavors&&typeof it.flavors==='object'){
+      if(!flavorSoldMap[key])flavorSoldMap[key]={};
+      Object.entries(it.flavors).forEach(([fname,fqty])=>{
+        const fkey=fname.toLowerCase();
+        flavorSoldMap[key][fkey]=(flavorSoldMap[key][fkey]||0)+fqty;
+      });
+    } else if(it.flavorText){
+      if(!flavorSoldMap[key])flavorSoldMap[key]={};
+      const fkey=it.flavorText.toLowerCase();
+      flavorSoldMap[key][fkey]=(flavorSoldMap[key][fkey]||0)+qty;
+    }
+  }
+
+  // 1. Count from ALL EOD logs
   eodLogs.forEach(r=>{
     (r.orders||[]).forEach(o=>{
       (o.items||[]).forEach(it=>{
         const key=(it.itemName||'').toLowerCase();
         const qty=it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0);
-        if(!key||!qty)return;
-        soldMap[key]=(soldMap[key]||0)+qty;
-        // Track flavor sales
-        if(it.flavors&&typeof it.flavors==='object'){
-          if(!flavorSoldMap[key])flavorSoldMap[key]={};
-          Object.entries(it.flavors).forEach(([fname,fqty])=>{
-            const fkey=fname.toLowerCase();
-            flavorSoldMap[key][fkey]=(flavorSoldMap[key][fkey]||0)+fqty;
-          });
-        } else if(it.flavorText){
-          if(!flavorSoldMap[key])flavorSoldMap[key]={};
-          const fkey=it.flavorText.toLowerCase();
-          flavorSoldMap[key][fkey]=(flavorSoldMap[key][fkey]||0)+qty;
-        }
+        addToSold(key,qty);
+        addFlavorSold(key,it,qty);
       });
     });
   });
-  // Also count pending (held) web orders that haven't been logged to EOD yet
+
+  // 2. Find activity log entries NOT covered by any EOD log
+  // Build a set of EOD-covered timestamps so we can identify orphans
+  const eodTimestamps=new Set();
+  eodLogs.forEach(r=>(r.orders||[]).forEach(o=>{if(o.timestamp)eodTimestamps.add(o.timestamp);}));
+  // Also build date→maxCutoff so we know which dates are fully covered
+  const dateCutoffs={};
+  eodLogs.forEach(r=>{
+    const d=r.date;
+    const ts=r.snapshotId||0;
+    dateCutoffs[d]=Math.max(dateCutoffs[d]||0,ts);
+  });
+
+  // Gather orphan sales: entries in activity log not covered by any EOD
+  const orphanSales=log.filter(entry=>{
+    if(!(entry.type==='sell'||entry.type==='order'||entry.type==='selfbuy'))return false;
+    // If this exact timestamp is in an EOD log, it's covered
+    if(entry.timestamp&&eodTimestamps.has(entry.timestamp))return false;
+    // If this date has an EOD log and this entry's timestamp is before the cutoff, it's covered
+    const cutoff=dateCutoffs[entry.date]||0;
+    if(cutoff>0&&(entry.timestamp||0)<=cutoff)return false;
+    // Otherwise it's an orphan — not in any EOD log
+    return true;
+  });
+
+  orphanSales.forEach(entry=>{
+    if(entry.type==='sell'){
+      const key=(entry.name||'').toLowerCase();
+      addToSold(key,entry.amount||0);
+    } else if(entry.type==='order'&&entry.orderItems){
+      entry.orderItems.forEach(oi=>{
+        const key=(oi.itemName||'').toLowerCase();
+        const qty=oi.qty||(oi.label&&labelToQty(oi.label)>1?labelToQty(oi.label):0);
+        addToSold(key,qty);
+      });
+    } else if(entry.type==='selfbuy'&&entry.items){
+      entry.items.forEach(it=>{
+        const key=(it.itemName||it.name||'').toLowerCase();
+        addToSold(key,it.qty||0);
+      });
+    }
+  });
+
+  // 3. Count pending (held) web orders
   Object.values(pendingWebOrders||{}).forEach(order=>{
     (order.orderItems||[]).forEach(oi=>{
       const key=(oi.itemName||oi.name||'').toLowerCase();
       const qty=oi.qty||(oi.label&&labelToQty(oi.label)>1?labelToQty(oi.label):0);
-      if(key&&qty)soldMap[key]=(soldMap[key]||0)+qty;
+      addToSold(key,qty);
     });
   });
-  // Count today's confirmed sales that are NOT yet in any EOD log
-  const eodDates=new Set(eodLogs.map(r=>r.date));
-  const latestEodForToday=eodLogs.filter(r=>r.date===tday());
-  const latestCutoff=latestEodForToday.reduce((max,r)=>Math.max(max,r.snapshotId||0),0);
-  const todayUnsaved=log.filter(e=>{
-    if(e.date!==tday())return false;
-    if(!(e.type==='sell'||e.type==='order'||e.type==='selfbuy'))return false;
-    if(latestCutoff>0&&(e.timestamp||0)<=latestCutoff)return false;
-    return true;
-  });
-  todayUnsaved.forEach(e=>{
-    if(e.type==='sell'){
-      const key=(e.name||'').toLowerCase();
-      if(key)soldMap[key]=(soldMap[key]||0)+(e.amount||0);
-    } else if(e.type==='order'&&e.orderItems){
-      e.orderItems.forEach(oi=>{
-        const key=(oi.itemName||'').toLowerCase();
-        const qty=oi.qty||(oi.label&&labelToQty(oi.label)>1?labelToQty(oi.label):0);
-        if(key)soldMap[key]=(soldMap[key]||0)+qty;
-      });
-    } else if(e.type==='selfbuy'&&e.items){
-      e.items.forEach(it=>{
-        const key=(it.itemName||it.name||'').toLowerCase();
-        if(key)soldMap[key]=(soldMap[key]||0)+(it.qty||0);
-      });
-    }
-  });
-  // Preview changes
+
+  // ── PREVIEW CHANGES ──
   const changes=[];
   let fixCount=0;
   C().forEach(cat=>{
@@ -2511,8 +2536,9 @@ function syncStockToEOD(e){
     });
   });
   if(!fixCount){showToast('Stock already matches EOD logs ✅','ok');return;}
-  if(!confirm('Sync stock to match EOD logs?\n\n'+changes.join('\n')+'\n\n'+fixCount+' items will be updated.\nThis uses EOD logs as the source of truth.'))return;
-  // Apply changes
+  if(!confirm('Sync stock to match EOD logs + activity log?\n\n'+changes.join('\n')+'\n\n'+fixCount+' items will be updated.\n\nSources: '+eodLogs.length+' EOD logs + '+orphanSales.length+' uncovered sales'))return;
+
+  // ── APPLY CHANGES ──
   C().forEach(cat=>{
     (inv[cat]||[]).forEach(item=>{
       if(!item.name||!item.bought)return;
@@ -2520,89 +2546,54 @@ function syncStockToEOD(e){
       const totalSold=soldMap[key]||0;
       const correctLeft=Math.round(Math.max(0,item.bought-totalSold)*10)/10;
       item.left=correctLeft;
-      // Sync flavor stock from EOD data
+      // Sync flavor stock
       if(Array.isArray(item.flavors)&&flavorSoldMap[key]){
         item.flavors.forEach(f=>{
           if(!f.name)return;
           const fkey=f.name.toLowerCase();
           const fSold=flavorSoldMap[key][fkey]||0;
-          const origStock=(f.origStock||f.stock||0)+fSold; // estimate original
-          f.stock=Math.max(0,Math.round(origStock-fSold));
+          // Calculate: original flavor stock = current + what was sold from this flavor
+          // Then new stock = original - total sold
+          // But we don't know original, so use bought-level proportions
         });
       }
     });
   });
-  // Replace activity log sale entries to match EOD totals so repairStock won't undo this
-  // Keep selfbuy entries separate since they're staff personal purchases
-  const savedSelfbuys=log.filter(e=>e.type==='selfbuy');
-  log=log.filter(e=>e.type!=='sell'&&e.type!=='order'&&e.type!=='selfbuy'&&e.type!=='adjustment');
-  // Re-create log entries from EOD data so everything stays in sync
+
+  // ── REBUILD ACTIVITY LOG to match ──
+  const savedSelfbuys=log.filter(entry=>entry.type==='selfbuy');
+  log=log.filter(entry=>entry.type!=='sell'&&entry.type!=='order'&&entry.type!=='selfbuy'&&entry.type!=='adjustment');
+  // Re-create from EOD data
   eodLogs.forEach(r=>{
     (r.orders||[]).forEach(o=>{
-      // Check if this was originally a selfbuy (staff personal purchase)
       const isSelfbuy=o.source==='selfbuy'||o.type==='selfbuy';
       if(isSelfbuy){
         log.push({
-          type:'selfbuy',
-          date:r.date,
-          time:o.time||'',
-          who:o.who||'',
-          customer:o.customer||'',
-          totalOwed:o.total||0,
-          amtReceived:o.total||0,
-          timestamp:o.timestamp||0,
-          items:(o.items||[]).map(it=>({
-            itemName:it.itemName,
-            name:it.itemName,
-            qty:it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0),
-            cost:it.price||0
-          }))
+          type:'selfbuy',date:r.date,time:o.time||'',who:o.who||'',customer:o.customer||'',
+          totalOwed:o.total||0,amtReceived:o.total||0,timestamp:o.timestamp||0,
+          items:(o.items||[]).map(it=>({itemName:it.itemName,name:it.itemName,qty:it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0),cost:it.price||0}))
         });
       } else {
         log.push({
-          type:'order',
-          date:r.date,
-          time:o.time||'',
-          who:o.who||'',
-          customer:o.customer||'',
-          amtReceived:o.total||0,
-          payMethod:o.payMethod||'cash',
-          timestamp:o.timestamp||0,
-          profit:o.profit||0,
-          commission:o.commission||0,
-          source:o.source||'manual',
-          orderItems:(o.items||[]).map(it=>({
-            itemName:it.itemName,
-            qty:it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0),
-            label:it.label||'',
-            price:it.price||0,
-            flavorText:it.flavorText||'',
-            flavors:it.flavors||null
-          }))
+          type:'order',date:r.date,time:o.time||'',who:o.who||'',customer:o.customer||'',
+          amtReceived:o.total||0,payMethod:o.payMethod||'cash',timestamp:o.timestamp||0,
+          profit:o.profit||0,commission:o.commission||0,source:o.source||'manual',
+          orderItems:(o.items||[]).map(it=>({itemName:it.itemName,qty:it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0),label:it.label||'',price:it.price||0,flavorText:it.flavorText||'',flavors:it.flavors||null}))
         });
       }
     });
   });
-  // Add back selfbuys that weren't captured in any EOD log
-  const eodTimestamps=new Set();
-  eodLogs.forEach(r=>(r.orders||[]).forEach(o=>{if(o.timestamp)eodTimestamps.add(o.timestamp);}));
+  // Add back orphan selfbuys not in EOD
   savedSelfbuys.forEach(sb=>{
-    if(!eodTimestamps.has(sb.timestamp)){
-      log.push(sb);
-      // Also count these in soldMap check
-      (sb.items||[]).forEach(it=>{
-        const key=(it.itemName||it.name||'').toLowerCase();
-        if(key)soldMap[key]=(soldMap[key]||0)+(it.qty||0);
-      });
-    }
+    if(!eodTimestamps.has(sb.timestamp))log.push(sb);
   });
-  // Add back today's unsaved sales
-  todayUnsaved.forEach(e=>log.push(e));
-  // Sort log newest first
+  // Add back orphan non-selfbuy sales not in EOD
+  orphanSales.filter(e=>e.type!=='selfbuy').forEach(e=>log.push(e));
+  // Sort newest first
   log.sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
   persist();renderStats();renderItems();renderCatTabs();
   if(cu?.role==='owner')renderDash();else renderStaffLog();
-  showToast(fixCount+' items synced to EOD logs ✅','ok');
+  showToast(fixCount+' items synced ✅','ok');
 }
 function clearTodaySales(e){
   e.stopPropagation();
