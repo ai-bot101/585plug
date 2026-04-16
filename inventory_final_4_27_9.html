@@ -4805,8 +4805,22 @@ async function fbPullNow(){
       const missingFromIncoming=localConfirmed.filter(lc=>!incomingLog.some(il=>il.webOrderKey===lc.webOrderKey));
       if(missingFromIncoming.length>0){
         _debugOverlayLog('[PROTECT] Preserved '+missingFromIncoming.length+' locally-confirmed orders from log overwrite: '+missingFromIncoming.map(e=>(e.webOrderKey||'').substr(0,18)).join(', '));
-        // Insert at the front (newest first) so they show in confirmed orders
         incomingLog.unshift(...missingFromIncoming);
+      }
+      // PROTECT _cleared flags: if local log has _cleared=true on entries,
+      // carry those flags over to the incoming log so EOD dedup still works
+      const clearedSet=new Set();
+      log.forEach(e=>{
+        if(e._cleared){
+          const fp=(e.time||'')+'|'+(e.who||'')+'|'+(e.amtReceived||e.total||0)+'|'+(e.date||'');
+          clearedSet.add(fp);
+        }
+      });
+      if(clearedSet.size>0){
+        incomingLog.forEach(e=>{
+          const fp=(e.time||'')+'|'+(e.who||'')+'|'+(e.amtReceived||e.total||0)+'|'+(e.date||'');
+          if(clearedSet.has(fp))e._cleared=true;
+        });
       }
       log=incomingLog;
       if(data.cfg){const savedCu=cu;cfg=data.cfg;cu=savedCu;}
@@ -5150,7 +5164,26 @@ function loadDayNote(dateStr){
 // ── EOD LOGS ──────────────────────────────────────
 function buildEODRecord(dateStr){
   const dl=dateStr||tday();
-  const dayLog=log.filter(e=>e.date===dl);
+  // ── BULLETPROOF DEDUP: collect timestamps of orders already in ANY existing EOD log ──
+  // This prevents the same order from appearing in multiple EOD logs, even if
+  // _cleared flags got lost during a Firebase sync overwrite.
+  const alreadyCaptured=new Set();
+  eodLogs.forEach(existingLog=>{
+    if(!existingLog.orders)return;
+    existingLog.orders.forEach(o=>{
+      // Use timestamp+who+total as a unique fingerprint for each order
+      const fp=(o.time||'')+'|'+(o.who||'')+'|'+(o.total||o.amtReceived||0);
+      alreadyCaptured.add(fp);
+    });
+  });
+  const dayLog=log.filter(e=>{
+    if(e.date!==dl)return false;
+    if(e._cleared)return false; // still respect _cleared as a first filter
+    // Cross-check against existing EOD logs
+    const fp=(e.time||'')+'|'+(e.who||'')+'|'+(e.amtReceived||e.total||0);
+    if(alreadyCaptured.has(fp))return false;
+    return true;
+  });
   const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');
   const grandTotal=sells.reduce((s,e)=>s+(e.amtReceived||0),0);
   const eodCV=calcCashVirt(sells);
