@@ -4615,8 +4615,8 @@ function repairAllCommissions(){
         let cost=0;
         (o.items||[]).forEach(it=>{
           const found=itemLookup[(it.itemName||'').toLowerCase()];
-          let qty = (it.label && labelToQty(it.label) > 1) ? labelToQty(it.label) : (it.qty||0);
-          // Recovery: match price to tier if qty<=1 and no label
+          let qty = it.qty||(it.label && labelToQty(it.label) > 1 ? labelToQty(it.label) : 0);
+          // Recovery: match price to tier if qty<=1 and no label — but NEVER overwrite a manually-set qty
           if(qty<=1 && found && found.prices && found.prices.length){
             const itemPrice=it.price||0;
             const matchPrice=itemPrice>0?itemPrice:(((o.items||[]).length===1)?(o.total||0):0);
@@ -4624,7 +4624,7 @@ function repairAllCommissions(){
               const tier=found.prices.find(p=>parseFloat(p.price)===matchPrice);
               if(tier&&tier.label){
                 const tierQty=labelToQty(tier.label);
-                if(tierQty>1){qty=tierQty;it.label=tier.label;it.qty=tierQty;changed=true;}
+                if(tierQty>1){qty=tierQty;if(!it.qty||it.qty<=1){it.label=tier.label;it.qty=tierQty;changed=true;}}
               }
             }
           }
@@ -5360,7 +5360,7 @@ function openEditEODOrder(logIdx,orderIdx){
       <div style="flex:1;font-size:14px;color:var(--text);font-family:var(--mono);">${it.itemName}</div>
       <div style="display:flex;align-items:center;gap:4px;">
         <span style="font-size:12px;color:var(--text3);">qty:</span>
-        <input type="number" class="eod-item-qty" data-idx="${ii}" value="${it.qty}" min="0" step="0.1" style="width:70px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--mono);font-size:14px;outline:none;text-align:center;">
+        <input type="number" class="eod-item-qty" data-idx="${ii}" value="${it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):1)}" min="0" step="0.1" style="width:70px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--mono);font-size:14px;outline:none;text-align:center;">
       </div>
     </div>
   `).join('');
@@ -5430,7 +5430,7 @@ function saveEODOrderEdit(){
   document.querySelectorAll('.eod-item-qty').forEach(inp=>{
     const ii=parseInt(inp.dataset.idx);
     if(o.items&&o.items[ii]){
-      const oldQty=(o.items[ii].label&&labelToQty(o.items[ii].label)>1)?labelToQty(o.items[ii].label):(o.items[ii].qty||0);
+      const oldQty=o.items[ii].qty||(o.items[ii].label&&labelToQty(o.items[ii].label)>1?labelToQty(o.items[ii].label):0);
       const newQty=parseFloat(inp.value)||0;
       const diff=newQty-oldQty;
       // Adjust inventory: positive diff = more sold = deduct more, negative = less sold = restock
@@ -5568,7 +5568,7 @@ function deleteEODOrder(logIdx,orderIdx){
     o.items.forEach(it=>{
       const itemName=(it.itemName||'').toLowerCase();
       // Use label to get real quantity (e.g. "eighth" = 3.7g, "ounce" = 28.2g, "2" = 2 units)
-      const qty=it.label?labelToQty(it.label):(it.qty||0);
+      const qty=it.qty||(it.label?labelToQty(it.label):0);
       if(!itemName||!qty)return;
       for(const c of C()){
         const found=(inv[c]||[]).find(item=>item.name&&item.name.toLowerCase()===itemName);
@@ -5619,7 +5619,7 @@ function deleteEODOrder(logIdx,orderIdx){
     if(o.items&&o.items.length){
       o.items.forEach(it=>{
         const itemName=(it.itemName||'').toLowerCase();
-        const qty=it.label?labelToQty(it.label):(it.qty||0);
+        const qty=it.qty||(it.label?labelToQty(it.label):0);
         if(!itemName||!qty)return;
         log.unshift({type:'adjustment',name:itemName,amount:qty,direction:'add',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'EOD order deleted (no log match)'});
       });
@@ -5981,7 +5981,7 @@ function viewEODLog(i,filterPerson){
     let cost=0;
     (o.items||[]).forEach(it=>{
       const found=eodItemLookup[(it.itemName||'').toLowerCase()];
-      let qty=(it.label&&labelToQty(it.label)>1)?labelToQty(it.label):(it.qty||0);
+      let qty=it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0);
       // Recovery: match price to tier if qty<=1 and no label
       if(qty<=1 && found && found.prices && found.prices.length){
         const itemPrice=it.price||0;
