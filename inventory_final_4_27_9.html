@@ -1387,7 +1387,7 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='EOD-FIX-v10';
+const _APP_VERSION='EOD-FIX-v11';
 setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v10]';},1000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
@@ -2533,32 +2533,68 @@ function syncStockToEOD(e){
     });
   });
   // Replace activity log sale entries to match EOD totals so repairStock won't undo this
+  // Keep selfbuy entries separate since they're staff personal purchases
+  const savedSelfbuys=log.filter(e=>e.type==='selfbuy');
   log=log.filter(e=>e.type!=='sell'&&e.type!=='order'&&e.type!=='selfbuy'&&e.type!=='adjustment');
   // Re-create log entries from EOD data so everything stays in sync
   eodLogs.forEach(r=>{
     (r.orders||[]).forEach(o=>{
-      log.push({
-        type:'order',
-        date:r.date,
-        time:o.time||'',
-        who:o.who||'',
-        customer:o.customer||'',
-        amtReceived:o.total||0,
-        payMethod:o.payMethod||'cash',
-        timestamp:o.timestamp||0,
-        profit:o.profit||0,
-        commission:o.commission||0,
-        source:o.source||'manual',
-        orderItems:(o.items||[]).map(it=>({
-          itemName:it.itemName,
-          qty:it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0),
-          label:it.label||'',
-          price:it.price||0,
-          flavorText:it.flavorText||'',
-          flavors:it.flavors||null
-        }))
-      });
+      // Check if this was originally a selfbuy (staff personal purchase)
+      const isSelfbuy=o.source==='selfbuy'||o.type==='selfbuy';
+      if(isSelfbuy){
+        log.push({
+          type:'selfbuy',
+          date:r.date,
+          time:o.time||'',
+          who:o.who||'',
+          customer:o.customer||'',
+          totalOwed:o.total||0,
+          amtReceived:o.total||0,
+          timestamp:o.timestamp||0,
+          items:(o.items||[]).map(it=>({
+            itemName:it.itemName,
+            name:it.itemName,
+            qty:it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0),
+            cost:it.price||0
+          }))
+        });
+      } else {
+        log.push({
+          type:'order',
+          date:r.date,
+          time:o.time||'',
+          who:o.who||'',
+          customer:o.customer||'',
+          amtReceived:o.total||0,
+          payMethod:o.payMethod||'cash',
+          timestamp:o.timestamp||0,
+          profit:o.profit||0,
+          commission:o.commission||0,
+          source:o.source||'manual',
+          orderItems:(o.items||[]).map(it=>({
+            itemName:it.itemName,
+            qty:it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0),
+            label:it.label||'',
+            price:it.price||0,
+            flavorText:it.flavorText||'',
+            flavors:it.flavors||null
+          }))
+        });
+      }
     });
+  });
+  // Add back selfbuys that weren't captured in any EOD log
+  const eodTimestamps=new Set();
+  eodLogs.forEach(r=>(r.orders||[]).forEach(o=>{if(o.timestamp)eodTimestamps.add(o.timestamp);}));
+  savedSelfbuys.forEach(sb=>{
+    if(!eodTimestamps.has(sb.timestamp)){
+      log.push(sb);
+      // Also count these in soldMap check
+      (sb.items||[]).forEach(it=>{
+        const key=(it.itemName||it.name||'').toLowerCase();
+        if(key)soldMap[key]=(soldMap[key]||0)+(it.qty||0);
+      });
+    }
   });
   // Add back today's unsaved sales
   todayUnsaved.forEach(e=>log.push(e));
@@ -5466,7 +5502,7 @@ function buildEODRecord(dateStr){
       type:e.type,
       source:e.source||(e.webOrderKey?'website':'manual'),
       customer:e.customer||e.name||'',
-      items:e.orderItems ? e.orderItems.map(oi=>({...oi})) : (e.name?[{itemName:e.name,qty:e.amount,label:e.label||''}]:[]),
+      items:e.orderItems ? e.orderItems.map(oi=>({...oi})) : (e.items ? e.items.map(it=>({itemName:it.itemName||it.name||'',qty:it.qty||0,label:it.label||'',price:it.cost||it.price||0})) : (e.name?[{itemName:e.name,qty:e.amount,label:e.label||''}]:[])),
       total:e.amtReceived||e.total||0,
       amtReceived:e.amtReceived||e.total||0,
       profit:e.profit||0,
