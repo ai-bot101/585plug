@@ -1382,8 +1382,8 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='EOD-FIX-v7';
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v7]';},1000);
+const _APP_VERSION='EOD-FIX-v8';
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v8]';},1000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
 let commissionPaused={}; // {staffName: true} — commission disabled for this staff member
@@ -5426,7 +5426,8 @@ function saveEODOrderEdit(){
   const{logIdx,orderIdx}=editEODState;
   const r=eodLogs[logIdx];
   const o=r.orders[orderIdx];
-  // update quantities + adjust inventory for changes
+  // update quantities + adjust inventory AND flavor stock for changes
+  const _editDiffs=[]; // track changes for adjustment entries
   document.querySelectorAll('.eod-item-qty').forEach(inp=>{
     const ii=parseInt(inp.dataset.idx);
     if(o.items&&o.items[ii]){
@@ -5441,6 +5442,25 @@ function saveEODOrderEdit(){
           if(found){
             found.left=Math.round(Math.max(0,gl(found)-diff)*10)/10;
             _debugOverlayLog('[EOD-EDIT] '+found.name+': stock '+(diff>0?'deducted':'restored')+' by '+fmt(Math.abs(diff))+' ('+fmt(oldQty)+'→'+fmt(newQty)+')');
+            // Adjust flavor stock too
+            if(Array.isArray(found.flavors)){
+              const it=o.items[ii];
+              if(it.flavors&&typeof it.flavors==='object'){
+                // Multi-flavor: scale each flavor proportionally
+                const ratio=oldQty>0?diff/oldQty:0;
+                Object.entries(it.flavors).forEach(([fname,fqty])=>{
+                  if(fqty<=0)return;
+                  const flavorDiff=Math.round(fqty*(newQty/oldQty)*10)/10-fqty;
+                  const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===fname.toLowerCase());
+                  if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-flavorDiff));
+                });
+              } else if(it.flavorText){
+                // Single flavor: apply the full diff
+                const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===it.flavorText.toLowerCase());
+                if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-diff));
+              }
+            }
+            _editDiffs.push({itemName:itemName,diff:diff,oldQty:oldQty,newQty:newQty});
             break;
           }
         }
@@ -5539,9 +5559,9 @@ function saveEODOrderEdit(){
         }
       });
     }
-    if(matchingLog.amount!==undefined&&o.items&&o.items[0])matchingLog.amount=o.items[0].qty;
     // For 'sell' type entries, update the amount field which repairStock uses
     if(matchingLog.type==='sell'&&o.items&&o.items[0])matchingLog.amount=o.items[0].qty;
+    else if(matchingLog.amount!==undefined&&o.items&&o.items[0])matchingLog.amount=o.items[0].qty;
     matchingLog.amtReceived=newTotal;
     matchingLog.profit=o.profit;
     matchingLog.commission=o.commission;
@@ -5551,6 +5571,19 @@ function saveEODOrderEdit(){
     if(newPM==='split'){matchingLog.splitCash=o.splitCash;matchingLog.splitVirtual=o.splitVirtual;}
     else{delete matchingLog.splitCash;delete matchingLog.splitVirtual;}
     if(o.note)matchingLog.note=o.note;
+    _debugOverlayLog('[EOD-EDIT] Updated matching log entry (type='+matchingLog.type+')');
+  } else if(_editDiffs.length>0){
+    // No matching log entry found — create adjustment entries so repairStock doesn't undo our changes
+    _debugOverlayLog('[EOD-EDIT] No matching log entry found — creating adjustment entries for '+_editDiffs.length+' items');
+    _editDiffs.forEach(d=>{
+      if(d.diff>0){
+        // More sold: tell repairStock to count extra sold
+        log.unshift({type:'adjustment',name:d.itemName,amount:d.diff,direction:'remove',who:cu?.name||'Owner',timestamp:Date.now(),date:r.date,time:tstr(),note:'EOD edit: '+fmt(d.oldQty)+'→'+fmt(d.newQty)});
+      } else {
+        // Less sold: tell repairStock to add stock back
+        log.unshift({type:'adjustment',name:d.itemName,amount:Math.abs(d.diff),direction:'add',who:cu?.name||'Owner',timestamp:Date.now(),date:r.date,time:tstr(),note:'EOD edit: '+fmt(d.oldQty)+'→'+fmt(d.newQty)});
+      }
+    });
   }
   persist();
   closeOv('edit-eod-order-modal');
