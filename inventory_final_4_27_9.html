@@ -1951,6 +1951,18 @@ function showPricePicker(cat,ri,item,tiers){
         <div style="font-size:16px;font-weight:700;color:var(--green);">$${t.price}</div>
       </div>`;
     }).join('')}
+    <div id="custom-amt-section" style="margin-top:4px;">
+      <div onclick="document.getElementById('custom-amt-fields').style.display=document.getElementById('custom-amt-fields').style.display==='none'?'block':'none'" style="display:flex;align-items:center;justify-content:center;padding:12px;margin-bottom:8px;background:rgba(108,99,255,0.08);border:1px solid rgba(108,99,255,0.25);border-radius:12px;cursor:pointer;">
+        <span style="font-size:14px;font-weight:600;color:var(--accent);">✏️ Custom Amount</span>
+      </div>
+      <div id="custom-amt-fields" style="display:none;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;">
+        <div style="display:flex;gap:10px;margin-bottom:10px;">
+          <div style="flex:1;"><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:4px;">Amount (g or units)</label><input type="number" id="custom-qty-inp" placeholder="e.g. 18.2" min="0.1" step="0.1" style="width:100%;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:var(--mono);"></div>
+          <div style="flex:1;"><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:4px;">Price $</label><input type="number" id="custom-price-inp" placeholder="e.g. 150" min="0" step="1" style="width:100%;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:var(--mono);"></div>
+        </div>
+        <button onclick="pickCustomAmount('${cat}',${ri})" style="width:100%;padding:10px;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.3);border-radius:8px;color:var(--green);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans);">Add Custom Amount</button>
+      </div>
+    </div>
     <button onclick="document.getElementById('price-pick-modal').remove()" style="width:100%;margin-top:12px;padding:12px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text3);font-size:13px;cursor:pointer;">Cancel</button>
   </div>`;
   document.body.appendChild(d);
@@ -1974,6 +1986,28 @@ function pickPriceTier(cat,ri,ti){
   orderItems.push({cat,ri,itemName:item.name,qty,label,price,flavorText:''});
   document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');
   // Auto-fill total if this is the only item
+  if(orderItems.length===1){const totalInp=document.getElementById('ord-total');if(totalInp&&!totalInp.value)totalInp.value=price;}
+  renderOrdItems();calcComm();
+}
+function pickCustomAmount(cat,ri){
+  const item=(inv[cat]||[])[ri];if(!item)return;
+  const qty=parseFloat(document.getElementById('custom-qty-inp').value)||0;
+  const price=parseFloat(document.getElementById('custom-price-inp').value)||0;
+  if(!qty){showToast('Enter an amount','err');return;}
+  if(!price){showToast('Enter a price','err');return;}
+  document.getElementById('price-pick-modal')?.remove();
+  if(orderItems.find(o=>o.cat===cat&&o.ri===ri&&!o.flavorText)){showToast(item.name+' already in order','err');return;}
+  // Label shows the custom amount (e.g. "18.2g")
+  const label=fmt(qty)+'g';
+  // If item has flavors, pass to flavor picker
+  const flavorsAvail=(item.flavors||[]).filter(f=>f.name&&f.stock>0);
+  if(flavorsAvail.length>0){
+    _pendingPriceTier={label,qty,price};
+    showFlavorPicker(cat,ri,item,flavorsAvail);
+    return;
+  }
+  orderItems.push({cat,ri,itemName:item.name,qty,label,price,flavorText:''});
+  document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');
   if(orderItems.length===1){const totalInp=document.getElementById('ord-total');if(totalInp&&!totalInp.value)totalInp.value=price;}
   renderOrdItems();calcComm();
 }
@@ -2130,7 +2164,26 @@ function pickFlavor(cat,ri,flavorName,fi){
   renderOrdItems();calcComm();
 }
 function renderOrdItems(){const list=document.getElementById('order-items-list');if(!orderItems.length){list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0 12px;">No items added yet — search above</div>';return;}list.innerHTML=orderItems.map((o,i)=>{const it=(inv[o.cat]||[])[o.ri];const ao=it&&isAddOnOnly(it);const flav=o.flavorText?`<span style="font-size:10px;color:var(--accent);margin-left:6px;">🍬 ${o.flavorText}</span>`:'';const tierTag=o.label?`<span style="font-size:10px;color:var(--green);margin-left:6px;text-transform:capitalize;">${o.label}${o.price?' · $'+o.price:''}</span>`:'';return`<div class="order-item-row"><div class="oir-name">${o.itemName}${tierTag}${flav}${ao?'<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>':''}</div><div class="oir-qty"><input type="number" value="${o.qty}" min="0.1" step="0.1" onchange="updOQ(${i},this.value)"></div><button class="oir-remove" onclick="remOI(${i})">x</button></div>`;}).join('');}
-function updOQ(i,v){orderItems[i].qty=parseFloat(v)||0;calcComm();}
+function updOQ(i,v){
+  const newQty=parseFloat(v)||0;
+  orderItems[i].qty=newQty;
+  // Update label to match the new qty so EOD log shows the right amount
+  const item=(inv[orderItems[i].cat]||[])[orderItems[i].ri];
+  if(item){
+    // Check if new qty matches any price tier
+    const tiers=(item.prices||[]).filter(p=>p.label&&p.price>0);
+    const matchTier=tiers.find(t=>Math.abs(labelToQty(t.label)-newQty)<0.01);
+    if(matchTier){
+      orderItems[i].label=matchTier.label;
+      orderItems[i].price=parseFloat(matchTier.price)||0;
+    } else {
+      // Custom amount — label shows grams
+      orderItems[i].label=fmt(newQty)+'g';
+    }
+    renderOrdItems();
+  }
+  calcComm();
+}
 function remOI(i){
   // check if removing this would leave only add-on-only items with no base item
   const removing=orderItems[i];
@@ -5373,11 +5426,39 @@ function saveEODOrderEdit(){
   const{logIdx,orderIdx}=editEODState;
   const r=eodLogs[logIdx];
   const o=r.orders[orderIdx];
-  // update quantities
+  // update quantities + adjust inventory for changes
   document.querySelectorAll('.eod-item-qty').forEach(inp=>{
     const ii=parseInt(inp.dataset.idx);
     if(o.items&&o.items[ii]){
-      o.items[ii].qty=parseFloat(inp.value)||0;
+      const oldQty=(o.items[ii].label&&labelToQty(o.items[ii].label)>1)?labelToQty(o.items[ii].label):(o.items[ii].qty||0);
+      const newQty=parseFloat(inp.value)||0;
+      const diff=newQty-oldQty;
+      // Adjust inventory: positive diff = more sold = deduct more, negative = less sold = restock
+      if(Math.abs(diff)>0.001){
+        const itemName=(o.items[ii].itemName||'').toLowerCase();
+        for(const c of C()){
+          const found=(inv[c]||[]).find(item=>item.name&&item.name.toLowerCase()===itemName);
+          if(found){
+            found.left=Math.round(Math.max(0,gl(found)-diff)*10)/10;
+            _debugOverlayLog('[EOD-EDIT] '+found.name+': stock '+(diff>0?'deducted':'restored')+' by '+fmt(Math.abs(diff))+' ('+fmt(oldQty)+'→'+fmt(newQty)+')');
+            break;
+          }
+        }
+      }
+      o.items[ii].qty=newQty;
+      // Update label to match new qty (so EOD shows correct amount)
+      const itemNameLower=(o.items[ii].itemName||'').toLowerCase();
+      let matchedItem=null;
+      for(const c of C()){matchedItem=(inv[c]||[]).find(item=>item.name&&item.name.toLowerCase()===itemNameLower);if(matchedItem)break;}
+      if(matchedItem){
+        const tiers=(matchedItem.prices||[]).filter(p=>p.label&&p.price>0);
+        const matchTier=tiers.find(t=>Math.abs(labelToQty(t.label)-newQty)<0.01);
+        if(matchTier){
+          o.items[ii].label=matchTier.label;
+        } else if(newQty>1){
+          o.items[ii].label=fmt(newQty)+'g';
+        }
+      }
     }
   });
   // update who (staff)
@@ -5402,7 +5483,8 @@ function saveEODOrderEdit(){
       });
     });
     if(found){
-      const qty=(it.label&&labelToQty(it.label)>1)?labelToQty(it.label):(it.qty||0);
+      // Use actual qty (not label) so custom amounts calculate correctly
+      const qty=it.qty||((it.label&&labelToQty(it.label)>1)?labelToQty(it.label):1);
       cost+=cpuItem(found)*qty;
     }
   });
