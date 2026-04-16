@@ -5162,29 +5162,38 @@ function loadDayNote(dateStr){
 }
 
 // ── EOD LOGS ──────────────────────────────────────
+
+// ── EOD DEDUP: localStorage tracker (Firebase can NEVER overwrite this) ──
+// Stores timestamps of every order captured in any EOD log
+function _eodGetCaptured(){
+  try{return new Set(JSON.parse(localStorage.getItem('_eodCapturedTs')||'[]'));}catch(e){return new Set();}
+}
+function _eodSaveCaptured(setObj){
+  try{localStorage.setItem('_eodCapturedTs',JSON.stringify([...setObj]));}catch(e){}
+}
+
 function buildEODRecord(dateStr){
   const dl=dateStr||tday();
-  // ── BULLETPROOF DEDUP: collect timestamps of orders already in ANY existing EOD log ──
-  // This prevents the same order from appearing in multiple EOD logs, even if
-  // _cleared flags got lost during a Firebase sync overwrite.
-  const alreadyCaptured=new Set();
+  // ── TRIPLE DEDUP PROTECTION ──
+  // 1) localStorage captured-timestamps (survives Firebase sync)
+  const capturedTs=_eodGetCaptured();
+  // 2) Cross-ref existing EOD log orders
+  const eodFingerprints=new Set();
   eodLogs.forEach(existingLog=>{
     if(!existingLog.orders)return;
     existingLog.orders.forEach(o=>{
-      // Primary: use timestamp (ms-precision, unique per order)
-      if(o.timestamp){alreadyCaptured.add('ts:'+o.timestamp);}
-      // Fallback: time+who+amount (for old orders without timestamp)
-      const amt=Math.round((o.amtReceived||o.total||0)*100);
-      alreadyCaptured.add('fp:'+(o.time||'')+'|'+(o.who||'')+'|'+amt);
+      if(o.timestamp)capturedTs.add(o.timestamp);
+      eodFingerprints.add((o.time||'')+'|'+(o.who||'')+'|'+Math.round((o.amtReceived||o.total||0)*100));
     });
   });
   const dayLog=log.filter(e=>{
     if(e.date!==dl)return false;
+    // 3) _cleared flag (may survive Firebase sync)
     if(e._cleared)return false;
-    // Cross-check against existing EOD logs using BOTH fingerprint methods
-    if(e.timestamp&&alreadyCaptured.has('ts:'+e.timestamp))return false;
-    const amt=Math.round((e.amtReceived||e.total||0)*100);
-    if(alreadyCaptured.has('fp:'+(e.time||'')+'|'+(e.who||'')+'|'+amt))return false;
+    // Check localStorage captured timestamps
+    if(e.timestamp&&capturedTs.has(e.timestamp))return false;
+    // Check EOD log fingerprints
+    if(eodFingerprints.has((e.time||'')+'|'+(e.who||'')+'|'+Math.round((e.amtReceived||e.total||0)*100)))return false;
     return true;
   });
   const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');
@@ -5789,6 +5798,17 @@ async function saveEODLog(){
   record.savedAt=new Date().toLocaleString();
   record.logNumber=eodLogs.length+1;
   eodLogs.unshift(record);
+
+  // ── Save captured order timestamps to localStorage (Firebase-proof) ──
+  const capturedTs=_eodGetCaptured();
+  (record.orders||[]).forEach(o=>{if(o.timestamp)capturedTs.add(o.timestamp);});
+  // Also mark ALL sell/order/selfbuy entries for this day as captured
+  log.forEach(e=>{
+    if((e.type==='sell'||e.type==='order'||e.type==='selfbuy')&&e.date===dl&&e.timestamp){
+      capturedTs.add(e.timestamp);
+    }
+  });
+  _eodSaveCaptured(capturedTs);
 
   // Clear ALL confirmed orders for this day from view (stock deductions stay in log)
   let cleared=0;
