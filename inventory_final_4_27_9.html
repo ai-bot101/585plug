@@ -1145,6 +1145,25 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
     </div>
   </div>
 </div>
+<div class="ov" id="edit-selfbuy-modal" style="z-index:150;">
+  <div class="modal" style="max-width:420px;">
+    <h3>✏️ Edit Staff Purchase</h3>
+    <div class="msub" id="edit-sb-info"></div>
+    <div id="edit-sb-items"></div>
+    <div class="field" style="margin-top:12px;">
+      <label>Who Made This Purchase</label>
+      <div id="edit-sb-who-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Note</label>
+      <input type="text" id="edit-sb-note" placeholder="Optional note" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;">
+    </div>
+    <div class="mact">
+      <button class="mc" onclick="closeOv('edit-selfbuy-modal')">Cancel</button>
+      <button class="mp" onclick="saveSelfbuyEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
 
 <div class="ov" id="eod-modal">
   <div class="modal wide">
@@ -2698,9 +2717,10 @@ if(e.type==='selfbuy'){
   const pc=isV(e.payMethod)?'virt':'cash';
   const sbIdx=log.indexOf(e);
   const ois=(e.items||[]).map(o=>`${fmt(o.qty)}x ${o.itemName} (${fmtP(o.cost)})`).join(', ');
+  const sbEditBtn=cu?.role==='owner'?`<button onclick="event.stopPropagation();openEditSelfbuy(${sbIdx})" style="background:rgba(108,99,255,0.08);border:1px solid rgba(108,99,255,0.2);border-radius:6px;padding:3px 8px;color:var(--accent);font-size:10px;cursor:pointer;font-family:var(--sans);margin-top:4px;">✏️ Edit</button>`:'';
   const sbDelBtn=cu?.role==='owner'?`<button onclick="event.stopPropagation();deleteSelfbuy(${sbIdx})" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:6px;padding:3px 8px;color:var(--red);font-size:10px;cursor:pointer;font-family:var(--sans);margin-top:4px;">🗑️ Delete</button>`:'';
   const expand=`<div class="ae-expand"><div class="ex-row"><span class="ex-label">Sold By</span><span class="ex-val">${e.who}</span></div><div class="ex-row"><span class="ex-label">Payment</span><span class="ex-val">${e.payMethodLabel||'Cash'}</span></div><div class="ex-row"><span class="ex-label">Total</span><span class="ex-val">${fmtP(e.totalOwed||0)}</span></div><div class="ex-row"><span class="ex-label">Time</span><span class="ex-val">${e.date} ${e.time||''}</span></div><div class="ex-items"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Items:</div>${(e.items||[]).map(o=>`<div class="ex-item">${fmt(o.qty)}x ${o.itemName} — ${fmtP(o.cost)}</div>`).join('')}</div></div>`;
-  return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot" style="background:var(--orange)"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.who} — self purchase</span></div><div class="ae-oi">${ois}</div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${expand}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.totalOwed||0)}</span></div>${sbDelBtn}</div></div>`;
+  return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot" style="background:var(--orange)"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.who} — self purchase</span></div><div class="ae-oi">${ois}</div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${expand}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.totalOwed||0)}</span></div>${sbEditBtn}${sbDelBtn}</div></div>`;
 }
 if(e.type==='order'){const pc=(isV(e.payMethod)||e.payMethod==='split')?'virt':'cash';const ois=(e.orderItems||[]).map(o=>`${fmt(o.qty)}x ${o.itemName}${o.flavorText?' 🍬 '+o.flavorText:''}${o.label?' ('+o.label+')':''}`).join(', ');const creditBadge=e.creditApplied>0?`<span style="font-size:10px;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.25);border-radius:5px;padding:1px 6px;color:var(--green);font-family:var(--mono);">-${fmtP(e.creditApplied)} credit</span>`:'';
 const debtBadge=e.shortPaid>0?`<span style="font-size:10px;background:rgba(244,107,107,0.1);border:1px solid rgba(244,107,107,0.25);border-radius:5px;padding:1px 6px;color:var(--red);font-family:var(--mono);">⚠️ owes ${fmtP(e.shortPaid)}</span>`:'';const saveBadge=e.extraCredit>0?`<span style="font-size:10px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:5px;padding:1px 6px;color:var(--accent);font-family:var(--mono);">💳 +${fmtP(e.extraCredit)} saved</span>`:'';const logIdx=log.indexOf(e);
@@ -3056,6 +3076,86 @@ function clearCredit(key){
 }
 
 
+let editSbIdx=-1;
+let editSbWho='';
+function openEditSelfbuy(idx){
+  editSbIdx=idx;
+  const e=log[idx];
+  if(!e||e.type!=='selfbuy')return;
+  document.getElementById('edit-sb-info').textContent=e.who+' — '+(e.date||'')+' '+(e.time||'');
+  // Render editable items (qty + item name)
+  document.getElementById('edit-sb-items').innerHTML=(e.items||[]).map((it,ii)=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="flex:1;font-size:14px;color:var(--text);font-family:var(--mono);">${it.itemName||it.name}</div>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <span style="font-size:12px;color:var(--text3);">qty:</span>
+        <input type="number" class="sb-item-qty" data-idx="${ii}" value="${it.qty||0}" min="0" step="0.1" style="width:70px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--mono);font-size:14px;outline:none;text-align:center;">
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <span style="font-size:12px;color:var(--text3);">cost:</span>
+        <input type="number" class="sb-item-cost" data-idx="${ii}" value="${it.cost||0}" min="0" step="0.01" style="width:80px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--mono);font-size:14px;outline:none;text-align:center;">
+      </div>
+    </div>`).join('');
+  // Staff picker
+  editSbWho=e.who||cfg.users[0].name;
+  const whoBtns=document.getElementById('edit-sb-who-btns');
+  whoBtns.innerHTML=cfg.users.map((u,ui)=>`<div onclick="setEditSbWho('${u.name}')" id="esbwho-${ui}" style="padding:8px 14px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--sans);border:2px solid var(--border);background:var(--bg3);color:var(--text2);display:flex;align-items:center;gap:5px;transition:all .15s;user-select:none;"><span>${u.role==='owner'?'👑':'👤'}</span><span>${u.name}</span></div>`).join('');
+  setEditSbWho(editSbWho,true);
+  document.getElementById('edit-sb-note').value=e.note||'';
+  document.getElementById('edit-selfbuy-modal').classList.add('open');
+}
+function setEditSbWho(name,init){
+  editSbWho=name;
+  cfg.users.forEach((u,ui)=>{
+    const btn=document.getElementById('esbwho-'+ui);
+    if(!btn)return;
+    const active=u.name===name;
+    btn.style.borderColor=active?'var(--accent)':'var(--border)';
+    btn.style.background=active?'rgba(108,99,255,0.15)':'var(--bg3)';
+    btn.style.color=active?'var(--accent)':'var(--text2)';
+  });
+}
+function saveSelfbuyEdit(){
+  if(editSbIdx<0||editSbIdx>=log.length)return;
+  const e=log[editSbIdx];
+  if(!e||e.type!=='selfbuy')return;
+  // Update quantities and costs, adjust stock for qty changes
+  document.querySelectorAll('.sb-item-qty').forEach(inp=>{
+    const ii=parseInt(inp.dataset.idx);
+    if(e.items&&e.items[ii]){
+      const oldQty=e.items[ii].qty||0;
+      const newQty=parseFloat(inp.value)||0;
+      const diff=newQty-oldQty;
+      if(Math.abs(diff)>0.001){
+        const itemName=(e.items[ii].itemName||e.items[ii].name||'').toLowerCase();
+        for(const c of C()){
+          const found=(inv[c]||[]).find(item=>item.name&&item.name.toLowerCase()===itemName);
+          if(found){
+            found.left=Math.round(Math.max(0,gl(found)-diff)*10)/10;
+            break;
+          }
+        }
+      }
+      e.items[ii].qty=newQty;
+    }
+  });
+  // Update costs
+  document.querySelectorAll('.sb-item-cost').forEach(inp=>{
+    const ii=parseInt(inp.dataset.idx);
+    if(e.items&&e.items[ii])e.items[ii].cost=parseFloat(inp.value)||0;
+  });
+  // Update who
+  e.who=editSbWho||e.who;
+  // Update note
+  e.note=document.getElementById('edit-sb-note').value.trim();
+  // Recalculate total owed
+  e.totalOwed=(e.items||[]).reduce((s,it)=>s+(it.cost||0),0);
+  persist();
+  closeOv('edit-selfbuy-modal');
+  renderAll();
+  showToast('Staff purchase updated ✅','ok');
+  editSbIdx=-1;
+}
 async function deleteSelfbuy(idx){
   if(!await _ownerGuard())return;
   if(idx<0||idx>=log.length)return;
