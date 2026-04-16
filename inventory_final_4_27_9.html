@@ -6209,7 +6209,7 @@ function viewEODLog(i,filterPerson){
       ${filtered.map((o,fi)=>{
         // find the real index in allOrders for edit button
         const oi=allOrders.indexOf(o);
-        const items=(o.items||[]).map(it=>{const q=(it.label&&labelToQty(it.label)>1)?labelToQty(it.label):(it.qty||1);return`${fmt(q)}x ${it.itemName}`;}).join(', ');
+        const items=(o.items||[]).map(it=>{const q=it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):1);return`${fmt(q)}x ${it.itemName}`;}).join(', ');
         return`<div style="padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="var d=this.querySelector('.eod-detail');if(d)d.style.display=d.style.display==='block'?'none':'block';">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -6235,7 +6235,7 @@ function viewEODLog(i,filterPerson){
             </div>
             ${(o.items||[]).length?`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
               <div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-family:var(--mono);">ITEMS</div>
-              ${(o.items||[]).map(it=>{const q=(it.label&&labelToQty(it.label)>1)?labelToQty(it.label):(it.qty||1);return`<div style="font-size:14px;color:var(--text);padding:4px 0;font-family:var(--mono);">${fmt(q)}x ${it.itemName}</div>`;}).join('')}
+              ${(o.items||[]).map(it=>{const q=it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):1);return`<div style="font-size:14px;color:var(--text);padding:4px 0;font-family:var(--mono);">${fmt(q)}x ${it.itemName}</div>`;}).join('')}
             </div>`:''}
             <div style="display:flex;gap:8px;margin-top:12px;">
               <button onclick="event.stopPropagation();openEditEODOrder(${i},${oi})" style="flex:1;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:8px;padding:10px;color:var(--accent);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;">✏️ Edit</button>
@@ -6696,8 +6696,8 @@ function searchCustomers(q){
     const credit=customerCredits[c.name.toLowerCase()]||0;
     const orderRows=c.orders.map(e=>{
       const pc=isV(e.payMethod)?'virt':'cash';
-      const items=e.orderItems?(e.orderItems.map(o=>{const q=(o.label&&labelToQty(o.label)>1)?labelToQty(o.label):(o.qty||1);return fmt(q)+'x '+o.itemName;}).join(', ')):
-                  e.items?(e.items.map(o=>{const q=(o.label&&labelToQty(o.label)>1)?labelToQty(o.label):(o.qty||1);return fmt(q)+'x '+o.itemName;}).join(', ')):
+      const items=e.orderItems?(e.orderItems.map(o=>{const q=o.qty||(o.label&&labelToQty(o.label)>1?labelToQty(o.label):1);return fmt(q)+'x '+o.itemName;}).join(', ')):
+                  e.items?(e.items.map(o=>{const q=o.qty||(o.label&&labelToQty(o.label)>1?labelToQty(o.label):1);return fmt(q)+'x '+o.itemName;}).join(', ')):
                   (e.name||'');
       return`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;">
         <div>
@@ -6854,7 +6854,7 @@ function exportEODLog(){
   if(r.orders&&r.orders.length){
     lines.push('ALL ORDERS ('+r.orders.length+')');
     r.orders.forEach((o,idx2)=>{
-      const items=(o.items||[]).map(it=>{const q=(it.label&&labelToQty(it.label)>1)?labelToQty(it.label):(it.qty||1);return fmt(q)+'x '+it.itemName;}).join(', ');
+      const items=(o.items||[]).map(it=>{const q=it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):1);return fmt(q)+'x '+it.itemName;}).join(', ');
       lines.push((idx2+1)+'. '+(o.customer||'Quick Sell')+' - '+fmtP(o.total)+' - '+o.payMethod);
       if(items)lines.push('   Items: '+items);
       if(o.note)lines.push('   Note: '+o.note);
