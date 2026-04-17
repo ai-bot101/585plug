@@ -362,6 +362,20 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .ap-perm-del-btn:hover{background:rgba(244,162,74,0.2);border-color:var(--orange,#f4a24a);}
 .ap-order.cancelled{opacity:0.5;border-style:dashed;}
 
+/* ANNOUNCEMENT POPUP */
+#announce-popup{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9600;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);}
+#announce-popup.open{display:flex;}
+.ann-card{background:var(--black2);border:1px solid rgba(204,31,31,0.3);border-radius:18px;width:100%;max-width:360px;padding:0;overflow:hidden;box-shadow:0 20px 60px rgba(204,31,31,0.2);animation:annSlideIn 0.4s ease-out;}
+.ann-top{background:linear-gradient(135deg,rgba(204,31,31,0.15) 0%,rgba(0,0,0,0.3) 100%);border-bottom:1px solid rgba(204,31,31,0.2);padding:24px 20px;text-align:center;}
+.ann-bell{font-size:44px;margin-bottom:8px;display:inline-block;animation:announceBell 2s ease-in-out infinite;}
+.ann-title{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--red);letter-spacing:3px;}
+.ann-body{padding:24px 20px;}
+.ann-msg{font-family:'Oswald',sans-serif;font-size:16px;font-weight:400;color:var(--white);line-height:1.7;text-align:center;white-space:pre-wrap;word-break:break-word;}
+.ann-dismiss{display:block;width:100%;background:var(--red);border:none;border-radius:12px;padding:16px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;cursor:pointer;transition:background 0.2s;margin-top:20px;}
+.ann-dismiss:hover{background:var(--red3);}
+@keyframes annSlideIn{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+@keyframes announceBell{0%,100%{transform:rotate(0);}10%{transform:rotate(14deg);}20%{transform:rotate(-12deg);}30%{transform:rotate(8deg);}40%{transform:rotate(0);}}
+
 /* NEW DROP MODAL */
 #new-drop-modal{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);}
 #new-drop-modal.open{display:flex;}
@@ -577,6 +591,20 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
     </div>
   </header>
 
+  <!-- ANNOUNCEMENT POPUP -->
+  <div id="announce-popup">
+    <div class="ann-card">
+      <div class="ann-top">
+        <div class="ann-bell">🔔</div>
+        <div class="ann-title">ANNOUNCEMENT</div>
+      </div>
+      <div class="ann-body">
+        <div class="ann-msg" id="announce-text"></div>
+        <button class="ann-dismiss" onclick="dismissAnnouncement()">GOT IT</button>
+      </div>
+    </div>
+  </div>
+
   <div class="hero">
     <div class="hero-van"><img id="hero-logo" src="#" alt="585 Plug"></div>
     <div class="hero-top">
@@ -719,6 +747,17 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
     <div style="display:flex;gap:6px;">
       <button class="nd-btn-secondary" style="flex:1;" onclick="activateNewDrop()">Activate Drop</button>
       <button class="nd-btn-secondary" style="flex:1;background:rgba(200,200,200,0.1);color:var(--white3);border-color:rgba(200,200,200,0.3);" onclick="deactivateNewDrop()">Deactivate</button>
+    </div>
+  </div>
+  <!-- ANNOUNCEMENT MANAGER -->
+  <div style="border-top:1px solid var(--border);padding:12px 16px;background:var(--black);">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--red);letter-spacing:2px;margin-bottom:10px;">🔔 ANNOUNCEMENT BANNER</div>
+    <div id="ann-status-admin" style="background:rgba(0,0,0,0.5);border:1px solid rgba(204,31,31,0.2);border-radius:8px;padding:10px;margin-bottom:10px;font-family:'Oswald',sans-serif;font-size:11px;color:var(--white3);">Status: Loading...</div>
+    <div style="font-family:'Oswald',sans-serif;font-size:12px;color:var(--white3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Message:</div>
+    <textarea id="ann-msg-input" placeholder="e.g. New drop incoming this Friday! 🔥" style="width:100%;min-height:60px;background:var(--black3);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--white);font-family:'Oswald',sans-serif;font-size:13px;resize:vertical;outline:none;margin-bottom:10px;" onfocus="this.style.borderColor='var(--red)'" onblur="this.style.borderColor='var(--border2)'" oninput="this._userEdited=true"></textarea>
+    <div style="display:flex;gap:6px;">
+      <button class="nd-btn-secondary" style="flex:1;" onclick="activateAnnouncement()">🔔 Activate</button>
+      <button class="nd-btn-secondary" style="flex:1;background:rgba(200,200,200,0.1);color:var(--white3);border-color:rgba(200,200,200,0.3);" onclick="deactivateAnnouncement()">Deactivate</button>
     </div>
   </div>
 </div>
@@ -943,6 +982,7 @@ function processData(data) {
   buildCatTabs();
   renderMenu();
   checkNewDrops(data);
+  checkAnnouncement(data);
   const ss = document.getElementById('sync-status');
   if (ss) ss.innerHTML = '<span style="color:#3ecf8e;font-size:10px;font-family:monospace;letter-spacing:1px;">● LIVE</span>';
 }
@@ -2220,11 +2260,115 @@ async function deactivateNewDrop() {
   }
 }
 
+// ── ANNOUNCEMENT BANNER SYSTEM ──
+let _annShownThisSession = false;
+
+function checkAnnouncement(data) {
+  const ann = data.announcement;
+  const popup = document.getElementById('announce-popup');
+  const textEl = document.getElementById('announce-text');
+  if (!popup || !textEl) return;
+
+  if (!ann || !ann.active || !ann.message || !ann.message.trim()) {
+    return; // don't force-close if already showing — let user dismiss
+  }
+
+  const annId = ann.updatedAt || 0;
+
+  // If user already dismissed this exact announcement, skip
+  const dismissKey = 'ann_' + annId;
+  if (localStorage.getItem(dismissKey) === '1') return;
+
+  // Only auto-show once per page load (don't re-pop on every 15s poll)
+  if (_annShownThisSession && window._currentAnnId === annId) return;
+
+  // If the message changed while they're on the site, show the new one
+  window._currentAnnId = annId;
+  _annShownThisSession = true;
+  textEl.textContent = ann.message;
+
+  // Small delay so menu loads first
+  setTimeout(() => {
+    popup.classList.add('open');
+    document.body.classList.add('no-scroll');
+  }, 600);
+}
+
+function dismissAnnouncement() {
+  const popup = document.getElementById('announce-popup');
+  if (popup) popup.classList.remove('open');
+  document.body.classList.remove('no-scroll');
+  if (window._currentAnnId) {
+    localStorage.setItem('ann_' + window._currentAnnId, '1');
+  }
+}
+
+async function loadAnnouncementAdmin() {
+  const statusEl = document.getElementById('ann-status-admin');
+  const msgInput = document.getElementById('ann-msg-input');
+  if (!statusEl) return;
+
+  try {
+    const res = await fetch(FB_URL + '/inv_d6bb4/announcement.json');
+    const ann = res.ok ? await res.json() : null;
+    const isActive = ann && ann.active;
+
+    if (isActive && ann.message) {
+      const updated = ann.updatedAt ? new Date(ann.updatedAt).toLocaleString() : '';
+      statusEl.innerHTML = '<span style="color:var(--green);">● ACTIVE</span>' + (updated ? ' — Updated ' + updated : '');
+      if (msgInput && !msgInput._userEdited) msgInput.value = ann.message;
+    } else {
+      statusEl.innerHTML = '<span style="color:var(--white3);">● Inactive</span>';
+      if (msgInput && ann && ann.message && !msgInput._userEdited) msgInput.value = ann.message;
+    }
+  } catch(e) {
+    statusEl.innerHTML = '<span style="color:var(--red);">Error loading</span>';
+  }
+}
+
+async function activateAnnouncement() {
+  const msgInput = document.getElementById('ann-msg-input');
+  const msg = msgInput ? msgInput.value.trim() : '';
+  if (!msg) { alert('Type a message first!'); return; }
+
+  try {
+    const payload = { active: true, message: msg, updatedAt: Date.now() };
+    const res = await fetch(FB_URL + '/inv_d6bb4/announcement.json', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    showToast('Announcement activated! 🔔', 'green');
+    if (msgInput) msgInput._userEdited = false;
+    loadAnnouncementAdmin();
+  } catch(e) {
+    console.error('Error activating announcement:', e);
+    showToast('Failed to activate', 'red-t');
+  }
+}
+
+async function deactivateAnnouncement() {
+  try {
+    const res = await fetch(FB_URL + '/inv_d6bb4/announcement/active.json', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(false)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    showToast('Announcement deactivated', 'green');
+    loadAnnouncementAdmin();
+  } catch(e) {
+    console.error('Error deactivating announcement:', e);
+    showToast('Failed to deactivate', 'red-t');
+  }
+}
+
 // Initialize new drops admin on panel open
 const _origOpenAdmin = openAdmin;
 openAdmin = function() {
   _origOpenAdmin();
-  setTimeout(() => loadNewDropsAdmin(), 100);
+  setTimeout(() => { loadNewDropsAdmin(); loadAnnouncementAdmin(); }, 100);
 };
 
 // ── TOAST ──
