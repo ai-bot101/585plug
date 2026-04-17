@@ -176,7 +176,18 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .hero-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(56px,14vw,100px);color:var(--red);letter-spacing:4px;line-height:.95;margin-bottom:6px;text-shadow:0 0 60px rgba(204,31,31,0.3);}
 .hero-title span{color:var(--white);}
 .hero-sub{font-family:'Oswald',sans-serif;font-size:15px;font-weight:300;color:var(--white3);letter-spacing:3px;text-transform:uppercase;margin-bottom:20px;}
-.hero-tagline{font-size:13px;color:var(--white2);max-width:380px;margin:0 auto 24px;line-height:1.8;font-weight:300;}
+.hero-tagline{font-size:13px;color:var(--white2);max-width:380px;margin:0 auto 0;line-height:1.8;font-weight:300;}
+
+/* ROUTE TIMES */
+.route-section{margin-top:20px;padding:0 10px;}
+.route-title{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--white);letter-spacing:3px;margin-bottom:14px;}
+.route-wrap{position:relative;}
+.route-line{position:absolute;top:6px;left:15%;right:15%;height:2px;background:linear-gradient(90deg,rgba(204,31,31,0.15),rgba(204,31,31,0.4),rgba(204,31,31,0.4),rgba(204,31,31,0.15));z-index:1;border-radius:1px;}
+.route-timeline{display:flex;align-items:center;justify-content:center;gap:0;position:relative;padding:0 6px;}
+.route-stop{display:flex;flex-direction:column;align-items:center;position:relative;z-index:2;flex:1;}
+.route-dot{width:12px;height:12px;border-radius:50%;background:var(--red);border:2px solid rgba(204,31,31,0.4);margin-bottom:8px;box-shadow:0 0 8px rgba(204,31,31,0.3);}
+.route-time{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--white);letter-spacing:1px;line-height:1;}
+.route-label{font-family:'Oswald',sans-serif;font-size:9px;color:var(--white3);text-transform:uppercase;letter-spacing:1px;margin-top:3px;}
 
 /* SEARCH */
 .search-wrap{max-width:1100px;margin:0 auto;padding:20px 16px 0;}
@@ -615,6 +626,34 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
     <div class="hero-title">585<span> Plug</span></div>
     <div class="hero-sub">Quality You Can Trust · Rochester NY</div>
     <div class="hero-tagline">Smoke Happy. Smoke Healthy. Browse our full menu and send your order directly.</div>
+    <div class="route-section">
+      <div class="route-title">🚗 NEW DAILY ROUTES</div>
+      <div class="route-wrap">
+        <div class="route-line"></div>
+        <div class="route-timeline">
+          <div class="route-stop">
+            <div class="route-dot"></div>
+            <div class="route-time">NOON</div>
+            <div class="route-label">1st Route</div>
+          </div>
+          <div class="route-stop">
+            <div class="route-dot"></div>
+            <div class="route-time">4 PM</div>
+            <div class="route-label">2nd Route</div>
+          </div>
+          <div class="route-stop">
+            <div class="route-dot"></div>
+            <div class="route-time">7 PM</div>
+            <div class="route-label">3rd Route</div>
+          </div>
+          <div class="route-stop">
+            <div class="route-dot"></div>
+            <div class="route-time">10 PM</div>
+            <div class="route-label">Last Route</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="search-wrap">
