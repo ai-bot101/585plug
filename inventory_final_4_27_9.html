@@ -489,9 +489,11 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
           <div style="display:flex;align-items:center;gap:8px;">
             <span id="staff-buys-count" style="font-size:10px;color:var(--text3);font-family:var(--mono);"></span>
             <button onclick="openOwnerStaffBuy()" style="background:rgba(244,162,74,0.12);border:1px solid rgba(244,162,74,0.3);border-radius:8px;padding:6px 14px;color:var(--orange);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;">+ Log Staff Buy</button>
+            <button onclick="saveStaffBuyLog()" style="background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:8px;padding:6px 14px;color:var(--accent);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;">📋 Save Log</button>
           </div>
         </div>
         <div id="staff-buys-list"></div>
+        <div id="staff-buy-logs-list" style="margin-top:14px;"></div>
       </div>
 
       <!-- saved EOD logs -->
@@ -1357,6 +1359,7 @@ let failedAttempts=[]; // {timestamp, date, time, userSlot} — owner login fail
 let loginLog=[]; // {timestamp, date, time, name, role} — all successful logins
 let dayNotes={}; // {date: noteString}
 let eodLogs=[]; // saved end-of-day records
+let staffBuyLogs=[]; // saved staff buy snapshots
 let cu=null,activeCat='ALL',srch='',selDay='today',staffSelDay='today',selPw=null;
 let inv={STRAINS:[],DISPOS:[],EDIBLES:[],PREROLLS:[],NICOTINE:[]};
 let log=[],pendingSale=null,selMethod=null,orderItems=[],orderPayMethod=null;
@@ -1406,8 +1409,8 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='EOD-FIX-v11';
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v10]';},1000);
+const _APP_VERSION='EOD-FIX-v12';
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v12]';},1000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
 let commissionPaused={}; // {staffName: true} — commission disabled for this staff member
@@ -1497,7 +1500,7 @@ function _emergencyPush(){
   try{
     const payload={
       inv,log,cfg,
-      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,
+      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,
       failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,
       commissionPaused,autoDailyDebts,
       updatedAt:Date.now()
@@ -2358,14 +2361,22 @@ function confirmOrder(){
     const key=customer.trim().toLowerCase();
     customerCredits[key]=(customerCredits[key]||0)-short;
   }
-  const objs=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||''}));
-  objs.forEach(({item,qty,flavorText})=>{
+  const objs=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||'',flavors:o.flavors||null}));
+  objs.forEach(({item,qty,flavorText,flavors})=>{
     if(!item)return;
     item.left=Math.round((gl(item)-qty)*10)/10;
-    // deduct from flavor stock if a flavor was selected — always 1 physical unit
-    if(flavorText&&Array.isArray(item.flavors)){
-      const fl=item.flavors.find(f=>f.name===flavorText);
-      if(fl)fl.stock=Math.max(0,Math.round(fl.stock-1));
+    // deduct from flavor stock — handle both formats
+    if(Array.isArray(item.flavors)){
+      if(flavors&&typeof flavors==='object'){
+        Object.entries(flavors).forEach(([fname,fqty])=>{
+          if(fqty<=0)return;
+          const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===fname.toLowerCase());
+          if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-fqty));
+        });
+      } else if(flavorText){
+        const fl=item.flavors.find(f=>f.name===flavorText);
+        if(fl)fl.stock=Math.max(0,Math.round(fl.stock-1));
+      }
     }
   });
   const vFee2=isV(orderPayMethod)||orderPayMethod==='split';
@@ -2520,11 +2531,14 @@ function syncStockToEOD(e){
         const key=(oi.itemName||'').toLowerCase();
         const qty=oi.qty||(oi.label&&labelToQty(oi.label)>1?labelToQty(oi.label):0);
         addToSold(key,qty);
+        addFlavorSold(key,oi,qty);
       });
     } else if(entry.type==='selfbuy'&&entry.items){
       entry.items.forEach(it=>{
         const key=(it.itemName||it.name||'').toLowerCase();
-        addToSold(key,it.qty||0);
+        const qty=it.qty||0;
+        addToSold(key,qty);
+        addFlavorSold(key,it,qty);
       });
     }
   });
@@ -2535,6 +2549,7 @@ function syncStockToEOD(e){
       const key=(oi.itemName||oi.name||'').toLowerCase();
       const qty=oi.qty||(oi.label&&labelToQty(oi.label)>1?labelToQty(oi.label):0);
       addToSold(key,qty);
+      addFlavorSold(key,oi,qty);
     });
   });
 
@@ -2566,15 +2581,34 @@ function syncStockToEOD(e){
       const correctLeft=Math.round(Math.max(0,item.bought-totalSold)*10)/10;
       item.left=correctLeft;
       // Sync flavor stock
-      if(Array.isArray(item.flavors)&&flavorSoldMap[key]){
-        item.flavors.forEach(f=>{
-          if(!f.name)return;
-          const fkey=f.name.toLowerCase();
-          const fSold=flavorSoldMap[key][fkey]||0;
-          // Calculate: original flavor stock = current + what was sold from this flavor
-          // Then new stock = original - total sold
-          // But we don't know original, so use bought-level proportions
-        });
+      if(Array.isArray(item.flavors)){
+        const fSoldData=flavorSoldMap[key]||{};
+        // Rebuild each flavor: bought_per_flavor is unknown, so estimate as current + sold
+        // Then new_stock = estimated_bought - sold = current (no change unless overall left changed)
+        // Better approach: scale flavor stocks so sum matches new item.left
+        const totalFlavorNow=item.flavors.reduce((s,f)=>s+(f.stock||0),0);
+        if(totalFlavorNow>0&&correctLeft!==currentLeft){
+          // Scale all flavor stocks proportionally to match new item.left
+          const ratio=correctLeft/Math.max(1,totalFlavorNow);
+          let assigned=0;
+          item.flavors.forEach((f,i)=>{
+            if(!f.name)return;
+            const newStock=Math.max(0,Math.round((f.stock||0)*ratio));
+            f.stock=newStock;
+            assigned+=newStock;
+          });
+          // Fix rounding: add/remove from largest flavor
+          const diff2=Math.round(correctLeft)-assigned;
+          if(diff2!==0){
+            const biggest=item.flavors.reduce((best,f)=>(!best||(f.stock||0)>(best.stock||0))?f:best,null);
+            if(biggest)biggest.stock=Math.max(0,(biggest.stock||0)+diff2);
+          }
+        } else if(totalFlavorNow===0&&correctLeft>0){
+          // Flavors all at 0 but item has stock — distribute evenly
+          const each=Math.floor(correctLeft/item.flavors.length);
+          let leftover=Math.round(correctLeft)-each*item.flavors.length;
+          item.flavors.forEach(f=>{f.stock=each;if(leftover>0){f.stock++;leftover--;}});
+        }
       }
     });
   });
@@ -2961,28 +2995,63 @@ function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today
     allTime[e.who].t+=(e.amtReceived||0);
     allTime[e.who].comm+=(e.commission||0);
   });
+  // Build per-person sales lists for expandable view
+  const personSales={};
+  cfg.users.forEach(u=>{personSales[u.name]=[];});
+  sells.forEach(e=>{
+    if(!personSales[e.who])personSales[e.who]=[];
+    personSales[e.who].push(e);
+  });
   document.getElementById('dusers').innerHTML=cfg.users.map((u,i)=>{
     const col=UC[i]||UC[0];
     const d=us[u.name]||{c:0,t:0,comm:0};
     const at=allTime[u.name]||{c:0,t:0,comm:0};
-    return`<div class="usr" style="flex-direction:column;align-items:flex-start;gap:8px;">
+    const mySales=personSales[u.name]||[];
+    const salesHtml=mySales.length?mySales.map(s=>{
+      const items=s.orderItems?(s.orderItems||[]).map(oi=>{const q=oi.qty||(oi.label&&labelToQty(oi.label)>1?labelToQty(oi.label):1);return fmt(q)+'x '+oi.itemName;}).join(', ')
+        :s.items?(s.items||[]).map(it=>fmt(it.qty||1)+'x '+(it.itemName||it.name)).join(', ')
+        :(s.name||'');
+      const pm=PM.find(m=>m.id===s.payMethod)?.label||s.payMethod||'Cash';
+      const isSB=s.type==='selfbuy';
+      return`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;">
+        <div style="flex:1;">
+          <div style="color:var(--text);font-family:var(--mono);text-transform:capitalize;">${items||'Sale'}</div>
+          <div style="color:var(--text3);margin-top:2px;">${s.time||''} · ${pm}${isSB?' · <span style="color:var(--orange);">🛒 Self Buy</span>':''}</div>
+          ${s.customer?'<div style="color:var(--text2);margin-top:1px;">'+s.customer+'</div>':''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:10px;">
+          <div style="font-family:var(--mono);font-weight:700;color:var(--green);">${fmtP(s.amtReceived||s.total||s.totalOwed||0)}</div>
+          ${!isSB&&s.commission?'<div style="font-size:10px;color:var(--orange);">comm: '+fmtP(s.commission)+'</div>':''}
+        </div>
+      </div>`;
+    }).join(''):'<div style="padding:8px 0;font-size:12px;color:var(--text3);">No sales</div>';
+    return`<div class="usr" style="flex-direction:column;align-items:flex-start;gap:8px;cursor:pointer;" onclick="var det=this.querySelector('.person-sales-detail');if(det)det.style.display=det.style.display==='block'?'none':'block';">
       <div style="display:flex;align-items:center;gap:8px;width:100%;">
         <div style="width:30px;height:30px;border-radius:8px;font-size:13px;font-weight:700;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${col}22;color:${col}">${u.name.charAt(0).toUpperCase()}</div>
         <div class="un" style="color:${col}">${u.name}</div>
+        <div style="margin-left:auto;font-size:10px;color:var(--text3);">tap to view sales ▾</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;width:100%;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;width:100%;">
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;">
-          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">Today Sales</div>
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">${isAllTime?'Total':'Today'} Sales</div>
           <div style="font-size:16px;font-weight:700;font-family:var(--mono);color:${col}">${d.c}</div>
         </div>
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;">
-          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">Today Comm</div>
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">${isAllTime?'Total':'Today'} Rev</div>
+          <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:var(--green)">${fmtP(d.t)}</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;">
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">${isAllTime?'Total':'Today'} Comm</div>
           <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:var(--orange)">${fmtP(d.comm)}</div>
         </div>
         <div style="background:rgba(108,99,255,0.06);border:1px solid rgba(108,99,255,0.2);border-radius:8px;padding:8px;text-align:center;">
           <div style="font-size:9px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">All-Time Comm</div>
           <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:var(--accent)">${fmtP(at.comm)}</div>
         </div>
+      </div>
+      <div class="person-sales-detail" style="display:none;width:100%;background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:4px;">
+        <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">${u.name}'s ${isAllTime?'ALL':'DAILY'} SALES (${mySales.length})</div>
+        ${salesHtml}
       </div>
     </div>`;
   }).join('');const is={};sells.forEach(e=>{if(e.type==='order'){(e.orderItems||[]).forEach(o=>{if(!is[o.itemName])is[o.itemName]=0;is[o.itemName]+=(e.amtReceived||0)/Math.max(1,(e.orderItems||[]).length);});}else{if(!is[e.name])is[e.name]=0;is[e.name]+=(e.amtReceived||0);}});const sorted=Object.entries(is).sort((a,b)=>b[1]-a[1]).slice(0,8),mx=sorted[0]?.[1]||1;document.getElementById('dtop').innerHTML=sorted.length?sorted.map(([n,a])=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)"><span style="flex:1;font-size:12px;color:var(--text);text-transform:capitalize">${n}</span><div style="flex:2;height:3px;background:var(--bg4);border-radius:2px;overflow:hidden"><div style="height:100%;width:${(a/mx*100).toFixed(1)}%;background:var(--green);border-radius:2px"></div></div><span style="font-family:var(--mono);font-size:11px;color:var(--green);min-width:40px;text-align:right">${fmtP(a)}</span></div>`).join(''):'<div class="empty">No sales recorded</div>';}
@@ -3037,6 +3106,145 @@ function renderStaffBuys(){
     html+='</div>';
   });
   el.innerHTML=html;
+  renderStaffBuyLogsList();
+}
+function saveStaffBuyLog(){
+  const buys=log.filter(e=>e.type==='selfbuy');
+  if(!buys.length){showToast('No staff purchases to log','err');return;}
+  // Use localStorage cutoff to prevent duplicates (same approach as EOD)
+  const lsCutoff=parseInt(localStorage.getItem('_sbLogCutoff')||'0');
+  const logCutoff=staffBuyLogs.reduce((max,l)=>Math.max(max,l.snapshotId||0),0);
+  const cutoff=Math.max(lsCutoff,logCutoff);
+  const newBuys=cutoff>0?buys.filter(b=>(b.timestamp||0)>cutoff):buys;
+  if(!newBuys.length){showToast('No new staff purchases since last log','err');return;}
+  // Group by staff
+  const byStaff={};
+  newBuys.forEach(b=>{
+    if(!byStaff[b.who])byStaff[b.who]={buys:[],total:0,itemCount:0};
+    byStaff[b.who].buys.push(b);
+    byStaff[b.who].total+=(b.totalOwed||b.amtReceived||0);
+    byStaff[b.who].itemCount+=(b.items||[]).length;
+  });
+  const grandTotal=newBuys.reduce((s,b)=>s+(b.totalOwed||b.amtReceived||0),0);
+  const saveTime=Date.now();
+  const logNum=staffBuyLogs.length+1;
+  const record={
+    logNumber:logNum,
+    date:tday(),
+    savedAt:new Date().toLocaleString(),
+    snapshotId:saveTime,
+    buyCount:newBuys.length,
+    grandTotal:grandTotal,
+    byStaff:byStaff,
+    buys:newBuys.map(b=>({
+      who:b.who,
+      date:b.date,
+      time:b.time||'',
+      timestamp:b.timestamp||0,
+      totalOwed:b.totalOwed||b.amtReceived||0,
+      items:(b.items||[]).map(it=>({
+        itemName:it.itemName||it.name||'',
+        qty:it.qty||0,
+        cost:it.cost||0
+      }))
+    }))
+  };
+  staffBuyLogs.unshift(record);
+  try{localStorage.setItem('_sbLogCutoff',String(saveTime));}catch(ex){}
+  persist();
+  renderStaffBuyLogsList();
+  showToast('Staff Buy Log #'+logNum+' saved ✅ ('+newBuys.length+' purchases, '+fmtP(grandTotal)+')','ok');
+}
+function renderStaffBuyLogsList(){
+  const el=document.getElementById('staff-buy-logs-list');
+  if(!el)return;
+  if(!staffBuyLogs.length){el.innerHTML='';return;}
+  const totalLogs=staffBuyLogs.length;
+  el.innerHTML=`<div style="border-top:1px solid rgba(244,162,74,0.2);padding-top:12px;margin-top:4px;">
+    <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">📋 Saved Staff Buy Logs (${totalLogs})</div>
+    ${staffBuyLogs.map((l,i)=>{
+      const logNum=l.logNumber||totalLogs-i;
+      return`<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+            <span style="font-size:13px;font-weight:600;color:var(--orange);">📋 Log #${logNum}</span>
+            <span style="font-size:10px;color:var(--text3);font-family:var(--mono);">${l.date}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text3);font-family:var(--mono);">
+            ${l.buyCount} purchase${l.buyCount!==1?'s':''} · ${fmtP(l.grandTotal)} total owed
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px;">Saved ${l.savedAt}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="viewStaffBuyLog(${i})" style="background:rgba(244,162,74,0.08);border:1px solid rgba(244,162,74,0.2);border-radius:7px;color:var(--orange);padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);">View</button>
+          <button onclick="deleteStaffBuyLog(${i})" style="background:rgba(244,107,107,0.06);border:1px solid rgba(244,107,107,0.15);border-radius:7px;color:rgba(244,107,107,0.5);padding:6px 10px;font-size:11px;cursor:pointer;font-family:var(--sans);">Delete</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function viewStaffBuyLog(idx){
+  const l=staffBuyLogs[idx];
+  if(!l)return;
+  const logNum=l.logNumber||staffBuyLogs.length-idx;
+  // Build view in a modal
+  let html=`<h3 style="color:var(--orange);">📋 Staff Buy Log #${logNum}</h3>
+    <div class="msub">${l.date} · Saved ${l.savedAt}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;">
+      <div style="background:rgba(244,162,74,0.08);border:1px solid rgba(244,162,74,0.25);border-radius:12px;padding:14px;">
+        <div style="font-size:9px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total Owed</div>
+        <div style="font-size:22px;font-weight:700;font-family:var(--mono);color:var(--orange);">${fmtP(l.grandTotal)}</div>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;">
+        <div style="font-size:9px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Purchases</div>
+        <div style="font-size:22px;font-weight:700;font-family:var(--mono);color:var(--text);">${l.buyCount}</div>
+      </div>
+    </div>`;
+  // Group by staff
+  const staffGroups={};
+  (l.buys||[]).forEach(b=>{
+    if(!staffGroups[b.who])staffGroups[b.who]={buys:[],total:0};
+    staffGroups[b.who].buys.push(b);
+    staffGroups[b.who].total+=(b.totalOwed||0);
+  });
+  Object.entries(staffGroups).forEach(([name,data],si)=>{
+    const col=si===0?'#f46b6b':si===1?'#c084fc':'#3b82f6';
+    html+=`<div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">
+        <span style="font-size:14px;font-weight:700;color:${col};">👤 ${name}</span>
+        <span style="font-family:var(--mono);font-weight:700;color:var(--orange);font-size:16px;">${fmtP(data.total)}</span>
+      </div>`;
+    data.buys.forEach(b=>{
+      const items=(b.items||[]).map(it=>fmt(it.qty)+'x '+it.itemName+' ('+fmtP(it.cost)+')').join(', ');
+      html+=`<div style="background:var(--bg4);border:1px solid var(--border2);border-radius:8px;padding:10px;margin-bottom:6px;">
+        <div style="font-size:13px;color:var(--text);font-family:var(--mono);">${items||'No items'}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px;">${b.date} · ${b.time||''} · ${fmtP(b.totalOwed)}</div>
+      </div>`;
+    });
+    html+='</div>';
+  });
+  html+=`<div class="mact"><button class="mc" onclick="closeOv('sb-log-view-modal')">Close</button></div>`;
+  // Use a dynamic modal
+  let modal=document.getElementById('sb-log-view-modal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.className='ov';
+    modal.id='sb-log-view-modal';
+    modal.style.zIndex='160';
+    modal.innerHTML='<div class="modal" style="max-width:480px;max-height:85vh;overflow-y:auto;" id="sb-log-view-content"></div>';
+    document.body.appendChild(modal);
+  }
+  document.getElementById('sb-log-view-content').innerHTML=html;
+  modal.classList.add('open');
+}
+async function deleteStaffBuyLog(idx){
+  if(!await _ownerGuard())return;
+  const l=staffBuyLogs[idx];
+  const logNum=l?.logNumber||staffBuyLogs.length-idx;
+  if(!confirm('Delete Staff Buy Log #'+logNum+'?'))return;
+  staffBuyLogs.splice(idx,1);
+  persist();renderStaffBuyLogsList();
+  showToast('Staff Buy Log deleted','ok');
 }
 function renderCredits(){
   const entries=Object.entries(customerCredits);
@@ -3132,6 +3340,21 @@ function saveSelfbuyEdit(){
           const found=(inv[c]||[]).find(item=>item.name&&item.name.toLowerCase()===itemName);
           if(found){
             found.left=Math.round(Math.max(0,gl(found)-diff)*10)/10;
+            // Adjust flavor stock for selfbuy qty changes
+            if(Array.isArray(found.flavors)){
+              const it=e.items[ii];
+              if(it.flavors&&typeof it.flavors==='object'){
+                Object.entries(it.flavors).forEach(([fname,fqty])=>{
+                  if(fqty<=0)return;
+                  const flavorDiff=Math.round(fqty*(newQty/oldQty)*10)/10-fqty;
+                  const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===fname.toLowerCase());
+                  if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-flavorDiff));
+                });
+              } else if(it.flavorText){
+                const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===it.flavorText.toLowerCase());
+                if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-diff));
+              }
+            }
             break;
           }
         }
@@ -3172,10 +3395,18 @@ async function deleteSelfbuy(idx){
       const found=(inv[c]||[]).find(item=>item.name&&item.name.toLowerCase()===itemName);
       if(found){
         found.left=Math.round((gl(found)+qty)*10)/10;
-        // Restore flavor stock
-        if(Array.isArray(found.flavors)&&it.flavorText){
-          const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===it.flavorText.toLowerCase());
-          if(fl)fl.stock=(fl.stock||0)+Math.round(qty);
+        // Restore flavor stock — handle both formats
+        if(Array.isArray(found.flavors)){
+          if(it.flavors&&typeof it.flavors==='object'){
+            Object.entries(it.flavors).forEach(([fname,fqty])=>{
+              if(fqty<=0)return;
+              const flav=found.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
+              if(flav)flav.stock=Math.round((flav.stock||0)+fqty);
+            });
+          } else if(it.flavorText){
+            const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===it.flavorText.toLowerCase());
+            if(fl)fl.stock=(fl.stock||0)+1; // 1 physical unit
+          }
         }
         break;
       }
@@ -3213,7 +3444,7 @@ async function deleteLogEntry(idx) {
                 });
               } else if (oi.flavorText && oi.flavorText.indexOf(',') === -1) {
                 const fl = found.flavors.find(f => f.name === oi.flavorText);
-                if (fl) fl.stock = (fl.stock||0) + qty;
+                if (fl) fl.stock = (fl.stock||0) + 1; // 1 physical unit, not gram weight
               }
             }
             break;
@@ -4330,12 +4561,17 @@ function finalizeConfirmOrder(fbKey, assignedTo){
         if (f) { f.left = Math.max(0, Math.round((gl(f)-qty)*10)/10); foundItem = f; }
       }
       // Deduct flavor stock if needed
-      if (foundItem && foundItem.flavors && oi.flavors && typeof oi.flavors === 'object') {
-        Object.entries(oi.flavors).forEach(([fname, fqty]) => {
-          if (fqty <= 0) return;
-          const flav = foundItem.flavors.find(fl => fl.name && fl.name.toLowerCase() === fname.toLowerCase());
-          if (flav) flav.stock = Math.max(0, (flav.stock||0) - fqty);
-        });
+      if (foundItem && Array.isArray(foundItem.flavors)) {
+        if (oi.flavors && typeof oi.flavors === 'object') {
+          Object.entries(oi.flavors).forEach(([fname, fqty]) => {
+            if (fqty <= 0) return;
+            const flav = foundItem.flavors.find(fl => fl.name && fl.name.toLowerCase() === fname.toLowerCase());
+            if (flav) flav.stock = Math.max(0, (flav.stock||0) - fqty);
+          });
+        } else if (oi.flavorText) {
+          const fl = foundItem.flavors.find(f => f.name && f.name.toLowerCase() === oi.flavorText.toLowerCase());
+          if (fl) fl.stock = Math.max(0, (fl.stock||0) - 1);
+        }
       }
     });
   }
@@ -5182,6 +5418,7 @@ async function fbPullNow(){
       customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
       dayNotes=data.dayNotes||{};
       eodLogs=Array.isArray(data.eodLogs)?data.eodLogs:[];
+      staffBuyLogs=Array.isArray(data.staffBuyLogs)?data.staffBuyLogs:[];
       failedAttempts=Array.isArray(data.failedAttempts)?data.failedAttempts:[];
       loginLog=Array.isArray(data.loginLog)?data.loginLog:[];
       cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
@@ -5228,7 +5465,7 @@ function fbPush(){
       // via targeted PUT/DELETE/PATCH calls on specific order keys.
       const payload={
         inv,log,cfg,
-        customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
+        customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
         updatedAt:Date.now()
       };
       fbLastTimestamp=payload.updatedAt; // prevent echo pull
@@ -5310,7 +5547,7 @@ async function persistEncrypted(){
   try{
     const data={
       inv,log,cfg,
-      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts
+      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts
     };
     const encrypted=await encryptData(data);
     localStorage.setItem('ig_enc',encrypted);
