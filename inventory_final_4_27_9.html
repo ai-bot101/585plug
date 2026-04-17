@@ -850,6 +850,10 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
     <div class="field"><label>Amount Bought</label><input type="number" id="em-bought" step="0.1"></div>
     <div class="field"><label>Amount Left</label><input type="number" id="em-left" step="0.1"></div>
     <input type="hidden" id="em-cat"><input type="hidden" id="em-idx">
+    <div class="field">
+      <label>Category <span style="color:var(--text3);font-size:11px;">(change to move item)</span></label>
+      <select id="em-move-cat" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;-webkit-appearance:none;appearance:none;"></select>
+    </div>
     <!-- menu prices -->
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;">
       <div style="font-size:10px;font-family:var(--mono);color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Menu Prices</div>
@@ -4081,7 +4085,11 @@ function openEdit(cat,idx){
   document.getElementById('em-left').value=item.left!==null?item.left:'';
   document.getElementById('em-cat').value=cat;
   document.getElementById('em-idx').value=idx;
-  // legacy fields - safely skip if not present
+  // Populate move-to-category dropdown
+  const moveSel=document.getElementById('em-move-cat');
+  if(moveSel){
+    moveSel.innerHTML=C().map(c=>`<option value="${c}"${c===cat?' selected':''}>${c}</option>`).join('');
+  }
   document.getElementById('edit-modal').classList.add('open');
 }
 
@@ -4113,8 +4121,19 @@ async function saveEdit(){
       log.unshift({type:'adjustment',name:item.name.toLowerCase(),amount:Math.abs(delta),direction:delta>0?'add':'remove',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'Manual stock edit'});
     }
   }
-  // prices saved via getPriceTiers above
-  persist();closeOv('edit-modal');renderStats();renderItems();pushInventory();showToast('Item updated','ok');
+  // Move to different category if changed
+  const newCat=document.getElementById('em-move-cat')?.value;
+  if(newCat&&newCat!==cat){
+    // Remove from old category
+    (inv[cat]||[]).splice(idx,1);
+    // Add to new category
+    if(!inv[newCat])inv[newCat]=[];
+    inv[newCat].push(item);
+    showToast('Moved "'+item.name+'" → '+newCat,'ok');
+  } else {
+    showToast('Item updated','ok');
+  }
+  persist();closeOv('edit-modal');renderStats();renderItems();pushInventory();
 }
 async function toggleSoldOut(cat,idx){
   if(!await _ownerGuard())return;
