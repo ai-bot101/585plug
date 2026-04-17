@@ -967,6 +967,18 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
         <button onclick="doReset('logs')" style="width:100%;margin-top:12px;background:rgba(244,162,74,0.12);border:1px solid rgba(244,162,74,0.3);border-radius:8px;padding:10px;color:var(--orange);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">Clear Activity Log</button>
       </div>
 
+      <!-- Wipe all logs & data, keep inventory -->
+      <div style="background:rgba(244,107,107,0.04);border:1px solid rgba(244,107,107,0.15);border-radius:12px;padding:16px;">
+        <div style="display:flex;align-items:flex-start;gap:12px;">
+          <div style="font-size:24px;flex-shrink:0;">🧹</div>
+          <div style="flex:1;">
+            <div style="font-size:14px;font-weight:600;color:var(--red);margin-bottom:4px;">Wipe All Logs — Keep Inventory</div>
+            <div style="font-size:12px;color:var(--text3);line-height:1.6;">Clears ALL activity logs, EOD logs, staff buy logs, cancelled orders, customer credits, VIP status, customer deals, and day notes. Your inventory items (names, prices, stock, flavors) are untouched.</div>
+          </div>
+        </div>
+        <button onclick="doReset('nukelogs')" style="width:100%;margin-top:12px;background:rgba(244,107,107,0.12);border:1px solid rgba(244,107,107,0.35);border-radius:8px;padding:10px;color:var(--red);font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer;">🧹 Wipe All Logs & Data</button>
+      </div>
+
       <!-- Remove all items -->
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;">
         <div style="display:flex;align-items:flex-start;gap:12px;">
@@ -6985,7 +6997,7 @@ function openResetModal(){
 }
 
 function doReset(type){
-  const messages={stock:'Reset all stock quantities to zero? Items, prices, and costs are kept.',logs:'Clear the entire activity log? Inventory is untouched.',items:'Delete ALL items from every category? Logs and settings are kept.',all:'FULL RESET - wipe all inventory, logs, and credits? Logins, categories, and commission settings are kept. This cannot be undone.'};
+  const messages={stock:'Reset all stock quantities to zero? Items, prices, and costs are kept.',logs:'Clear the entire activity log? Inventory is untouched.',items:'Delete ALL items from every category? Logs and settings are kept.',all:'FULL RESET - wipe all inventory, logs, and credits? Logins, categories, and commission settings are kept. This cannot be undone.',nukelogs:'⚠️ WIPE ALL DATA except inventory items?\n\nThis will clear:\n• All activity logs (sales, orders, selfbuys)\n• All EOD logs\n• All staff buy logs\n• All cancelled orders\n• Customer credits & VIP status\n• Customer deals\n• Day notes\n\nYour inventory items (names, prices, stock, flavors) are KEPT.\n\nThis cannot be undone.'};
   if(!confirm(messages[type]))return;
 
   if(type==='stock'){
@@ -7013,8 +7025,27 @@ function doReset(type){
     C().forEach(cat=>{inv[cat]=[];});
     log=[];
     customerCredits={};
+    eodLogs=[];
+    staffBuyLogs=[];
+    cancelledOrders=[];
+    vipCustomers={};
+    customerDeals={};
+    dayNotes={};
     persist();renderAll();closeOv('reset-modal');
     showToast('Full reset complete','ok');
+
+  }else if(type==='nukelogs'){
+    // Wipe ALL data EXCEPT inventory items — keeps names, prices, stock, flavors
+    log=[];
+    eodLogs=[];
+    staffBuyLogs=[];
+    cancelledOrders=[];
+    customerCredits={};
+    vipCustomers={};
+    customerDeals={};
+    dayNotes={};
+    persist();renderAll();closeOv('reset-modal');
+    showToast('All logs & data wiped — inventory kept ✅','ok');
   }
 }
 
