@@ -2266,7 +2266,7 @@ async function deactivateNewDrop() {
 }
 
 // ── ANNOUNCEMENT BANNER SYSTEM ──
-let _annShownThisSession = false;
+let _annShownThisLoad = false;
 
 function checkAnnouncement(data) {
   const ann = data.announcement;
@@ -2275,21 +2275,13 @@ function checkAnnouncement(data) {
   if (!popup || !textEl) return;
 
   if (!ann || !ann.active || !ann.message || !ann.message.trim()) {
-    return; // don't force-close if already showing — let user dismiss
+    return;
   }
 
-  const annId = ann.updatedAt || 0;
-
-  // If user already dismissed this exact announcement, skip
-  const dismissKey = 'ann_' + annId;
-  if (localStorage.getItem(dismissKey) === '1') return;
-
   // Only auto-show once per page load (don't re-pop on every 15s poll)
-  if (_annShownThisSession && window._currentAnnId === annId) return;
+  if (_annShownThisLoad) return;
 
-  // If the message changed while they're on the site, show the new one
-  window._currentAnnId = annId;
-  _annShownThisSession = true;
+  _annShownThisLoad = true;
   textEl.textContent = ann.message;
 
   // Small delay so menu loads first
@@ -2303,9 +2295,7 @@ function dismissAnnouncement() {
   const popup = document.getElementById('announce-popup');
   if (popup) popup.classList.remove('open');
   document.body.classList.remove('no-scroll');
-  if (window._currentAnnId) {
-    localStorage.setItem('ann_' + window._currentAnnId, '1');
-  }
+  // No localStorage save — popup will show again on next visit/refresh
 }
 
 async function loadAnnouncementAdmin() {
