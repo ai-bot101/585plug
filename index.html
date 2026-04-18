@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260418125124';
+var _MENU_V = 'v20260418130026';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -174,9 +174,12 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .logo-circle img{width:100%;height:100%;object-fit:cover;}
 .logo-text{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--red);letter-spacing:2px;line-height:1;}
 .logo-sub{font-size:9px;color:var(--white3);letter-spacing:1.5px;text-transform:uppercase;}
-.cart-btn{background:var(--red);border:none;border-radius:8px;padding:8px 14px;color:#fff;font-family:'Oswald',sans-serif;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;flex-shrink:0;transition:background .2s;}
-.cart-btn:hover{background:var(--red3);}
-.cart-count{background:#fff;color:var(--red);border-radius:50%;width:20px;height:20px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;}
+.cart-btn{display:none;}
+.cart-count{display:none;}
+.cart-pill{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--red);border:none;border-radius:50px;padding:14px 28px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0px));color:#fff;font-family:'Oswald',sans-serif;font-size:16px;font-weight:600;letter-spacing:1.5px;cursor:pointer;display:none;align-items:center;gap:10px;box-shadow:0 6px 24px rgba(204,31,31,0.5),0 2px 8px rgba(0,0,0,0.4);z-index:500;transition:transform 0.15s,box-shadow 0.15s;white-space:nowrap;touch-action:manipulation;}
+.cart-pill:active{transform:translateX(-50%) scale(0.96);}
+.cart-pill.visible{display:flex;}
+.cart-pill-count{background:rgba(255,255,255,0.2);border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;}
 
 /* HERO */
 .hero{position:relative;overflow:hidden;background:linear-gradient(180deg,#0a0a0a 0%,#111 100%);padding:56px 20px 48px;text-align:center;border-bottom:1px solid var(--border);}
@@ -609,11 +612,13 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
       </div>
       <button onclick="openAdminGate()" style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white3);font-size:14px;cursor:pointer;opacity:0.4;transition:opacity .2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.4'" title="Admin">⚙️</button>
       <button class="orders-btn" id="orders-btn" onclick="openOrderHistory()" style="display:none;">📜 Orders</button>
-      <button class="cart-btn" onclick="openCart()">
-        🛒 Cart <div class="cart-count" id="cart-count">0</div>
-      </button>
     </div>
   </header>
+
+  <!-- FLOATING CART PILL -->
+  <button class="cart-pill" id="cart-pill" onclick="openCart()">
+    🛒 View Cart <span class="cart-pill-count" id="cart-pill-count">0</span> — <span id="cart-pill-total">$0</span>
+  </button>
 
   <!-- ANNOUNCEMENT POPUP -->
   <div id="announce-popup">
@@ -1557,7 +1562,19 @@ function removeFromCart(idx) {
 }
 
 function updateCartCount() {
-  document.getElementById('cart-count').textContent = cart.length;
+  const n = cart.length;
+  const pill = document.getElementById('cart-pill');
+  const pillCount = document.getElementById('cart-pill-count');
+  const pillTotal = document.getElementById('cart-pill-total');
+  if (pill) {
+    if (n > 0) {
+      pill.classList.add('visible');
+      pillCount.textContent = n;
+      pillTotal.textContent = '$' + cart.reduce((s,c)=>s+c.price,0);
+    } else {
+      pill.classList.remove('visible');
+    }
+  }
 }
 
 function getSub() { return cart.reduce((s,c) => s+c.price, 0); }
@@ -1582,6 +1599,7 @@ function openCart() {
   document.body.classList.add('no-scroll');
   document.documentElement.classList.add('no-scroll');
   document.getElementById('cart-overlay').classList.add('open');
+  var pill=document.getElementById('cart-pill');if(pill)pill.style.display='none';
   // iOS Safari: block touchmove on overlay background
   document.addEventListener('touchmove', _blockTouch, { passive: false });
 }
@@ -1591,6 +1609,7 @@ function closeCart() {
   document.documentElement.classList.remove('no-scroll');
   document.removeEventListener('touchmove', _blockTouch);
   window.scrollTo(0, parseInt(document.documentElement.style.getPropertyValue('--scroll-y') || '0') * -1);
+  updateCartCount();
 }
 
 function renderCart() {
