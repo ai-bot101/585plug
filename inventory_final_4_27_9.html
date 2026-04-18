@@ -1425,7 +1425,7 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='BUGFIX-v14';
+const _APP_VERSION='BUGFIX-v15';
 setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v12]';},1000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
@@ -4303,6 +4303,13 @@ function processWebsiteOrders(pendingOrders) {
       return;
     }
     console.log('[PENDING-TRACE] PROCESSING', fbKey.substr(0,20), '— inLocal:', !!pendingWebOrders[fbKey], 'source:', order.source||'website', 'stockV2:', order._stockDeductedV2);
+    // AUTO-CLEAN: skip and delete ghost orders with no items
+    if(!order.orderItems||!order.orderItems.length||(Array.isArray(order.orderItems)&&order.orderItems.every(i=>!i.itemName&&!i.name))){
+      console.warn('[PENDING] Ghost order with no items — auto-deleting from Firebase:', fbKey);
+      fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
+      if(pendingWebOrders[fbKey])delete pendingWebOrders[fbKey];
+      return;
+    }
     if (!pendingWebOrders[fbKey]) {
       pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:false};
       console.log('[PENDING] New order from Firebase:', fbKey, 'source:', order.source||'website', 'total:', order.total);
