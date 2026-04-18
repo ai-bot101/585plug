@@ -1425,7 +1425,7 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='BUGFIX-v16';
+const _APP_VERSION='FLAVOR-FIX-v17';
 setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v12]';},1000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
@@ -4311,8 +4311,11 @@ function processWebsiteOrders(pendingOrders) {
       return;
     }
     if (!pendingWebOrders[fbKey]) {
-      pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:false};
-      console.log('[PENDING] New order from Firebase:', fbKey, 'source:', order.source||'website', 'total:', order.total);
+      // If stock was already deducted globally (_stockDeductedV2), mark as locally held too
+      // so confirmWebOrder doesn't double-deduct
+      const alreadyDeducted = !!order._stockDeductedV2;
+      pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:alreadyDeducted};
+      console.log('[PENDING] New order from Firebase:', fbKey, 'source:', order.source||'website', 'total:', order.total, 'alreadyDeducted:', alreadyDeducted);
       newCount++;
       // Deduct stock if not already done reliably.
       // _stockDeductedV2 means the fix is in place (processWebsiteOrders runs AFTER inv update).
@@ -4821,18 +4824,8 @@ function doReverseConfirmed(fbKey) {
       if (found) { found.left = Math.round((gl(found) + qty)*10)/10; foundItem = found; }
     }
     // Restore flavor stock — handle both object format (website) and string format (manual)
-    if (foundItem && Array.isArray(foundItem.flavors)) {
-      if (oi.flavors && typeof oi.flavors === 'object') {
-        Object.entries(oi.flavors).forEach(([fname, fqty]) => {
-          if (fqty <= 0) return;
-          const flav = foundItem.flavors.find(fl => fl.name && fl.name.toLowerCase() === fname.toLowerCase());
-          if (flav) flav.stock = (flav.stock||0) + fqty;
-        });
-      } else if (oi.flavorText) {
-        const fl = foundItem.flavors.find(f => f.name && f.name.toLowerCase() === oi.flavorText.toLowerCase());
-        if (fl) fl.stock = (fl.stock||0) + qty;
-      }
-    }
+    // NOTE: flavors are physical UNITS (count), not weight — always restore by pick count, not labelToQty
+    _restoreFlavorStock(foundItem, oi, 1);
   });
 
   // Remove from sales log
@@ -6298,19 +6291,8 @@ function deleteEODOrder(logIdx,orderIdx){
         const found=(inv[c]||[]).find(item=>item.name&&item.name.toLowerCase()===itemName);
         if(found){
           found.left=Math.round((gl(found)+qty)*10)/10;
-          // Restore flavor stock — handle both object and string formats
-          if(Array.isArray(found.flavors)){
-            if(it.flavors&&typeof it.flavors==='object'){
-              Object.entries(it.flavors).forEach(([fname,fqty])=>{
-                if(fqty<=0)return;
-                const flav=found.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
-                if(flav)flav.stock=(flav.stock||0)+fqty;
-              });
-            } else if(it.flavorText){
-              const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===it.flavorText.toLowerCase());
-              if(fl)fl.stock=(fl.stock||0)+qty;
-            }
-          }
+          // Restore flavor stock — flavors are physical units, not weight
+          _restoreFlavorStock(found,it,1);
           break;
         }
       }
@@ -6515,17 +6497,8 @@ function saveAddEODOrder(){
       const found=(inv[c]||[]).find(item=>item.name&&item.name.toLowerCase()===itemName);
       if(found){
         found.left=Math.round(Math.max(0,gl(found)-(it.qty||0))*10)/10;
-        // Deduct flavor stock if flavors object is present
-        if(found.flavors&&it.flavors&&typeof it.flavors==='object'){
-          Object.entries(it.flavors).forEach(([fname,fqty])=>{
-            if(fqty<=0)return;
-            const flav=found.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
-            if(flav)flav.stock=Math.max(0,(flav.stock||0)-fqty);
-          });
-        } else if(it.flavorText&&Array.isArray(found.flavors)){
-          const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===it.flavorText.toLowerCase());
-          if(fl)fl.stock=Math.max(0,(fl.stock||0)-(it.qty||0));
-        }
+        // Deduct flavor stock — flavors are physical units, not weight
+        _deductFlavorStock(found,it,1);
         break;
       }
     }
