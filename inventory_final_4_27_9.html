@@ -1425,7 +1425,7 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='EOD-FIX-v12';
+const _APP_VERSION='BUGFIX-v14';
 setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v12]';},1000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
@@ -1480,7 +1480,7 @@ function _restoreFlavorStock(foundItem,oi,qty){
       if(flav)flav.stock=Math.round((flav.stock||0)+fqty);
     });
   }else if(oi.flavorText){
-    const fl=foundItem.flavors.find(f=>f.name===oi.flavorText);
+    const fl=foundItem.flavors.find(f=>f.name&&f.name.toLowerCase()===oi.flavorText.toLowerCase());
     if(fl)fl.stock=Math.round((fl.stock||0)+1); // 1 physical unit, not gram weight
   }
 }
@@ -1495,7 +1495,7 @@ function _deductFlavorStock(foundItem,oi,qty){
       if(flav)flav.stock=Math.max(0,Math.round((flav.stock||0)-fqty));
     });
   }else if(oi.flavorText){
-    const fl=foundItem.flavors.find(f=>f.name===oi.flavorText);
+    const fl=foundItem.flavors.find(f=>f.name&&f.name.toLowerCase()===oi.flavorText.toLowerCase());
     if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-1)); // 1 physical unit, not gram weight
   }
 }
@@ -2336,7 +2336,7 @@ function confirmOrder(){
             if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-fqty));
           });
         }else if(flavorText&&Array.isArray(item.flavors)){
-          const fl=item.flavors.find(f=>f.name===flavorText);
+          const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===flavorText.toLowerCase());
           if(fl)fl.stock=Math.max(0,Math.round(fl.stock-1));
         }
       });
@@ -2380,7 +2380,7 @@ function confirmOrder(){
   const objs=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||'',flavors:o.flavors||null}));
   objs.forEach(({item,qty,flavorText,flavors})=>{
     if(!item)return;
-    item.left=Math.round((gl(item)-qty)*10)/10;
+    item.left=Math.max(0,Math.round((gl(item)-qty)*10)/10);
     // deduct from flavor stock — handle both formats
     if(Array.isArray(item.flavors)){
       if(flavors&&typeof flavors==='object'){
@@ -2390,7 +2390,7 @@ function confirmOrder(){
           if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-fqty));
         });
       } else if(flavorText){
-        const fl=item.flavors.find(f=>f.name===flavorText);
+        const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===flavorText.toLowerCase());
         if(fl)fl.stock=Math.max(0,Math.round(fl.stock-1));
       }
     }
@@ -2595,6 +2595,7 @@ function syncStockToEOD(e){
       const key=item.name.toLowerCase();
       const totalSold=soldMap[key]||0;
       const correctLeft=Math.round(Math.max(0,item.bought-totalSold)*10)/10;
+      const currentLeft=gl(item);
       item.left=correctLeft;
       // Sync flavor stock
       if(Array.isArray(item.flavors)){
@@ -3459,7 +3460,7 @@ async function deleteLogEntry(idx) {
                   if (flav) flav.stock = (flav.stock||0) + fqty;
                 });
               } else if (oi.flavorText && oi.flavorText.indexOf(',') === -1) {
-                const fl = found.flavors.find(f => f.name === oi.flavorText);
+                const fl = found.flavors.find(f => f.name && f.name.toLowerCase() === oi.flavorText.toLowerCase());
                 if (fl) fl.stock = (fl.stock||0) + 1; // 1 physical unit, not gram weight
               }
             }
@@ -3633,14 +3634,39 @@ function saveLogEdit(){
   const newName=document.getElementById('edit-log-customer').value.trim();
   if(isOrder)e.customer=newName||'Customer';
   else if(e.type==='sell')e.name=newName||e.name;
-  // update quantities
+  // update quantities AND adjust stock for changes
   if(isOrder&&e.orderItems){
+    const itemLkAdj={};
+    C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.name)itemLkAdj[item.name.toLowerCase()]=item;});});
     document.querySelectorAll('.log-item-qty').forEach(inp=>{
       const ii=parseInt(inp.dataset.idx);
-      if(e.orderItems[ii])e.orderItems[ii].qty=parseFloat(inp.value)||0;
+      if(e.orderItems[ii]){
+        const oldQty=(e.orderItems[ii].label&&labelToQty(e.orderItems[ii].label)>1)?labelToQty(e.orderItems[ii].label):(e.orderItems[ii].qty||0);
+        const newQty=parseFloat(inp.value)||0;
+        const diff=newQty-oldQty;
+        if(Math.abs(diff)>0.001){
+          const itemName=(e.orderItems[ii].itemName||'').toLowerCase();
+          const found=itemLkAdj[itemName];
+          if(found){
+            // diff>0 means more sold = deduct more; diff<0 means less sold = restore
+            found.left=Math.round(Math.max(0,gl(found)-diff)*10)/10;
+          }
+        }
+        e.orderItems[ii].qty=newQty;
+      }
     });
   }else if(e.type==='sell'){
-    e.amount=parseFloat(document.querySelector('.log-item-qty')?.value)||e.amount;
+    const oldAmt=e.amount||0;
+    const newAmt=parseFloat(document.querySelector('.log-item-qty')?.value)||0;
+    const diff=newAmt-oldAmt;
+    if(Math.abs(diff)>0.001){
+      const itemName=(e.name||'').toLowerCase();
+      for(const c of C()){
+        const found=(inv[c]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
+        if(found){found.left=Math.round(Math.max(0,gl(found)-diff)*10)/10;break;}
+      }
+    }
+    e.amount=newAmt;
   }
   // update total
   const newTotal=parseFloat(document.getElementById('edit-log-total').value)||0;
@@ -4686,6 +4712,46 @@ function cancelWebOrder(fbKey) {
   showToast('Order cancelled — stock restored 🔄', 'err');
 }
 
+function cancelAllPending(){
+  const keys=Object.keys(pendingWebOrders).filter(k=>{const o=pendingWebOrders[k];return !o.confirmed&&!o.cancelled;});
+  if(!keys.length){showToast('No pending orders to cancel','err');return;}
+  if(!confirm('Cancel all '+keys.length+' pending orders and restore stock?'))return;
+  keys.forEach(fbKey=>{
+    const order=pendingWebOrders[fbKey];
+    if(!order)return;
+    // Save to cancelled log
+    const cancelEntry={...order,fbKey,cancelledBy:cu?.name||'Staff',cancelledAt:Date.now(),cancelledDate:tday(),cancelledTime:tstr()};
+    if(!cancelledOrders)cancelledOrders=[];
+    cancelledOrders.unshift(cancelEntry);
+    // Restore stock + flavors
+    (order.orderItems||[]).forEach(oi=>{
+      const itemName=(oi.itemName||oi.name||'').toLowerCase();
+      const qty=labelToQty(oi.label);
+      const cat=oi.cat||'';
+      let realCat=cat;
+      if(cat&&!inv[cat]){const match=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(match)realCat=match;}
+      let foundItem=null;
+      if(!realCat||!inv[realCat]){
+        for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
+      }else{
+        const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
+        if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
+      }
+      _restoreFlavorStock(foundItem,oi,qty);
+    });
+    delete pendingWebOrders[fbKey];
+    processedOrderIds.add(fbKey);
+    fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({cancelled:true})}).then(()=>{
+      fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
+    }).catch(()=>{});
+  });
+  if(cancelledOrders.length>200)cancelledOrders=cancelledOrders.slice(0,200);
+  persist();renderPendingOrders();renderCancelledOrders();renderStats();renderItems();
+  if(cu?.role==='owner')renderDash();
+  showToast(keys.length+' pending orders cancelled — stock restored 🔄','ok');
+}
+
 function reverseConfirmedOrder(fbKey) {
   // Show styled confirmation popup
   const m = document.createElement('div');
@@ -4756,7 +4822,7 @@ function doReverseConfirmed(fbKey) {
           if (flav) flav.stock = (flav.stock||0) + fqty;
         });
       } else if (oi.flavorText) {
-        const fl = foundItem.flavors.find(f => f.name === oi.flavorText);
+        const fl = foundItem.flavors.find(f => f.name && f.name.toLowerCase() === oi.flavorText.toLowerCase());
         if (fl) fl.stock = (fl.stock||0) + qty;
       }
     }
@@ -4786,17 +4852,25 @@ function doReverseConfirmed(fbKey) {
   showToast('Order reversed — stock restored ✅', 'ok');
 }
 
+let _revertingKeys=new Set(); // prevent double-click race
 function revertToPending(fbKey) {
+  // Prevent rapid double-clicks on the same order
+  if(_revertingKeys.has(fbKey)){showToast('Already reverting this order...','err');return;}
   if (!confirm('Move this order back to pending?')) return;
+  _revertingKeys.add(fbKey);
+  setTimeout(()=>_revertingKeys.delete(fbKey),2000);
 
   // Find the log entry
   const logIdx = log.findIndex(e => e.webOrderKey === fbKey);
-  if (logIdx < 0) { showToast('Could not find order in log', 'err'); return; }
+  if (logIdx < 0) { showToast('Could not find order in log', 'err'); _revertingKeys.delete(fbKey); return; }
   const entry = log[logIdx];
+
+  // Deep-copy orderItems so they survive any reference issues
+  const safeItems = JSON.parse(JSON.stringify(entry.orderItems||[]));
 
   // Rebuild the pending order object from the log entry
   const pendingOrder = {
-    orderItems: (entry.orderItems||[]).map(i => ({
+    orderItems: safeItems.map(i => ({
       itemName: i.itemName||'', cat: i.cat||'', qty: i.qty||1,
       label: i.label||'', price: i.price||0,
       flavorText: i.flavorText||'',
@@ -4814,6 +4888,13 @@ function revertToPending(fbKey) {
     fbKey: fbKey,
     _stockDeductedLocally: true // stock is already held
   };
+
+  // Validate — don't create empty pending orders
+  if(!pendingOrder.orderItems.length){
+    showToast('⚠️ Order has no items — cannot revert. Use Cancel & Restore instead.','err');
+    _revertingKeys.delete(fbKey);
+    return;
+  }
 
   // Remove from log
   log.splice(logIdx, 1);
@@ -4837,18 +4918,34 @@ function revertToPending(fbKey) {
 }
 
 function clearConfirmedOrders(){
-  if(!confirm('Clear all confirmed orders from this view?\n\nStock deductions will stay — this just hides them from the confirmed list.'))return;
+  if(!confirm('Clear all confirmed orders and restore stock?'))return;
   const cleared=[];
   log.forEach(e=>{
     if(e.source==='website'&&e.webOrderKey&&!e._cleared){
+      // ALWAYS restore stock when clearing confirmed orders
+      (e.orderItems||[]).forEach(oi=>{
+        const itemName=(oi.itemName||oi.name||'').toLowerCase();
+        const qty=oi.label?labelToQty(oi.label):(oi.qty||1);
+        const cat=oi.cat||'';
+        let realCat=cat;
+        if(cat&&!inv[cat]){const match=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(match)realCat=match;}
+        let foundItem=null;
+        if(!realCat||!inv[realCat]){
+          for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
+        }else{
+          const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
+          if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
+        }
+        _restoreFlavorStock(foundItem,oi,qty);
+      });
       e._cleared=true;
       cleared.push(e.webOrderKey);
-      // Also delete from Firebase pending_orders so they can't come back on relog
       fetch(FB_URL+'/pending_orders/'+e.webOrderKey+'.json',{method:'DELETE'}).catch(()=>{});
     }
   });
-  persist();renderConfirmedWebOrders();
-  showToast(cleared.length+' confirmed orders cleared ✅','ok');
+  persist();renderConfirmedWebOrders();renderStats();renderItems();
+  if(cu?.role==='owner')renderDash();
+  showToast(cleared.length+' orders cleared — stock restored 🔄','ok');
 }
 // ── CONFIRMED WEBSITE ORDERS (reversible) ──
 function renderConfirmedWebOrders() {
@@ -6203,7 +6300,7 @@ function deleteEODOrder(logIdx,orderIdx){
                 if(flav)flav.stock=(flav.stock||0)+fqty;
               });
             } else if(it.flavorText){
-              const fl=found.flavors.find(f=>f.name===it.flavorText);
+              const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===it.flavorText.toLowerCase());
               if(fl)fl.stock=(fl.stock||0)+qty;
             }
           }
@@ -6419,7 +6516,7 @@ function saveAddEODOrder(){
             if(flav)flav.stock=Math.max(0,(flav.stock||0)-fqty);
           });
         } else if(it.flavorText&&Array.isArray(found.flavors)){
-          const fl=found.flavors.find(f=>f.name===it.flavorText);
+          const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===it.flavorText.toLowerCase());
           if(fl)fl.stock=Math.max(0,(fl.stock||0)-(it.qty||0));
         }
         break;
