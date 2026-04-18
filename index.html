@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260418112445';
+var _MENU_V = 'v20260418112805';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -387,7 +387,7 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .ap-order.cancelled{opacity:0.5;border-style:dashed;}
 
 /* ANNOUNCEMENT POPUP */
-#announce-popup{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9600;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);touch-action:manipulation;}
+#announce-popup{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9600;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);touch-action:manipulation;-webkit-user-select:none;user-select:none;}
 #announce-popup.open{display:flex;}
 .ann-card{background:var(--black2);border:1px solid rgba(204,31,31,0.3);border-radius:18px;width:100%;max-width:360px;padding:0;overflow:hidden;box-shadow:0 20px 60px rgba(204,31,31,0.2);animation:annSlideIn 0.4s ease-out;}
 .ann-top{background:linear-gradient(135deg,rgba(204,31,31,0.15) 0%,rgba(0,0,0,0.3) 100%);border-bottom:1px solid rgba(204,31,31,0.2);padding:24px 20px;text-align:center;}
@@ -395,7 +395,7 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .ann-title{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--red);letter-spacing:3px;}
 .ann-body{padding:24px 20px;}
 .ann-msg{font-family:'Oswald',sans-serif;font-size:16px;font-weight:400;color:var(--white);line-height:1.7;text-align:center;white-space:pre-wrap;word-break:break-word;}
-.ann-dismiss{display:block;width:100%;background:var(--red);border:none;border-radius:12px;padding:16px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;cursor:pointer;transition:background 0.2s;margin-top:20px;touch-action:manipulation;-webkit-tap-highlight-color:rgba(255,0,0,0.2);}
+.ann-dismiss{display:block;width:100%;background:var(--red);border:none;border-radius:12px;padding:18px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;cursor:pointer;transition:background 0.2s;margin-top:20px;touch-action:manipulation;-webkit-tap-highlight-color:rgba(255,0,0,0.2);-webkit-appearance:none;position:relative;z-index:9601;}
 .ann-dismiss:hover{background:var(--red3);}
 @keyframes annSlideIn{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
 @keyframes announceBell{0%,100%{transform:rotate(0);}10%{transform:rotate(14deg);}20%{transform:rotate(-12deg);}30%{transform:rotate(8deg);}40%{transform:rotate(0);}}
@@ -2387,16 +2387,22 @@ function checkAnnouncement(data) {
   // Small delay so menu loads first
   setTimeout(() => {
     popup.classList.add('open');
-    document.body.classList.add('no-scroll');
+    popup.style.display = 'flex';
   }, 600);
 }
 
 function dismissAnnouncement() {
   const popup = document.getElementById('announce-popup');
-  if (popup) popup.classList.remove('open');
+  if (popup) { popup.classList.remove('open'); popup.style.display = 'none'; }
   document.body.classList.remove('no-scroll');
-  // No localStorage save — popup will show again on next visit/refresh
 }
+// Bulletproof: attach listener directly in case onclick doesn't fire on mobile
+document.addEventListener('DOMContentLoaded', function(){
+  var btn = document.querySelector('.ann-dismiss');
+  if(btn) btn.addEventListener('click', dismissAnnouncement);
+  var popup = document.getElementById('announce-popup');
+  if(popup) popup.addEventListener('click', function(e){ if(e.target===popup) dismissAnnouncement(); });
+});
 
 async function loadAnnouncementAdmin() {
   const statusEl = document.getElementById('ann-status-admin');
