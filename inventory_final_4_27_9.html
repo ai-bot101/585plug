@@ -1425,7 +1425,7 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='BUGFIX-v15';
+const _APP_VERSION='BUGFIX-v16';
 setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v12]';},1000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
@@ -7168,6 +7168,13 @@ function doReset(type){
     vipCustomers={};
     customerDeals={};
     dayNotes={};
+    // Clear all pending web orders from Firebase
+    Object.keys(pendingWebOrders).forEach(fbKey=>{
+      fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
+    });
+    pendingWebOrders={};
+    processedOrderIds.clear();
+    fetch(FB_URL+'/pending_orders.json',{method:'DELETE'}).catch(()=>{});
     persist();renderAll();closeOv('reset-modal');
     showToast('Full reset complete','ok');
 
@@ -7181,6 +7188,14 @@ function doReset(type){
     vipCustomers={};
     customerDeals={};
     dayNotes={};
+    // Also clear all pending/confirmed web orders from Firebase
+    Object.keys(pendingWebOrders).forEach(fbKey=>{
+      fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
+    });
+    pendingWebOrders={};
+    processedOrderIds.clear();
+    // Nuke the entire pending_orders node in Firebase to kill ghost orders
+    fetch(FB_URL+'/pending_orders.json',{method:'DELETE'}).catch(()=>{});
     persist();renderAll();closeOv('reset-modal');
     showToast('All logs & data wiped — inventory kept ✅','ok');
   }
