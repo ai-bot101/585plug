@@ -5429,6 +5429,20 @@ async function fbPullNow(){
         _debugOverlayLog('[PROTECT] Preserved '+missingFromIncoming.length+' locally-confirmed orders from log overwrite: '+missingFromIncoming.map(e=>(e.webOrderKey||'').substr(0,18)).join(', '));
         incomingLog.unshift(...missingFromIncoming);
       }
+      // PROTECT recent local entries (selfbuys, sales, adjustments) that haven't synced yet
+      // If an entry exists locally but not in incoming, and it was created in the last 30 seconds,
+      // it means our push hasn't reached Firebase yet — preserve it
+      const RECENT_WINDOW=30000; // 30 seconds
+      const now=Date.now();
+      const recentLocal=log.filter(e=>{
+        if(!e.timestamp||now-e.timestamp>RECENT_WINDOW)return false;
+        // Check if this entry exists in incoming log (match by timestamp + who + type)
+        return !incomingLog.some(il=>il.timestamp===e.timestamp&&il.who===e.who&&il.type===e.type);
+      });
+      if(recentLocal.length>0){
+        _debugOverlayLog('[PROTECT] Preserved '+recentLocal.length+' recent local entries: '+recentLocal.map(e=>e.type).join(', '));
+        incomingLog.unshift(...recentLocal);
+      }
       // PROTECT _cleared flags: if local log has _cleared=true on entries,
       // carry those flags over to the incoming log so EOD dedup still works
       const clearedSet=new Set();
