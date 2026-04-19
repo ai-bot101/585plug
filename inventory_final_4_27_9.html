@@ -1706,8 +1706,34 @@ async function tryLogin(){
     renderAll();
     // ONLY start autoSync AFTER repairs are done and persisted
     startAutoSync();
+    _startAfkTimer();
   })();}
-function logout(){persist();stopAutoSync();_dataLoaded=false;cu=null;si=null;document.getElementById('pass-wrap').style.display='none';document.getElementById('pass-inp').value='';document.getElementById('lerr').textContent='';document.querySelectorAll('.u-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('login-btn').disabled=true;fbLastTimestamp=0;backToCalc();}
+function logout(){_stopAfkTimer();persist();stopAutoSync();_dataLoaded=false;cu=null;si=null;document.getElementById('pass-wrap').style.display='none';document.getElementById('pass-inp').value='';document.getElementById('lerr').textContent='';document.querySelectorAll('.u-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('login-btn').disabled=true;fbLastTimestamp=0;backToCalc();}
+
+// ── AFK AUTO-LOGOUT (5 min) ──
+let _afkTimer=null;
+const AFK_TIMEOUT=5*60*1000; // 5 minutes
+function _resetAfkTimer(){
+  if(_afkTimer)clearTimeout(_afkTimer);
+  if(!cu)return; // only run when logged in
+  _afkTimer=setTimeout(()=>{
+    if(!cu)return;
+    showToast('Logged out — inactive for 5 minutes','err');
+    logout();
+  },AFK_TIMEOUT);
+}
+function _startAfkTimer(){
+  ['click','touchstart','scroll','keydown','mousemove'].forEach(evt=>{
+    document.addEventListener(evt,_resetAfkTimer,{passive:true});
+  });
+  _resetAfkTimer();
+}
+function _stopAfkTimer(){
+  if(_afkTimer){clearTimeout(_afkTimer);_afkTimer=null;}
+  ['click','touchstart','scroll','keydown','mousemove'].forEach(evt=>{
+    document.removeEventListener(evt,_resetAfkTimer);
+  });
+}
 async function toggleEarnings(val){if(!await _ownerGuard())return;cfg.showEarnings=val;persist();renderStaffLog();updateEarnBtn();}
 function toggleEarningsQuick(){
   cfg.showEarnings=!cfg.showEarnings;
