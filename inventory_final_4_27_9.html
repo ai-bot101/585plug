@@ -4467,9 +4467,11 @@ function renderPendingOrders() {
         <div style="background:rgba(255,165,0,0.06);border:1px solid rgba(255,165,0,0.15);border-radius:6px;padding:6px 10px;margin-bottom:10px;">
           <div style="font-size:10px;color:#ffa500;font-family:var(--mono);letter-spacing:0.5px;">📦 INVENTORY ON HOLD — stock deducted until confirmed or cancelled</div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div id="pending-edit-panel-${o.fbKey}" style="display:none;margin-bottom:8px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
           <button onclick="confirmWebOrder('${o.fbKey}')" style="background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.3);border-radius:8px;padding:10px;color:var(--green);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">✅ Confirm</button>
-          <button onclick="cancelWebOrder('${o.fbKey}')" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:10px;color:var(--red);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">❌ Cancel · Restore</button>
+          <button onclick="toggleEditPending('${o.fbKey}')" style="background:rgba(108,99,255,0.08);border:1px solid rgba(108,99,255,0.25);border-radius:8px;padding:10px;color:var(--accent);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">✏️ Edit</button>
+          <button onclick="cancelWebOrder('${o.fbKey}')" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:10px;color:var(--red);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">❌ Cancel</button>
         </div>
       </div>`;
     }).join('')}
@@ -4527,6 +4529,81 @@ function updatePendingPayMethod(fbKey,methodId,methodLabel){
   }).catch(()=>{});
   showToast('Payment changed to '+methodLabel,'ok');
   renderPendingOrders();
+}
+
+function toggleEditPending(fbKey){
+  const panel=document.getElementById('pending-edit-panel-'+fbKey);
+  if(!panel)return;
+  if(panel.style.display!=='none'){panel.style.display='none';return;}
+  const order=pendingWebOrders[fbKey];
+  if(!order||!order.orderItems||!order.orderItems.length){showToast('No items to edit','err');return;}
+  let html=`<div style="background:rgba(108,99,255,0.06);border:1px solid rgba(108,99,255,0.2);border-radius:8px;padding:10px;">
+    <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px;letter-spacing:1px;font-family:var(--mono);">✏️ EDIT ORDER ITEMS</div>`;
+  order.orderItems.forEach((item,idx)=>{
+    const name=item.itemName||item.name||'?';
+    const qty=item.qty||1;
+    const label=item.label||'?';
+    const price=item.price||0;
+    const flavor=item.flavorText?` 🍬 ${item.flavorText}`:'';
+    html+=`<div id="pending-edit-row-${fbKey}-${idx}" style="display:flex;align-items:center;gap:8px;padding:8px;margin-bottom:4px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;">
+      <div style="flex:1;font-size:12px;color:var(--text);">
+        <span style="font-weight:600;">${qty}x ${name}</span>
+        <span style="color:var(--text3);"> (${label} · $${price})</span>${flavor}
+      </div>
+      <button onclick="removePendingItem('${fbKey}',${idx})" style="background:rgba(244,107,107,0.1);border:1px solid rgba(244,107,107,0.3);border-radius:6px;padding:6px 10px;color:var(--red);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);white-space:nowrap;">🗑 Remove</button>
+    </div>`;
+  });
+  html+=`</div>`;
+  panel.innerHTML=html;
+  panel.style.display='block';
+}
+
+function removePendingItem(fbKey,itemIdx){
+  const order=pendingWebOrders[fbKey];
+  if(!order||!order.orderItems)return;
+  const item=order.orderItems[itemIdx];
+  if(!item){showToast('Item not found','err');return;}
+  const name=item.itemName||item.name||'?';
+  if(!confirm('Remove '+name+' from this order and restore stock?'))return;
+
+  // Restore stock for this item
+  const itemName=(item.itemName||item.name||'').toLowerCase();
+  const qty=item.label?labelToQty(item.label):(item.qty||1);
+  for(const c of C()){
+    const found=(inv[c]||[]).find(i=>(i.name||'').toLowerCase()===itemName);
+    if(found){
+      found.left=Math.round((gl(found)+qty)*10)/10;
+      _restoreFlavorStock(found,item,item.qty||1);
+      break;
+    }
+  }
+
+  // Remove item from order
+  order.orderItems.splice(itemIdx,1);
+
+  // Recalculate total
+  const newTotal=order.orderItems.reduce((s,oi)=>(s+(oi.price||0)*(oi.qty||1)),0);
+  order.total=newTotal;
+
+  // If no items left, cancel the whole order
+  if(!order.orderItems.length){
+    order.cancelled=true;
+    fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
+    showToast('All items removed — order cancelled','ok');
+    persist();renderPendingOrders();renderStats();renderItems();
+    return;
+  }
+
+  // Sync to Firebase
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      ['pending_orders/'+fbKey+'/orderItems']:order.orderItems,
+      ['pending_orders/'+fbKey+'/total']:newTotal
+    })
+  }).catch(()=>{});
+
+  persist();renderPendingOrders();renderStats();renderItems();
+  showToast('Removed '+name+' — stock restored 🔄','ok');
 }
 
 function confirmWebOrder(fbKey) {
