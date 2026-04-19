@@ -4298,16 +4298,17 @@ function processWebsiteOrders(pendingOrders) {
     // when the Firebase DELETE of pending_orders failed.
     const alreadyInLog = log.some(e => e.webOrderKey === fbKey);
     if (alreadyInLog) {
-      console.log('[PENDING-TRACE] SKIP-IN-LOG', fbKey.substr(0,20), '— found matching webOrderKey in log, DELETING from Firebase');
-      fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
+      console.log('[PENDING-TRACE] SKIP-IN-LOG', fbKey.substr(0,20), '— found matching webOrderKey in log, skipping (NOT deleting)');
       return;
     }
     console.log('[PENDING-TRACE] PROCESSING', fbKey.substr(0,20), '— inLocal:', !!pendingWebOrders[fbKey], 'source:', order.source||'website', 'stockV2:', order._stockDeductedV2);
-    // AUTO-CLEAN: skip and delete ghost orders with no items
+    // Convert Firebase object-style orderItems back to array if needed
+    if(order.orderItems&&!Array.isArray(order.orderItems)){
+      order.orderItems=Object.values(order.orderItems);
+    }
+    // Skip orders with truly no items (but do NOT delete from Firebase)
     if(!order.orderItems||!order.orderItems.length||(Array.isArray(order.orderItems)&&order.orderItems.every(i=>!i.itemName&&!i.name))){
-      console.warn('[PENDING] Ghost order with no items — auto-deleting from Firebase:', fbKey);
-      fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
-      if(pendingWebOrders[fbKey])delete pendingWebOrders[fbKey];
+      console.warn('[PENDING] Order with no items — skipping (NOT deleting):', fbKey);
       return;
     }
     if (!pendingWebOrders[fbKey]) {
