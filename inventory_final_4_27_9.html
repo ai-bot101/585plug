@@ -4227,6 +4227,7 @@ const FB_URL='https://calculator-app-d6bb4-default-rtdb.firebaseio.com/inv_d6bb4
 let fbListening=false;
 let fbLastPush=0;
 let fbPushTimer=null;
+let _pendingFbPatches={}; // queued patches to include in next fbPush (for atomic writes)
 
 // Start live listener using Firebase SSE (Server-Sent Events)
 // This gives INSTANT updates the moment any device changes anything
@@ -4369,10 +4370,12 @@ function processWebsiteOrders(pendingOrders) {
           // Deduct flavor stock
           _deductFlavorStock(foundItem,oi,qty);
         });
-        // Mark in Firebase with V2 flag so other devices/reloads know deduction is reliable
-        fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({['pending_orders/'+fbKey+'/_stockDeducted']: true, ['pending_orders/'+fbKey+'/_stockDeductedV2']: true})
-        }).catch(()=>{});
+        // Queue V2 flag to be written ATOMICALLY with the inv update in fbPush().
+        // This prevents double-deduction: if inv push succeeds but flag push fails
+        // (which happened with the old fire-and-forget fetch), a page reload would
+        // see deducted inv but no flag → re-deduct → stock drops twice.
+        _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeducted']=true;
+        _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeductedV2']=true;
         persist();renderStats();renderItems();
       }
     }
@@ -5709,11 +5712,16 @@ function fbPush(){
       // This prevents a race condition where PUT overwrites orders that arrived
       // between our read and our write. pending_orders are managed individually
       // via targeted PUT/DELETE/PATCH calls on specific order keys.
+      // EXCEPTION: _pendingFbPatches includes pending_order flag updates (like
+      // _stockDeductedV2) that MUST be atomic with the inv update to prevent
+      // double stock deduction on page reload.
       const payload={
         inv,log,cfg,
         customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
-        updatedAt:Date.now()
+        updatedAt:Date.now(),
+        ..._pendingFbPatches
       };
+      _pendingFbPatches={}; // clear queued patches — they're included in this push
       fbLastTimestamp=payload.updatedAt; // prevent echo pull
       await fetch(FB_URL+'.json',{
         method:'PATCH',
