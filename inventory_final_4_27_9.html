@@ -5805,6 +5805,27 @@ function fbPush(){
   fbPushTimer=setTimeout(async()=>{
     fbPushInFlight=true; // block pulls while push is in-flight
     try{
+      // ── MERGE-BEFORE-PUSH: Prevent overwriting other devices' log entries ──
+      // While our push was debouncing, another device (e.g. staff selfbuy) may have
+      // pushed new log entries to Firebase. If we push our local log as-is, those
+      // entries get overwritten and lost. Fetch the current Firebase log and merge
+      // any entries we don't have locally before pushing.
+      try{
+        const mergeRes=await fetch(FB_URL+'/log.json');
+        if(mergeRes.ok){
+          const fbLog=await mergeRes.json();
+          if(Array.isArray(fbLog)&&fbLog.length>0){
+            const localKeys=new Set(log.map(e=>e&&e.timestamp?(e.timestamp+'|'+(e.who||'')+'|'+(e.type||'')):''));
+            const missing=fbLog.filter(e=>e&&e.timestamp&&!localKeys.has(e.timestamp+'|'+(e.who||'')+'|'+(e.type||'')));
+            if(missing.length>0){
+              log.push(...missing);
+              log.sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
+              console.log('[MERGE-PUSH] Preserved '+missing.length+' entries from other devices:',missing.map(e=>(e.type||'?')+' by '+(e.who||'?')).join(', '));
+            }
+          }
+        }
+      }catch(mergeErr){console.warn('[MERGE-PUSH] Could not fetch Firebase log for merge:',mergeErr);}
+
       // Use PATCH to update only inventory data — NEVER touch pending_orders
       // This prevents a race condition where PUT overwrites orders that arrived
       // between our read and our write. pending_orders are managed individually
