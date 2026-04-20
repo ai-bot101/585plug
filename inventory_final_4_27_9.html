@@ -2660,7 +2660,7 @@ function syncStockToEOD(e){
   // 3. Count pending (held) web orders
   Object.values(pendingWebOrders||{}).forEach(order=>{
     (order.orderItems||[]).forEach(oi=>{
-      const key=(oi.itemName||oi.name||'').toLowerCase();
+      const key=(oi.itemName||oi.name||'').toLowerCase().trim();
       const qty=oi.qty||(oi.label&&labelToQty(oi.label)>1?labelToQty(oi.label):0);
       addToSold(key,qty);
       addFlavorSold(key,oi,qty);
@@ -3543,7 +3543,7 @@ async function deleteLogEntry(idx) {
     if (entry.orderItems && entry.orderItems.length) {
       // Multi-item order
       entry.orderItems.forEach(oi => {
-        const itemName = (oi.itemName||oi.name||'').toLowerCase();
+        const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
         const qty = oi.label ? labelToQty(oi.label) : (oi.qty||1);
         for (const c of C()) {
           const found = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
@@ -3760,7 +3760,7 @@ function saveLogEdit(){
     if(Math.abs(diff)>0.001){
       const itemName=(e.name||'').toLowerCase();
       for(const c of C()){
-        const found=(inv[c]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
+        const found=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
         if(found){found.left=Math.round(Math.max(0,gl(found)-diff)*10)/10;break;}
       }
     }
@@ -4346,16 +4346,16 @@ function processWebsiteOrders(pendingOrders) {
         // Pending held order cancelled from menu — restore held stock + flavors
         const heldOrder = pendingWebOrders[fbKey];
         (heldOrder.orderItems||[]).forEach(oi => {
-          const itemName = (oi.itemName||oi.name||'').toLowerCase();
+          const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
           const qty = labelToQty(oi.label);
           const cat = oi.cat||'';
           let realCat = cat;
           if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
           let foundItem=null;
           if(!realCat||!inv[realCat]){
-            for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
+            for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
           }else{
-            const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
+            const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
             if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
           }
           _restoreFlavorStock(foundItem,oi,qty);
@@ -4365,16 +4365,16 @@ function processWebsiteOrders(pendingOrders) {
       } else if (order._stockDeducted) {
         // Order wasn't held locally but stock WAS deducted — restore from order data
         (order.orderItems||[]).forEach(oi => {
-          const itemName = (oi.itemName||oi.name||'').toLowerCase();
+          const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
           const qty = labelToQty(oi.label);
           const cat = oi.cat||'';
           let realCat = cat;
           if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
           let foundItem=null;
           if(!realCat||!inv[realCat]){
-            for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
+            for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
           }else{
-            const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
+            const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
             if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
           }
           // Restore flavor stock too
@@ -4426,22 +4426,35 @@ function processWebsiteOrders(pendingOrders) {
         pendingWebOrders[fbKey]._stockDeductedLocally = true;
         pendingWebOrders[fbKey]._stockDeducted = true;
         pendingWebOrders[fbKey]._stockDeductedV2 = true;
+        let _deductOk=0, _deductFail=0;
         (order.orderItems||[]).forEach(oi=>{
-          const itemName=(oi.itemName||oi.name||'').toLowerCase();
+          const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
           const qty=labelToQty(oi.label);
-          const cat=oi.cat||'';
+          const cat=(oi.cat||'').trim();
           let realCat=cat;
-          if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
+          if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase().trim()===cat.toLowerCase());if(m)realCat=m;}
           let foundItem=null;
           if(!realCat||!inv[realCat]){
-            for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase()===itemName);if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);foundItem=f;break;}}
+            for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);foundItem=f;break;}}
           }else{
-            const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
+            const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
             if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);foundItem=f;}
           }
-          // Deduct flavor stock
+          if(foundItem){
+            console.log('[STOCK-DEDUCT] ✅',itemName,'qty='+qty,'newLeft='+foundItem.left,'cat='+realCat);
+            _deductOk++;
+          }else{
+            console.warn('[STOCK-DEDUCT] ❌ ITEM NOT FOUND:','"'+itemName+'"','cat='+cat,'realCat='+realCat,'— stock NOT deducted for this item!');
+            console.warn('[STOCK-DEDUCT] Available items in',realCat||'ALL',':',(inv[realCat]||[]).map(i=>'"'+(i.name||'').toLowerCase().trim()+'"').join(', ')||'(checking all cats...)');
+            _deductFail++;
+          }
           _deductFlavorStock(foundItem,oi,qty);
         });
+        if(_deductFail>0){
+          console.error('[STOCK-DEDUCT] ⚠️ '+_deductFail+' items NOT FOUND — stock not fully deducted for order '+fbKey);
+          // Mark that deduction was incomplete so cancel doesn't over-restore
+          pendingWebOrders[fbKey]._deductIncomplete=true;
+        }
         // Queue V2 flag to be written ATOMICALLY with the inv update in fbPush().
         // This prevents double-deduction: if inv push succeeds but flag push fails
         // (which happened with the old fire-and-forget fetch), a page reload would
@@ -4755,7 +4768,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   const isVirtual = ['cashapp','venmo','applepay'].includes(payMethod) || payMethod === 'split';
   // Look up actual inventory items to get real cost for profit calculation
   const objs = (order.orderItems||[]).map(oi => {
-    const itemName = (oi.itemName||oi.name||'').toLowerCase();
+    const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
     const cat = oi.cat||'';
     const qty = labelToQty(oi.label) || oi.qty || 1;
     let found = null;
@@ -4794,7 +4807,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   // Stock should have been deducted on arrival (pending hold), but verify and deduct if missed
   if (!order._stockDeductedLocally) {
     (order.orderItems||[]).forEach(oi => {
-      const itemName = (oi.itemName||oi.name||'').toLowerCase();
+      const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
       const qty = labelToQty(oi.label) || oi.qty || 1;
       const cat = oi.cat||'';
       let realCat = cat;
@@ -4864,25 +4877,28 @@ function cancelWebOrder(fbKey) {
   cancelledOrders.unshift(cancelEntry);
   if (cancelledOrders.length > 200) cancelledOrders = cancelledOrders.slice(0, 200);
 
-  // Restore stock + flavors — items were held on arrival
-  (order.orderItems||[]).forEach(oi=>{
-    const itemName=(oi.itemName||oi.name||'').toLowerCase();
-    const qty=labelToQty(oi.label);
-    const cat=oi.cat||'';
-    let realCat=cat;
-    if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
-    let foundItem=null;
-    if(!realCat||!inv[realCat]){
-      for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
-    }else{
-      const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
-      if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
-    }
-    // Restore flavor stock (handles both object and string formats)
-    _restoreFlavorStock(foundItem,oi,qty);
-  });
-
-  _debugPending('CANCELLED',fbKey,'user cancelled — stock restored');
+  // Only restore stock if it was actually deducted — prevents phantom stock
+  if(order._stockDeductedLocally){
+    (order.orderItems||[]).forEach(oi=>{
+      const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
+      const qty=labelToQty(oi.label);
+      const cat=oi.cat||'';
+      let realCat=cat;
+      if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
+      let foundItem=null;
+      if(!realCat||!inv[realCat]){
+        for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
+      }else{
+        const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
+        if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
+      }
+      _restoreFlavorStock(foundItem,oi,qty);
+    });
+    _debugPending('CANCELLED',fbKey,'user cancelled — stock restored');
+  }else{
+    _debugPending('CANCELLED',fbKey,'user cancelled — stock was never deducted, nothing to restore');
+    showToast('Order cancelled (stock was not deducted for this order)','err');
+  }
   delete pendingWebOrders[fbKey];
   processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
 
@@ -4914,16 +4930,16 @@ function cancelAllPending(){
     cancelledOrders.unshift(cancelEntry);
     // Restore stock + flavors
     (order.orderItems||[]).forEach(oi=>{
-      const itemName=(oi.itemName||oi.name||'').toLowerCase();
+      const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
       const qty=labelToQty(oi.label);
       const cat=oi.cat||'';
       let realCat=cat;
       if(cat&&!inv[cat]){const match=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(match)realCat=match;}
       let foundItem=null;
       if(!realCat||!inv[realCat]){
-        for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
+        for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
       }else{
-        const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
+        const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
         if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
       }
       _restoreFlavorStock(foundItem,oi,qty);
@@ -4983,7 +4999,7 @@ function doReverseConfirmed(fbKey) {
   // Restore stock for each item
   const orderItems = logEntry ? logEntry.orderItems : [];
   orderItems.forEach(oi => {
-    const itemName = (oi.itemName||oi.name||'').toLowerCase();
+    const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
     const qty = oi.label ? labelToQty(oi.label) : (oi.qty||1);
     const cat = oi.cat || '';
 
@@ -5013,7 +5029,7 @@ function doReverseConfirmed(fbKey) {
   } else {
     // No log entry found — create adjustment entries so repairStock doesn't re-deduct
     orderItems.forEach(oi => {
-      const itemName = (oi.itemName||oi.name||'').toLowerCase();
+      const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
       const qty = oi.label ? labelToQty(oi.label) : (oi.qty||1);
       if (!itemName || !qty) return;
       log.unshift({type:'adjustment',name:itemName,amount:qty,direction:'add',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'Confirmed order reversed (no log match)'});
@@ -5078,14 +5094,23 @@ function revertToPending(fbKey) {
   // Remove from log
   log.splice(logIdx, 1);
 
+  // Mark stock flags so processWebsiteOrders doesn't re-deduct on next poll/reload
+  pendingOrder._stockDeducted = true;
+  pendingOrder._stockDeductedV2 = true;
+
   // Add back to pending
   pendingWebOrders[fbKey] = pendingOrder;
   processedOrderIds.delete(fbKey);
 
-  // Update Firebase — set confirmed back to false
-  fetch(FB_URL + '.json', {method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({['pending_orders/'+fbKey+'/confirmed']: false})
-  }).catch(()=>{});
+  // Write the FULL order back to Firebase (not just a patch).
+  // finalizeConfirmOrder DELETED this from Firebase, so the old path is gone.
+  // We must PUT the complete object or it'll be a ghost with no orderItems.
+  (async function putRevert(retries){
+    try{
+      const r=await fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(pendingOrder)});
+      if(!r.ok&&retries>0)setTimeout(()=>putRevert(retries-1),2000);
+    }catch(e){if(retries>0)setTimeout(()=>putRevert(retries-1),2000);}
+  })(3);
 
   persist();
   renderPendingOrders();
@@ -5103,16 +5128,16 @@ function clearConfirmedOrders(){
     if(e.source==='website'&&e.webOrderKey&&!e._cleared){
       // ALWAYS restore stock when clearing confirmed orders
       (e.orderItems||[]).forEach(oi=>{
-        const itemName=(oi.itemName||oi.name||'').toLowerCase();
+        const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
         const qty=oi.label?labelToQty(oi.label):(oi.qty||1);
         const cat=oi.cat||'';
         let realCat=cat;
         if(cat&&!inv[cat]){const match=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(match)realCat=match;}
         let foundItem=null;
         if(!realCat||!inv[realCat]){
-          for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
+          for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
         }else{
-          const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase()===itemName);
+          const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
           if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
         }
         _restoreFlavorStock(foundItem,oi,qty);
@@ -5533,7 +5558,7 @@ function repairStock(manual){
   // Count pending (held) web orders — stock is deducted but not in the log yet
   Object.values(pendingWebOrders).forEach(order => {
     (order.orderItems||[]).forEach(oi => {
-      const key = (oi.itemName||oi.name||'').toLowerCase();
+      const key = (oi.itemName||oi.name||'').toLowerCase().trim();
       const qty = oi.qty||(oi.label && labelToQty(oi.label) > 1 ? labelToQty(oi.label) : 0);
       if (key) soldMap[key] = (soldMap[key]||0) + qty;
     });
