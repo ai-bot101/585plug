@@ -1429,9 +1429,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v18';
-const _BUILD_TS=1776887692699; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v18]';},1000);
+const _APP_VERSION='deploy-v19';
+const _BUILD_TS=1776892406902; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v19]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -4384,6 +4384,8 @@ let fbPushTimer=null;
 let _pendingFbPatches={}; // queued patches to include in next fbPush (for atomic writes)
 let _deletedLogKeys=new Set(); // merge-before-push: skip entries we intentionally removed
 let _nukeInProgress=false; // when true, skip merge-before-push entirely (full wipe)
+let _openEditPanels=new Set(); // track which pending order edit panels are open across renders
+let _openPayPickers=new Set(); // track which pending order pay pickers are open across renders
 
 // Start live listener using Firebase SSE (Server-Sent Events)
 // This gives INSTANT updates the moment any device changes anything
@@ -4678,6 +4680,13 @@ function renderPendingOrders() {
 
   if (ownerEl) { ownerEl.innerHTML = html; ownerEl.style.display = 'block'; }
   if (staffEl) { staffEl.innerHTML = html; staffEl.style.display = 'block'; }
+  // Restore any open edit panels and pay pickers that were open before the re-render
+  _openEditPanels.forEach(fbKey=>{
+    if(pendingWebOrders[fbKey]&&!pendingWebOrders[fbKey].confirmed&&!pendingWebOrders[fbKey].cancelled)toggleEditPending(fbKey);
+  });
+  _openPayPickers.forEach(fbKey=>{
+    if(pendingWebOrders[fbKey]&&!pendingWebOrders[fbKey].confirmed&&!pendingWebOrders[fbKey].cancelled)togglePendingPayPicker(fbKey);
+  });
 }
 function updatePendingTotal(fbKey,val){
   const newTotal=parseFloat(val)||0;
@@ -4712,14 +4721,16 @@ function updatePendingSplit(fbKey){
 function togglePendingPayPicker(fbKey){
   const el=document.getElementById('pending-pay-picker-'+fbKey);
   if(!el)return;
-  if(el.style.display!=='none'){el.style.display='none';return;}
+  if(el.style.display!=='none'){el.style.display='none';_openPayPickers.delete(fbKey);return;}
   const methods=PM.filter(m=>m.id!=='nopay');
   const current=pendingWebOrders[fbKey]?.payMethod||'cash';
   el.innerHTML=methods.map(m=>`<button onclick="updatePendingPayMethod('${fbKey}','${m.id}','${m.label}')" style="padding:6px 10px;margin:2px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${m.id===current?'var(--accent)':'var(--border)'};background:${m.id===current?'rgba(108,99,255,0.15)':'var(--bg3)'};color:${m.id===current?'var(--accent)':'var(--text2)'};font-family:var(--sans);">${m.icon} ${m.label}</button>`).join('');
   el.style.display='block';
+  _openPayPickers.add(fbKey);
 }
 function updatePendingPayMethod(fbKey,methodId,methodLabel){
   if(!pendingWebOrders[fbKey])return;
+  _openPayPickers.delete(fbKey); // close picker after selection
   pendingWebOrders[fbKey].payMethod=methodId;
   pendingWebOrders[fbKey].payMethodLabel=methodLabel;
   // Sync to Firebase
@@ -4733,7 +4744,7 @@ function updatePendingPayMethod(fbKey,methodId,methodLabel){
 function toggleEditPending(fbKey){
   const panel=document.getElementById('pending-edit-panel-'+fbKey);
   if(!panel)return;
-  if(panel.style.display!=='none'){panel.style.display='none';return;}
+  if(panel.style.display!=='none'){panel.style.display='none';_openEditPanels.delete(fbKey);return;}
   const order=pendingWebOrders[fbKey];
   if(!order||!order.orderItems||!order.orderItems.length){showToast('No items to edit','err');return;}
   let html=`<div style="background:rgba(108,99,255,0.06);border:1px solid rgba(108,99,255,0.2);border-radius:8px;padding:10px;">
@@ -4755,6 +4766,7 @@ function toggleEditPending(fbKey){
   html+=`</div>`;
   panel.innerHTML=html;
   panel.style.display='block';
+  _openEditPanels.add(fbKey);
 }
 
 function removePendingItem(fbKey,itemIdx){
@@ -4808,6 +4820,7 @@ function removePendingItem(fbKey,itemIdx){
 function confirmWebOrder(fbKey) {
   const order = pendingWebOrders[fbKey];
   if (!order) return;
+  _openEditPanels.delete(fbKey);_openPayPickers.delete(fbKey);
 
   // If owner is confirming, show staff picker modal
   if(cu?.role==='owner'){
@@ -4947,6 +4960,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
 function cancelWebOrder(fbKey) {
   const order = pendingWebOrders[fbKey];
   if (!order) return;
+  _openEditPanels.delete(fbKey);_openPayPickers.delete(fbKey);
 
   // Save to cancelled log before deleting
   const cancelEntry = {
@@ -5826,6 +5840,9 @@ async function fbPullNow(){
     // Update inventory data FIRST (if changed), then check pending orders
     // This prevents the bug where processWebsiteOrders deducts stock and then inv gets overwritten
     if(data.updatedAt && data.updatedAt>fbLastTimestamp){
+      // RE-CHECK: if a push was queued while our fetch was in-flight, skip overwriting
+      // to prevent race condition where newly added items get wiped by stale Firebase data
+      if(fbPushTimer||fbPushInFlight){return;}
       fbLastTimestamp=data.updatedAt;
       // always overwrite ALL fields so resets/clears propagate to all devices
       inv=data.inv||{};C().forEach(c=>{if(!inv[c])inv[c]=[];});
