@@ -1429,9 +1429,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v17';
-const _BUILD_TS=1776887200686; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v17]';},1000);
+const _APP_VERSION='deploy-v18';
+const _BUILD_TS=1776887692699; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v18]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -1452,9 +1452,11 @@ if(sessionStorage.getItem('_autoUpdated')){
 setInterval(async()=>{
   try{
     const r=await fetch(FB_URL+'/invVersion.json?t='+Date.now());
-    if(!r.ok)return;
+    if(!r.ok){_debugOverlayLog('[UPDATE] Firebase check failed: HTTP '+r.status);return;}
     const serverV=await r.json();
+    _debugOverlayLog('[UPDATE] local='+_APP_VERSION+' server='+serverV);
     if(serverV&&serverV!==_APP_VERSION){
+      _debugOverlayLog('[UPDATE] ⚡ New version detected! Refreshing...');
       const b=document.createElement('div');
       b.style.cssText='position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,rgba(108,99,255,0.95),rgba(80,70,200,0.95));color:#fff;padding:14px;text-align:center;font-family:var(--sans);font-size:15px;font-weight:700;z-index:99999;letter-spacing:1px;';
       b.textContent='🔄 New update detected — refreshing...';
@@ -1463,7 +1465,7 @@ setInterval(async()=>{
       // Force bypass cache on reload
       setTimeout(()=>{window.location.href=location.pathname+'?_v='+Date.now();},1500);
     }
-  }catch(e){}
+  }catch(e){_debugOverlayLog('[UPDATE] Error: '+e.message);}
 },15000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
