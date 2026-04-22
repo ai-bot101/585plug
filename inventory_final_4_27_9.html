@@ -6967,9 +6967,21 @@ function searchEODLogs(query){
 async function deleteEODLog(i){
   if(!await _ownerGuard())return;
   const logNum=eodLogs.length-i;
-  if(!confirm('Delete Log #'+logNum+' ('+eodLogs[i].date+')?'))return;
+  const eodDate=eodLogs[i].date;
+  if(!confirm('Delete Log #'+logNum+' ('+eodDate+')?\n\nThis will also remove all sales entries for this day.'))return;
   eodLogs.splice(i,1);
-  persist();renderEODLogsList();showToast('Log deleted','ok');
+  // Also remove all sales log entries for this day so the day disappears from dashboard
+  const remaining=eodLogs.filter(l=>l.date===eodDate);
+  if(remaining.length===0){
+    for(let j=log.length-1;j>=0;j--){
+      if(log[j]&&log[j].date===eodDate&&(log[j].type==='sell'||log[j].type==='order'||log[j].type==='selfbuy')){
+        const e=log[j];
+        if(e.timestamp)_deletedLogKeys.add(e.timestamp+'|'+(e.who||'')+'|'+(e.type||''));
+        log.splice(j,1);
+      }
+    }
+  }
+  persist();renderDash();showToast('Log deleted — '+eodDate+' removed','ok');
 }
 
 let eodPersonFilter='all'; // 'all' or a person name
