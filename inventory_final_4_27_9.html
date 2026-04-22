@@ -2578,7 +2578,49 @@ function _autoRepairStock(){
 }
 function syncStockToEOD(e){
   if(e)e.stopPropagation();
-  if(!eodLogs.length){showToast('No EOD logs to sync from','err');return;}
+
+  // ── CLEAN ORPHANED LOG ENTRIES ──
+  // Remove sell/order/selfbuy entries for days that have NO EOD log (except today)
+  // These are leftovers from deleted EOD logs and shouldn't drive stock or dashboard
+  const today=tday();
+  const eodDates=new Set(eodLogs.map(r=>r.date));
+  let orphansRemoved=0;
+  for(let j=log.length-1;j>=0;j--){
+    const entry=log[j];
+    if(!entry||!entry.date)continue;
+    if(entry.date===today)continue; // keep today's entries
+    if(eodDates.has(entry.date))continue; // day has EOD, keep it
+    if(entry.type==='sell'||entry.type==='order'||entry.type==='selfbuy'){
+      if(entry.timestamp)_deletedLogKeys.add(entry.timestamp+'|'+(entry.who||'')+'|'+(entry.type||''));
+      log.splice(j,1);
+      orphansRemoved++;
+    }
+  }
+  if(orphansRemoved>0)console.log('[SYNC-EOD] Cleaned '+orphansRemoved+' orphaned log entries from days with no EOD log');
+
+  if(!eodLogs.length&&orphansRemoved>0){
+    // No EOD logs at all — just reset stock to match bought and clean dashboard
+    let resetCount=0;
+    C().forEach(cat=>{
+      (inv[cat]||[]).forEach(item=>{
+        if(!item.name||!item.bought)return;
+        // Only reset if no pending orders hold stock for this item
+        let pendingHeld=0;
+        Object.values(pendingWebOrders||{}).forEach(order=>{
+          (order.orderItems||[]).forEach(oi=>{
+            if((oi.itemName||oi.name||'').toLowerCase().trim()===item.name.toLowerCase())
+              pendingHeld+=(oi.qty||(oi.label?labelToQty(oi.label):0));
+          });
+        });
+        const correctLeft=Math.round(Math.max(0,item.bought-pendingHeld)*10)/10;
+        if(Math.abs(gl(item)-correctLeft)>0.05){item.left=correctLeft;resetCount++;}
+      });
+    });
+    persist();renderAll();
+    showToast('Cleaned '+orphansRemoved+' orphan entries'+(resetCount?' · '+resetCount+' items reset':'')+'  ✅','ok');
+    return;
+  }
+
   // ── BUILD SOLD MAP FROM ALL SOURCES ──
   // 1. EOD logs (primary source of truth — these are curated/edited)
   // 2. Activity log sales NOT covered by any EOD log (days without EOD, orphan selfbuys)
@@ -7437,6 +7479,16 @@ function doReset(type){
     vipCustomers={};
     customerDeals={};
     dayNotes={};
+    // Reset inventory: left = bought (no sales = nothing sold)
+    C().forEach(cat=>{
+      (inv[cat]||[]).forEach(item=>{
+        if(item.bought)item.left=item.bought;
+        // Reset flavor stock too
+        if(Array.isArray(item.flavors)){
+          item.flavors.forEach(f=>{if(f.bought)f.stock=f.bought;});
+        }
+      });
+    });
     // Also clear all pending/confirmed web orders from Firebase
     Object.keys(pendingWebOrders).forEach(fbKey=>{
       fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
@@ -7446,7 +7498,7 @@ function doReset(type){
     // Nuke the entire pending_orders node in Firebase to kill ghost orders
     fetch(FB_URL+'/pending_orders.json',{method:'DELETE'}).catch(()=>{});
     persist();renderAll();closeOv('reset-modal');
-    showToast('All logs & data wiped — inventory kept ✅','ok');
+    showToast('All logs & data wiped — stock reset ✅','ok');
   }
 }
 
