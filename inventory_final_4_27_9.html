@@ -1429,9 +1429,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v23';
-const _BUILD_TS=1776896627886; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v23]';},1000);
+const _APP_VERSION='deploy-v24';
+const _BUILD_TS=1776897771107; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v24]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -4423,7 +4423,7 @@ function processWebsiteOrders(pendingOrders) {
         const logEntry = log[logIdx];
         (logEntry.orderItems||[]).forEach(oi => {
           const itemName = (oi.itemName||'').toLowerCase();
-          const qty = labelToQty(oi.label);
+          const qty = (oi.qty||1)*labelToQty(oi.label);
           let foundItem=null;
           for (const c of C()) {
             const f = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
@@ -4437,7 +4437,7 @@ function processWebsiteOrders(pendingOrders) {
         const heldOrder = pendingWebOrders[fbKey];
         (heldOrder.orderItems||[]).forEach(oi => {
           const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
-          const qty = labelToQty(oi.label);
+          const qty = (oi.qty||1)*labelToQty(oi.label);
           const cat = oi.cat||'';
           let realCat = cat;
           if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
@@ -4456,7 +4456,7 @@ function processWebsiteOrders(pendingOrders) {
         // Order wasn't held locally but stock WAS deducted — restore from order data
         (order.orderItems||[]).forEach(oi => {
           const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
-          const qty = labelToQty(oi.label);
+          const qty = (oi.qty||1)*labelToQty(oi.label);
           const cat = oi.cat||'';
           let realCat = cat;
           if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
@@ -4519,7 +4519,7 @@ function processWebsiteOrders(pendingOrders) {
         let _deductOk=0, _deductFail=0;
         (order.orderItems||[]).forEach(oi=>{
           const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
-          const qty=labelToQty(oi.label);
+          const qty=(oi.qty||1)*labelToQty(oi.label); // multiply item count by weight/unit from label
           const cat=(oi.cat||'').trim();
           let realCat=cat;
           if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase().trim()===cat.toLowerCase());if(m)realCat=m;}
@@ -4990,7 +4990,7 @@ function cancelWebOrder(fbKey) {
   if(order._stockDeductedLocally){
     (order.orderItems||[]).forEach(oi=>{
       const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
-      const qty=labelToQty(oi.label);
+      const qty=(oi.qty||1)*labelToQty(oi.label);
       const cat=oi.cat||'';
       let realCat=cat;
       if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
@@ -5040,7 +5040,7 @@ function cancelAllPending(){
     // Restore stock + flavors
     (order.orderItems||[]).forEach(oi=>{
       const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
-      const qty=labelToQty(oi.label);
+      const qty=(oi.qty||1)*labelToQty(oi.label);
       const cat=oi.cat||'';
       let realCat=cat;
       if(cat&&!inv[cat]){const match=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(match)realCat=match;}
