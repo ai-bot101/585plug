@@ -4588,7 +4588,7 @@ function renderPendingOrders() {
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
           <button onclick="confirmWebOrder('${o.fbKey}')" style="background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.3);border-radius:8px;padding:10px;color:var(--green);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">✅ Confirm</button>
           <button onclick="toggleEditPending('${o.fbKey}')" style="background:rgba(108,99,255,0.08);border:1px solid rgba(108,99,255,0.25);border-radius:8px;padding:10px;color:var(--accent);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">✏️ Edit</button>
-          <button onclick="cancelWebOrder('${o.fbKey}')" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:10px;color:var(--red);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">❌ Cancel</button>
+          <button onclick="cancelWebOrder('${o.fbKey}')" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:10px;color:var(--red);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">❌ Cancel & Restore</button>
         </div>
       </div>`;
     }).join('')}
@@ -5044,10 +5044,31 @@ function doReverseConfirmed(fbKey) {
   // Delete from Firebase pending_orders
   fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
 
+  // ── Also remove from any EOD log that captured this order ──
+  eodLogs.forEach(r=>{
+    if(!r.orders||!r.orders.length)return;
+    const oidx=r.orders.findIndex(o=>o.webOrderKey===fbKey);
+    if(oidx<0)return;
+    r.orders.splice(oidx,1);
+    const _cv=calcCashVirt(r.orders);
+    r.grandTotal=r.orders.reduce((s,o)=>s+(o.amtReceived||o.total||0),0);
+    r.cashTotal=_cv.cash;
+    r.virtTotal=_cv.virt;
+    r.totalProfit=r.orders.reduce((s,o)=>s+(o.profit||0),0);
+    const newComm={};cfg.users.forEach(u=>{newComm[u.name]=0;});
+    r.orders.forEach(o=>{if(!newComm[o.who])newComm[o.who]=0;newComm[o.who]+=(o.commission||0);});
+    r.commByPerson=newComm;
+    const staffComm=cfg.users.filter(u=>u.role==='staff').reduce((s,u)=>s+(newComm[u.name]||0),0);
+    r.staffComm=staffComm;
+    r.ownerNet=Math.max(0,r.totalProfit-staffComm);
+    r.txCount=r.orders.length;
+  });
+
   persist();
   renderStats();
   renderItems();
   renderCancelledOrders();
+  renderEODLogsList();
   if (cu?.role==='owner') renderDash(); else renderStaffLog();
   showToast('Order reversed — stock restored ✅', 'ok');
 }
@@ -5198,9 +5219,8 @@ function renderConfirmedWebOrders() {
             <div style="font-size:10px;color:var(--text3);margin-top:2px;">${o.time||''} · ${o.date||''}</div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <button onclick="revertToPending('${o.webOrderKey}')" style="background:rgba(255,165,0,0.08);border:1px solid rgba(255,165,0,0.25);border-radius:8px;padding:10px;color:#ffa500;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">⏪ Revert to Pending</button>
-          <button onclick="reverseConfirmedOrder('${o.webOrderKey}')" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:10px;color:var(--red);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">❌ Cancel & Restore</button>
+        <div>
+          <button onclick="revertToPending('${o.webOrderKey}')" style="width:100%;background:rgba(255,165,0,0.08);border:1px solid rgba(255,165,0,0.25);border-radius:8px;padding:10px;color:#ffa500;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">⏪ Revert to Pending</button>
         </div>
       </div>`;
     }).join('')}
