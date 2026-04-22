@@ -1429,9 +1429,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v22';
-const _BUILD_TS=1776894493110; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v22]';},1000);
+const _APP_VERSION='deploy-v23';
+const _BUILD_TS=1776896627886; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v23]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -1449,13 +1449,17 @@ if(sessionStorage.getItem('_autoUpdated')){
 
 // ── AUTO-UPDATE: check Firebase for new deploy version every 15s ──
 // Uses the same Firebase invVersion that deploy.sh pushes — bypasses Cloudflare cache entirely
-setInterval(async()=>{
+let _updateDetected=false; // prevent multiple reload triggers
+const _autoUpdateInterval=setInterval(async()=>{
+  if(_updateDetected)return; // already reloading, stop checking
   try{
     const r=await fetch(FB_URL+'/invVersion.json?t='+Date.now());
     if(!r.ok){_debugOverlayLog('[UPDATE] Firebase check failed: HTTP '+r.status);return;}
     const serverV=await r.json();
     _debugOverlayLog('[UPDATE] local='+_APP_VERSION+' server='+serverV);
     if(serverV&&serverV!==_APP_VERSION){
+      _updateDetected=true; // lock — no more checks
+      clearInterval(_autoUpdateInterval); // stop the interval entirely
       _debugOverlayLog('[UPDATE] ⚡ New version detected! Refreshing...');
       const b=document.createElement('div');
       b.style.cssText='position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,rgba(108,99,255,0.95),rgba(80,70,200,0.95));color:#fff;padding:14px;text-align:center;font-family:var(--sans);font-size:15px;font-weight:700;z-index:99999;letter-spacing:1px;';
@@ -4678,8 +4682,15 @@ function renderPendingOrders() {
     }).join('')}
   </div>`;
 
-  if (ownerEl) { ownerEl.innerHTML = html; ownerEl.style.display = 'block'; }
-  if (staffEl) { staffEl.innerHTML = html; staffEl.style.display = 'block'; }
+  // Only render to ONE section to avoid duplicate element IDs in the DOM.
+  // getElementById('pending-edit-panel-...') would find the wrong (hidden) panel otherwise.
+  if (cu && cu.role==='owner') {
+    if (ownerEl) { ownerEl.innerHTML = html; ownerEl.style.display = 'block'; }
+    if (staffEl) { staffEl.innerHTML = ''; staffEl.style.display = 'none'; }
+  } else {
+    if (staffEl) { staffEl.innerHTML = html; staffEl.style.display = 'block'; }
+    if (ownerEl) { ownerEl.innerHTML = ''; ownerEl.style.display = 'none'; }
+  }
   // Restore any open edit panels and pay pickers that were open before the re-render
   _openEditPanels.forEach(fbKey=>{
     if(pendingWebOrders[fbKey]&&!pendingWebOrders[fbKey].confirmed&&!pendingWebOrders[fbKey].cancelled)toggleEditPending(fbKey);
