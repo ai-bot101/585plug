@@ -1427,8 +1427,8 @@ function _debugOverlayToggle(){
   };
 })();
 const _APP_VERSION='SYNC-FIX-v18';
-const _BUILD_TS=1776885260243; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v14]';},1000);
+const _BUILD_TS=1776885597025; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v15]';},1000);
 
 // Show "just updated" banner if we reloaded due to auto-update
 if(sessionStorage.getItem('_autoUpdated')){
@@ -5892,7 +5892,7 @@ async function fbPullNow(){
       else if(document.getElementById('log-view').style.display!=='none')renderStaffLog();
     }
     document.getElementById('sdot').className='sdot ok';
-    document.getElementById('slabel').textContent='Live — '+tstr();
+    document.getElementById('slabel').textContent='Live — '+tstr()+' · '+document.title.match(/\[.*\]/)?.[0];
   }catch(e){
     document.getElementById('sdot').className='sdot fail';
     document.getElementById('slabel').textContent='Connection error';
@@ -5958,7 +5958,7 @@ function fbPush(){
       fbPushInFlight=false;
       _deletedLogKeys.clear(); // safe to clear — deletions are now persisted in Firebase
       document.getElementById('sdot').className='sdot ok';
-      document.getElementById('slabel').textContent='Live — '+tstr();
+      document.getElementById('slabel').textContent='Live — '+tstr()+' · '+document.title.match(/\[.*\]/)?.[0];
     }catch(e){
       fbPushTimer=null; // clear so fbPull resumes
       fbPushInFlight=false;
@@ -8111,7 +8111,7 @@ function updateSync(){
   // try a quick test fetch to confirm connection
   fetch(FB_URL+'.json?shallow=true&t='+Date.now())
     .then(r=>{
-      if(r.ok){dot.className='sdot ok';lbl.textContent='Live — '+tstr();}
+      if(r.ok){dot.className='sdot ok';lbl.textContent='Live — '+tstr()+' · '+document.title.match(/\[.*\]/)?.[0];}
       else{dot.className='sdot fail';lbl.textContent='Firebase error '+r.status;}
     })
     .catch(()=>{dot.className='sdot fail';lbl.textContent='Firebase connection failed';});
