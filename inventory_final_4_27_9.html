@@ -749,6 +749,7 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
     <div class="mact"><button class="mp" onclick="closeOv('debt-modal')">Done</button></div>
   </div>
 </div>
+<div class="ov" id="pw-modal">
   <div class="modal">
     <h3>Change Passwords</h3><div class="msub">Pick who to update then enter their new passphrase.</div>
     <div class="pwlist" id="pwlist"></div>
@@ -4300,6 +4301,7 @@ let fbListening=false;
 let fbLastPush=0;
 let fbPushTimer=null;
 let _pendingFbPatches={}; // queued patches to include in next fbPush (for atomic writes)
+let _deletedLogKeys=new Set(); // merge-before-push: skip entries we intentionally removed
 
 // Start live listener using Firebase SSE (Server-Sent Events)
 // This gives INSTANT updates the moment any device changes anything
@@ -5025,6 +5027,9 @@ function doReverseConfirmed(fbKey) {
 
   // Remove from sales log
   if (logIdx > -1) {
+    // Mark this entry so merge-before-push doesn't re-add it from Firebase
+    const e=logEntry;
+    if(e&&e.timestamp)_deletedLogKeys.add(e.timestamp+'|'+(e.who||'')+'|'+(e.type||''));
     log.splice(logIdx, 1);
   } else {
     // No log entry found — create adjustment entries so repairStock doesn't re-deduct
@@ -5091,7 +5096,9 @@ function revertToPending(fbKey) {
     return;
   }
 
-  // Remove from log
+  // Remove from log — mark as intentionally deleted so merge-before-push skips it
+  const _rvEntry=log[logIdx];
+  if(_rvEntry&&_rvEntry.timestamp)_deletedLogKeys.add(_rvEntry.timestamp+'|'+(_rvEntry.who||'')+'|'+(_rvEntry.type||''));
   log.splice(logIdx, 1);
 
   // Mark stock flags so processWebsiteOrders doesn't re-deduct on next poll/reload
@@ -5816,7 +5823,13 @@ function fbPush(){
           const fbLog=await mergeRes.json();
           if(Array.isArray(fbLog)&&fbLog.length>0){
             const localKeys=new Set(log.map(e=>e&&e.timestamp?(e.timestamp+'|'+(e.who||'')+'|'+(e.type||'')):''));
-            const missing=fbLog.filter(e=>e&&e.timestamp&&!localKeys.has(e.timestamp+'|'+(e.who||'')+'|'+(e.type||'')));
+            const missing=fbLog.filter(e=>{
+              if(!e||!e.timestamp)return false;
+              const key=e.timestamp+'|'+(e.who||'')+'|'+(e.type||'');
+              if(localKeys.has(key))return false;
+              if(_deletedLogKeys.has(key))return false; // intentionally deleted — don't re-add
+              return true;
+            });
             if(missing.length>0){
               log.push(...missing);
               log.sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
@@ -5848,6 +5861,7 @@ function fbPush(){
       });
       fbPushTimer=null; // clear so fbPull resumes
       fbPushInFlight=false;
+      _deletedLogKeys.clear(); // safe to clear — deletions are now persisted in Firebase
       document.getElementById('sdot').className='sdot ok';
       document.getElementById('slabel').textContent='Live — '+tstr();
     }catch(e){
