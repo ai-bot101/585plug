@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Calculator</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -1426,10 +1429,12 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='SYNC-FIX-v18';
-const _BUILD_TS=1776885659358; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v16]';},1000);
+const _APP_VERSION='deploy-v17';
+const _BUILD_TS=1776887200686; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v17]';},1000);
 
+// Clean up cache-bust query param after reload
+if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
 // Show "just updated" banner if we reloaded due to auto-update
 if(sessionStorage.getItem('_autoUpdated')){
   sessionStorage.removeItem('_autoUpdated');
@@ -1442,25 +1447,24 @@ if(sessionStorage.getItem('_autoUpdated')){
   },500);
 }
 
-// ── AUTO-UPDATE: check for new deploys every 30s and show banner before reload ──
-const _btsPat='_BUILD'+'_TS='; // split so deploy sed doesn't corrupt the regex
+// ── AUTO-UPDATE: check Firebase for new deploy version every 15s ──
+// Uses the same Firebase invVersion that deploy.sh pushes — bypasses Cloudflare cache entirely
 setInterval(async()=>{
   try{
-    const r2=await fetch(location.href,{cache:'no-store',headers:{'Range':'bytes=0-3000'}});
-    const chunk=await r2.text();
-    const re=new RegExp(_btsPat+'(\\d+)');
-    const m=chunk.match(re);
-    if(m&&parseInt(m[1])!==_BUILD_TS){
-      // Show updating banner
+    const r=await fetch(FB_URL+'/invVersion.json?t='+Date.now());
+    if(!r.ok)return;
+    const serverV=await r.json();
+    if(serverV&&serverV!==_APP_VERSION){
       const b=document.createElement('div');
       b.style.cssText='position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,rgba(108,99,255,0.95),rgba(80,70,200,0.95));color:#fff;padding:14px;text-align:center;font-family:var(--sans);font-size:15px;font-weight:700;z-index:99999;letter-spacing:1px;';
       b.textContent='🔄 New update detected — refreshing...';
       document.body.appendChild(b);
       sessionStorage.setItem('_autoUpdated','1');
-      setTimeout(()=>location.reload(),1500);
+      // Force bypass cache on reload
+      setTimeout(()=>{window.location.href=location.pathname+'?_v='+Date.now();},1500);
     }
   }catch(e){}
-},30000);
+},15000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
 let commissionPaused={}; // {staffName: true} — commission disabled for this staff member
@@ -4377,6 +4381,7 @@ let fbLastPush=0;
 let fbPushTimer=null;
 let _pendingFbPatches={}; // queued patches to include in next fbPush (for atomic writes)
 let _deletedLogKeys=new Set(); // merge-before-push: skip entries we intentionally removed
+let _nukeInProgress=false; // when true, skip merge-before-push entirely (full wipe)
 
 // Start live listener using Firebase SSE (Server-Sent Events)
 // This gives INSTANT updates the moment any device changes anything
@@ -5912,7 +5917,9 @@ function fbPush(){
       // pushed new log entries to Firebase. If we push our local log as-is, those
       // entries get overwritten and lost. Fetch the current Firebase log and merge
       // any entries we don't have locally before pushing.
-      try{
+      // SKIP merge entirely during a full nuke — we WANT to overwrite Firebase with empty log
+      if(_nukeInProgress){_nukeInProgress=false;}
+      else try{
         const mergeRes=await fetch(FB_URL+'/log.json');
         if(mergeRes.ok){
           const fbLog=await mergeRes.json();
@@ -7504,6 +7511,8 @@ function doReset(type){
 
   }else if(type==='nukelogs'){
     // Wipe ALL data EXCEPT inventory items — keeps names, prices, stock, flavors
+    _nukeInProgress=true; // skip merge-before-push so Firebase doesn't re-add old logs
+    fbPushInFlight=true; // block fbPull from overwriting during debounce window
     log=[];
     eodLogs=[];
     staffBuyLogs=[];
@@ -7512,6 +7521,7 @@ function doReset(type){
     vipCustomers={};
     customerDeals={};
     dayNotes={};
+    _deletedLogKeys.clear(); // not needed — nuke flag handles it
     // Reset inventory: left = bought (no sales = nothing sold)
     C().forEach(cat=>{
       (inv[cat]||[]).forEach(item=>{
