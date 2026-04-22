@@ -1426,8 +1426,25 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='FLAVOR-FIX-v17';
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v12]';},1000);
+const _APP_VERSION='SYNC-FIX-v18';
+const _BUILD_TS=1776884834446; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v13]';},1000);
+
+// ── AUTO-UPDATE: check for new deploys every 60s and reload if code changed ──
+setInterval(async()=>{
+  try{
+    const r=await fetch(location.href,{method:'HEAD',cache:'no-store'});
+    const serverLen=r.headers.get('content-length');
+    // Also try fetching a small chunk to compare version string
+    const r2=await fetch(location.href,{cache:'no-store',headers:{'Range':'bytes=0-2000'}});
+    const chunk=await r2.text();
+    const m=chunk.match(/_BUILD_TS=1776884834446(\d+)/);
+    if(m&&parseInt(m[1])!==_BUILD_TS){
+      console.log('[AUTO-UPDATE] New version detected, reloading...');
+      location.reload();
+    }
+  }catch(e){}
+},60000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
 let commissionPaused={}; // {staffName: true} — commission disabled for this staff member
