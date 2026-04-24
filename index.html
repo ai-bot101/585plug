@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260424012258';
+var _MENU_V = 'v20260424013328';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -315,7 +315,7 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .ci-size{font-size:11px;color:var(--white3);margin-top:2px;font-family:'Oswald',sans-serif;}
 .ci-price{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--red);}
 .ci-remove{background:rgba(204,31,31,0.1);border:1px solid rgba(204,31,31,0.2);border-radius:6px;width:28px;height:28px;color:var(--red);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-.cart-footer{padding:14px;border-top:1px solid var(--border);}
+.cart-footer{padding:14px;border-top:1px solid var(--border);overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:70vh;}
 .fee-breakdown{margin-bottom:4px;}
 .cart-total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
 .ct-label{font-family:'Oswald',sans-serif;font-size:13px;color:var(--white3);letter-spacing:1px;text-transform:uppercase;}
@@ -743,7 +743,9 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
         <button class="ot-btn" id="ot-pickup" onclick="selOrderType('pickup')">🏪 Pickup</button>
       </div>
       <input class="addr-inp" id="addr-inp" type="text" placeholder="Start typing your address..."
-        oninput="addrSearch(this.value);checkoutReady()" autocomplete="off">
+        oninput="addrSearch(this.value);checkoutReady()" autocomplete="off"
+        onfocus="document.body.style.position='';document.documentElement.style.position='';"
+        onblur="if(document.getElementById('cart-overlay').classList.contains('open')){document.body.style.position='fixed';document.documentElement.style.position='fixed';}">
       <div class="addr-dropdown" id="addr-dropdown"></div>
       <div class="pickup-msg" id="pickup-msg">📍 You'll pick up at the agreed location. We'll confirm details when you send your order.</div>
       <button class="checkout-btn" id="checkout-btn" onclick="showConfirm()" disabled>
