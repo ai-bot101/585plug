@@ -1429,9 +1429,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v26';
-const _BUILD_TS=1777007926535; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v26]';},1000);
+const _APP_VERSION='deploy-v27';
+const _BUILD_TS=1777008179251; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v27]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -5900,7 +5900,18 @@ async function fbPullNow(){
           if(clearedSet.has(fp))e._cleared=true;
         });
       }
-      log=incomingLog;
+      // Filter out any entries we intentionally deleted locally (push may still be in-flight)
+      if(_deletedLogKeys.size>0){
+        const before=incomingLog.length;
+        const filtered=incomingLog.filter(e=>{
+          if(!e||!e.timestamp)return true;
+          return !_deletedLogKeys.has(e.timestamp+'|'+(e.who||'')+'|'+(e.type||''));
+        });
+        if(filtered.length<before)_debugOverlayLog('[PULL] Filtered '+(before-filtered.length)+' deleted entries from incoming log');
+        log=filtered;
+      } else {
+        log=incomingLog;
+      }
       if(data.cfg){const savedCu=cu;cfg=data.cfg;cu=savedCu;}
       customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
       dayNotes=data.dayNotes||{};
