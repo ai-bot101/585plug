@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260424112612';
+var _MENU_V = 'v20260424121201';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -712,30 +712,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
       </div>
       <div class="section-label">Payment Method</div>
       <div class="pay-method">
-        <button class="pm-btn" id="pm-cash" onclick="selPay('cash')">💵 Cash</button>
-        <button class="pm-btn" id="pm-cashapp" onclick="selPay('cashapp')">💚 CashApp</button>
-        <button class="pm-btn" id="pm-venmo" onclick="selPay('venmo')">💙 Venmo</button>
-        <button class="pm-btn" id="pm-applepay" onclick="selPay('applepay')">🍎 Apple Pay</button>
-        <button class="pm-btn" id="pm-split" onclick="selPay('split')" style="grid-column:span 2;">💵💚 Cash + CashApp</button>
-      </div>
-      <div class="virtual-fee-notice" id="vfee-notice">⚠️ $5 fee applies for virtual payments</div>
-      <div id="menu-split-fields" style="display:none;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;margin:8px 0;">
-        <div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;">Split Payment</div>
-        <div style="display:flex;gap:8px;">
-          <div style="flex:1;">
-            <label style="font-size:10px;color:rgba(255,255,255,0.5);display:block;margin-bottom:3px;">💵 Cash</label>
-            <input type="number" id="menu-split-cash" placeholder="$0" min="0" step="0.01" oninput="updateMenuSplit()" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:#3ecf8e;font-family:Oswald,sans-serif;font-size:15px;outline:none;">
-          </div>
-          <div style="flex:1;">
-            <label style="font-size:10px;color:rgba(255,255,255,0.5);display:block;margin-bottom:3px;">💚 CashApp</label>
-            <input type="number" id="menu-split-virtual" placeholder="$0" min="0" step="0.01" oninput="updateMenuSplit()" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:#a89cff;font-family:Oswald,sans-serif;font-size:15px;outline:none;">
-          </div>
-        </div>
-        <div id="split-progress-wrap" style="margin-top:10px;position:relative;height:28px;background:rgba(255,255,255,0.06);border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);transition:border-color 0.4s,box-shadow 0.4s;">
-          <div id="split-progress-bar" style="height:100%;width:0%;border-radius:8px;transition:width 0.4s ease,background 0.4s ease;background:linear-gradient(90deg,#3ecf8e,#a89cff);"></div>
-          <div id="split-progress-text" style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;font-family:Oswald,sans-serif;font-size:12px;font-weight:600;color:#fff;letter-spacing:0.5px;text-shadow:0 1px 3px rgba(0,0,0,0.5);"></div>
-        </div>
-        <div id="menu-split-summary" style="font-size:11px;color:rgba(255,255,255,0.4);font-family:Oswald,sans-serif;text-align:center;margin-top:6px;"></div>
+        <button class="pm-btn selected" id="pm-cash" onclick="selPay('cash')" style="grid-column:span 2;">💵 Cash Only</button>
       </div>
       <div class="section-label" style="margin-top:4px;">Delivery or Pickup?</div>
       <div class="order-type-btns">
@@ -852,7 +829,7 @@ const NTFY_TOPIC = '585plug-orders-x9k2m';
 
 // ── STATE ──
 let cart = [];
-let payMethod = null;
+let payMethod = 'cash';
 let orderType = null;
 let customerPhone = '';
 let selectedCat = 'ALL';
@@ -1956,7 +1933,7 @@ function closeOrderPreview() {
   // Save order to history before resetting
   _saveOrderHistory(_orderMsg);
   // Reset cart
-  cart=[];payMethod=null;orderType=null;selectedPrices={};
+  cart=[];payMethod='cash';orderType=null;selectedPrices={};
   updateCartCount();renderCart();renderMenu();closeCart();
   document.querySelectorAll('.pm-btn').forEach(b=>b.classList.remove('sel'));
   document.querySelectorAll('.ot-btn').forEach(b=>b.classList.remove('sel'));
