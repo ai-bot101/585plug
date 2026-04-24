@@ -1429,9 +1429,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v24';
-const _BUILD_TS=1776897771107; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v24]';},1000);
+const _APP_VERSION='deploy-v25';
+const _BUILD_TS=1777007675288; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v25]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -3667,6 +3667,8 @@ async function deleteLogEntry(idx) {
     }
   }
 
+  // Mark as intentionally deleted so merge-before-push doesn't re-add from Firebase
+  if(entry.timestamp)_deletedLogKeys.add(entry.timestamp+'|'+(entry.who||'')+'|'+(entry.type||''));
   log.splice(idx, 1);
   persist();
   renderStats();
