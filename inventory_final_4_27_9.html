@@ -1429,9 +1429,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v31';
-const _BUILD_TS=1777042930202; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v31]';},1000);
+const _APP_VERSION='deploy-v32';
+const _BUILD_TS=1777043491520; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v32]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2590,7 +2590,7 @@ function _autoRepairStock(){
     (Array.isArray(order.orderItems)?order.orderItems:[]).forEach(oi=>{
       const name=(oi.itemName||oi.name||'').toLowerCase().trim();
       if(!name)return;
-      soldMap[name]=(soldMap[name]||0)+(parseFloat(oi.qty)||labelToQty(oi.label)||1);
+      soldMap[name]=(soldMap[name]||0)+Math.max(parseFloat(oi.qty)||1,labelToQty(oi.label));
     });
   });
   // Compare and fix
