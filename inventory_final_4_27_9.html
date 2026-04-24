@@ -1429,9 +1429,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v28';
-const _BUILD_TS=1777008809184; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v28]';},1000);
+const _APP_VERSION='deploy-v29';
+const _BUILD_TS=1777040299414; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v29]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -3632,7 +3632,7 @@ async function deleteLogEntry(idx) {
       // Multi-item order
       entry.orderItems.forEach(oi => {
         const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
-        const qty = oi.label ? labelToQty(oi.label) : (oi.qty||1);
+        const qty = (oi.qty||1)*labelToQty(oi.label);
         for (const c of C()) {
           const found = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
           if (found) {
@@ -4882,7 +4882,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   const objs = (order.orderItems||[]).map(oi => {
     const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
     const cat = oi.cat||'';
-    const qty = labelToQty(oi.label) || oi.qty || 1;
+    const qty = (oi.qty||1)*labelToQty(oi.label);
     let found = null;
     if (cat && inv[cat]) {
       found = (inv[cat]||[]).find(item => (item.name||'').toLowerCase() === itemName);
@@ -4905,7 +4905,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
     type: 'order',
     source: 'website',
     customer: order.customerPhone || 'Website Customer',
-    orderItems: (order.orderItems||[]).map(i => ({cat:i.cat||'', itemName:i.itemName||i.name||'', qty:(i.label && labelToQty(i.label) > 1) ? labelToQty(i.label) : (i.qty||1), label:i.label||'', price:i.price||0, flavors:i.flavors||null, flavorText:i.flavorText||''})),
+    orderItems: (order.orderItems||[]).map(i => ({cat:i.cat||'', itemName:i.itemName||i.name||'', qty:i.qty||1, label:i.label||'', price:i.price||0, flavors:i.flavors||null, flavorText:i.flavorText||''})),
     total, payMethod,
     payMethodLabel: order.payMethodLabel || 'Cash',
     amtReceived: total, profit, commission,
@@ -4920,7 +4920,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   if (!order._stockDeductedLocally) {
     (order.orderItems||[]).forEach(oi => {
       const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
-      const qty = labelToQty(oi.label) || oi.qty || 1;
+      const qty = (oi.qty||1)*labelToQty(oi.label);
       const cat = oi.cat||'';
       let realCat = cat;
       if (cat && !inv[cat]) { const m = C().find(c => c.toLowerCase() === cat.toLowerCase()); if (m) realCat = m; }
@@ -5113,7 +5113,7 @@ function doReverseConfirmed(fbKey) {
   const orderItems = logEntry ? logEntry.orderItems : [];
   orderItems.forEach(oi => {
     const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
-    const qty = oi.label ? labelToQty(oi.label) : (oi.qty||1);
+    const qty = (oi.qty||1)*labelToQty(oi.label);
     const cat = oi.cat || '';
 
     let realCat = cat;
@@ -5146,7 +5146,7 @@ function doReverseConfirmed(fbKey) {
     // No log entry found — create adjustment entries so repairStock doesn't re-deduct
     orderItems.forEach(oi => {
       const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
-      const qty = oi.label ? labelToQty(oi.label) : (oi.qty||1);
+      const qty = (oi.qty||1)*labelToQty(oi.label);
       if (!itemName || !qty) return;
       log.unshift({type:'adjustment',name:itemName,amount:qty,direction:'add',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'Confirmed order reversed (no log match)'});
     });
@@ -5268,7 +5268,7 @@ function clearConfirmedOrders(){
       // ALWAYS restore stock when clearing confirmed orders
       (e.orderItems||[]).forEach(oi=>{
         const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
-        const qty=oi.label?labelToQty(oi.label):(oi.qty||1);
+        const qty=(oi.qty||1)*labelToQty(oi.label);
         const cat=oi.cat||'';
         let realCat=cat;
         if(cat&&!inv[cat]){const match=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(match)realCat=match;}
