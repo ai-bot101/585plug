@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260422184250';
+var _MENU_V = 'v20260424011434';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
