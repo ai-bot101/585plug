@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260424121201';
+var _MENU_V = 'v20260424184447';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -1118,16 +1118,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+let _fetchFails=0;
 async function doFetch() {
   try {
     const res = await fetch(FB_URL + '/inv_d6bb4.json');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    _fetchFails=0;
     processData(data);
   } catch(e) {
     console.error('Fetch error:', e);
+    _fetchFails++;
     const ss = document.getElementById('sync-status');
     if (ss) ss.innerHTML = '<span style="color:#f46b6b;font-size:10px;font-family:monospace;letter-spacing:1px;">● OFFLINE</span>';
+    // Show error to user if menu never loaded
+    if(!menuItems.length&&_fetchFails>=2){
+      const section=document.getElementById('menu-section');
+      if(section)section.innerHTML='<div class="empty-state"><div class="ei">⚠️</div><p style="color:#f46b6b;">Couldn\'t load menu</p><p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">Check your connection or disable any content blockers</p><button onclick="_fetchFails=0;doFetch();" style="margin-top:12px;background:rgba(204,31,31,0.15);border:1px solid rgba(204,31,31,0.4);border-radius:8px;padding:10px 24px;color:#f46b6b;font-family:Oswald,sans-serif;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:1px;">TAP TO RETRY</button></div>';
+    }
   }
 }
 
