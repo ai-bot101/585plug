@@ -1429,9 +1429,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v29';
-const _BUILD_TS=1777040299414; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v29]';},1000);
+const _APP_VERSION='deploy-v30';
+const _BUILD_TS=1777042003848; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v30]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2563,14 +2563,14 @@ function _autoRepairStock(){
       items.forEach(oi=>{
         const name=(oi.itemName||oi.name||'').toLowerCase().trim();
         if(!name)return;
-        const qty=parseFloat(oi.qty)||labelToQty(oi.label)||1;
+        const qty=Math.max(parseFloat(oi.qty)||1,labelToQty(oi.label));
         soldMap[name]=(soldMap[name]||0)+qty;
       });
     }
     if(entry.type==='sell'){
       const name=(entry.item||entry.itemName||'').toLowerCase().trim();
       if(name){
-        const qty=parseFloat(entry.qty)||labelToQty(entry.label)||1;
+        const qty=Math.max(parseFloat(entry.qty)||1,labelToQty(entry.label));
         soldMap[name]=(soldMap[name]||0)+qty;
       }
     }
@@ -2652,7 +2652,7 @@ function syncStockToEOD(e){
         Object.values(pendingWebOrders||{}).forEach(order=>{
           (order.orderItems||[]).forEach(oi=>{
             if((oi.itemName||oi.name||'').toLowerCase().trim()===item.name.toLowerCase())
-              pendingHeld+=(oi.qty||(oi.label?labelToQty(oi.label):0));
+              pendingHeld+=Math.max(oi.qty||1,labelToQty(oi.label));
           });
         });
         const correctLeft=Math.round(Math.max(0,item.bought-pendingHeld)*10)/10;
@@ -2691,7 +2691,7 @@ function syncStockToEOD(e){
     (r.orders||[]).forEach(o=>{
       (o.items||[]).forEach(it=>{
         const key=(it.itemName||'').toLowerCase();
-        const qty=it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0);
+        const qty=Math.max(it.qty||1,labelToQty(it.label));
         addToSold(key,qty);
         addFlavorSold(key,it,qty);
       });
@@ -2729,7 +2729,7 @@ function syncStockToEOD(e){
     } else if(entry.type==='order'&&entry.orderItems){
       entry.orderItems.forEach(oi=>{
         const key=(oi.itemName||'').toLowerCase();
-        const qty=oi.qty||(oi.label&&labelToQty(oi.label)>1?labelToQty(oi.label):0);
+        const qty=Math.max(oi.qty||1,labelToQty(oi.label));
         addToSold(key,qty);
         addFlavorSold(key,oi,qty);
       });
@@ -2747,7 +2747,7 @@ function syncStockToEOD(e){
   Object.values(pendingWebOrders||{}).forEach(order=>{
     (order.orderItems||[]).forEach(oi=>{
       const key=(oi.itemName||oi.name||'').toLowerCase().trim();
-      const qty=oi.qty||(oi.label&&labelToQty(oi.label)>1?labelToQty(oi.label):0);
+      const qty=Math.max(oi.qty||1,labelToQty(oi.label));
       addToSold(key,qty);
       addFlavorSold(key,oi,qty);
     });
@@ -2825,14 +2825,14 @@ function syncStockToEOD(e){
         log.push({
           type:'selfbuy',date:r.date,time:o.time||'',who:o.who||'',customer:o.customer||'',
           totalOwed:o.total||0,amtReceived:o.total||0,timestamp:o.timestamp||0,
-          items:(o.items||[]).map(it=>({itemName:it.itemName,name:it.itemName,qty:it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0),cost:it.price||0}))
+          items:(o.items||[]).map(it=>({itemName:it.itemName,name:it.itemName,qty:it.qty||1,cost:it.price||0}))
         });
       } else {
         log.push({
           type:'order',date:r.date,time:o.time||'',who:o.who||'',customer:o.customer||'',
           amtReceived:o.total||0,payMethod:o.payMethod||'cash',timestamp:o.timestamp||0,
           profit:o.profit||0,commission:o.commission||0,source:o.source||'manual',
-          orderItems:(o.items||[]).map(it=>({itemName:it.itemName,qty:it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0),label:it.label||'',price:it.price||0,flavorText:it.flavorText||'',flavors:it.flavors||null}))
+          orderItems:(o.items||[]).map(it=>({itemName:it.itemName,qty:it.qty||1,label:it.label||'',price:it.price||0,flavorText:it.flavorText||'',flavors:it.flavors||null}))
         });
       }
     });
@@ -2900,7 +2900,7 @@ function totBanner(sells,dl,isT,showProfit){
       if((e.type==='order')&&items.length){
         items.forEach(oi=>{
           const found=ilk[(oi.itemName||'').toLowerCase()];
-          let qty=(oi.label&&labelToQty(oi.label)>1)?labelToQty(oi.label):(oi.qty||0);
+          let qty=Math.max(oi.qty||1,labelToQty(oi.label));
           if(qty<=1&&found&&found.prices&&found.prices.length){
             const mp=oi.price||((items.length===1)?amt:0);
             if(mp>0){const tier=found.prices.find(p=>parseFloat(p.price)===mp);if(tier&&tier.label){const tq=labelToQty(tier.label);if(tq>1)qty=tq;}}
@@ -3008,7 +3008,7 @@ const te=ms.reduce((s,e)=>{
   if((e.type==='order')&&items.length){
     items.forEach(oi=>{
       const found=ilkS[(oi.itemName||'').toLowerCase()];
-      let qty=(oi.label&&labelToQty(oi.label)>1)?labelToQty(oi.label):(oi.qty||0);
+      let qty=Math.max(oi.qty||1,labelToQty(oi.label));
       if(qty<=1&&found&&found.prices&&found.prices.length){
         const mp=oi.price||((items.length===1)?amt:0);
         if(mp>0){const tier=found.prices.find(p=>parseFloat(p.price)===mp);if(tier&&tier.label){const tq=labelToQty(tier.label);if(tq>1)qty=tq;}}
@@ -3039,7 +3039,7 @@ function renderStaffCommHistory(){
     if((e.type==='order')&&items.length){
       items.forEach(oi=>{
         const found=ilkCH[(oi.itemName||'').toLowerCase()];
-        let qty=(oi.label&&labelToQty(oi.label)>1)?labelToQty(oi.label):(oi.qty||0);
+        let qty=Math.max(oi.qty||1,labelToQty(oi.label));
         if(qty<=1&&found&&found.prices&&found.prices.length){
           const mp=oi.price||((items.length===1)?amt:0);
           if(mp>0){const tier=found.prices.find(p=>parseFloat(p.price)===mp);if(tier&&tier.label){const tq=labelToQty(tier.label);if(tq>1)qty=tq;}}
@@ -3209,7 +3209,7 @@ function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today
     const at=allTime[u.name]||{c:0,t:0,comm:0};
     const mySales=personSales[u.name]||[];
     const salesHtml=mySales.length?mySales.map(s=>{
-      const items=s.orderItems?(s.orderItems||[]).map(oi=>{const q=oi.qty||(oi.label&&labelToQty(oi.label)>1?labelToQty(oi.label):1);return fmt(q)+'x '+oi.itemName;}).join(', ')
+      const items=s.orderItems?(s.orderItems||[]).map(oi=>{const q=Math.max(oi.qty||1,labelToQty(oi.label));return fmt(q)+'x '+oi.itemName;}).join(', ')
         :s.items?(s.items||[]).map(it=>fmt(it.qty||1)+'x '+(it.itemName||it.name)).join(', ')
         :(s.name||'');
       const pm=PM.find(m=>m.id===s.payMethod)?.label||s.payMethod||'Cash';
@@ -3547,7 +3547,7 @@ function saveSelfbuyEdit(){
               if(it.flavors&&typeof it.flavors==='object'){
                 Object.entries(it.flavors).forEach(([fname,fqty])=>{
                   if(fqty<=0)return;
-                  const flavorDiff=Math.round(fqty*(newQty/oldQty)*10)/10-fqty;
+                  const flavorDiff=oldQty>0?Math.round(fqty*(newQty/oldQty)*10)/10-fqty:0;
                   const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===fname.toLowerCase());
                   if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-flavorDiff));
                 });
@@ -3696,7 +3696,7 @@ function openEditLog(idx){
         <div style="flex:1;font-size:14px;color:var(--text);font-family:var(--mono);">${it.itemName}${it.label?' <span style="color:var(--accent);font-size:11px;">('+it.label+')</span>':''}</div>
         <div style="display:flex;align-items:center;gap:4px;">
           <span style="font-size:12px;color:var(--text3);">qty:</span>
-          <input type="number" class="log-item-qty" data-idx="${ii}" value="${(it.label && typeof labelToQty==='function' && labelToQty(it.label)>1)?labelToQty(it.label):it.qty}" min="0" step="0.1" style="width:80px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--mono);font-size:14px;outline:none;text-align:center;">
+          <input type="number" class="log-item-qty" data-idx="${ii}" value="${Math.max(it.qty||1,labelToQty(it.label))}" min="0" step="0.1" style="width:80px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--mono);font-size:14px;outline:none;text-align:center;">
         </div>
       </div>`).join('');
   }else if(e.type==='sell'){
@@ -3829,7 +3829,7 @@ function saveLogEdit(){
     document.querySelectorAll('.log-item-qty').forEach(inp=>{
       const ii=parseInt(inp.dataset.idx);
       if(e.orderItems[ii]){
-        const oldQty=(e.orderItems[ii].label&&labelToQty(e.orderItems[ii].label)>1)?labelToQty(e.orderItems[ii].label):(e.orderItems[ii].qty||0);
+        const oldQty=Math.max(e.orderItems[ii].qty||1,labelToQty(e.orderItems[ii].label));
         const newQty=parseFloat(inp.value)||0;
         const diff=newQty-oldQty;
         if(Math.abs(diff)>0.001){
@@ -3880,7 +3880,7 @@ function saveLogEdit(){
   if(isOrder&&e.orderItems){
     e.orderItems.forEach(oi=>{
       const found=itemLk[(oi.itemName||'').toLowerCase()];
-      const qty=(oi.label&&labelToQty(oi.label)>1)?labelToQty(oi.label):(oi.qty||0);
+      const qty=Math.max(oi.qty||1,labelToQty(oi.label));
       if(found)cost+=cpuItem(found)*qty;
     });
   }else if(e.type==='sell'){
@@ -5678,7 +5678,7 @@ function repairStock(manual){
     } else if (e.type === 'order') {
       (e.orderItems||[]).forEach(oi => {
         const key = (oi.itemName||'').toLowerCase();
-        const qty = oi.qty||(oi.label && labelToQty(oi.label) > 1 ? labelToQty(oi.label) : 0);
+        const qty = Math.max(oi.qty||1,labelToQty(oi.label));
         if (key) soldMap[key] = (soldMap[key]||0) + qty;
       });
     } else if (e.type === 'selfbuy') {
@@ -5697,7 +5697,7 @@ function repairStock(manual){
   Object.values(pendingWebOrders).forEach(order => {
     (order.orderItems||[]).forEach(oi => {
       const key = (oi.itemName||oi.name||'').toLowerCase().trim();
-      const qty = oi.qty||(oi.label && labelToQty(oi.label) > 1 ? labelToQty(oi.label) : 0);
+      const qty = Math.max(oi.qty||1,labelToQty(oi.label));
       if (key) soldMap[key] = (soldMap[key]||0) + qty;
     });
   });
@@ -6437,7 +6437,7 @@ function openEditEODOrder(logIdx,orderIdx){
       <div style="flex:1;font-size:14px;color:var(--text);font-family:var(--mono);">${it.itemName}</div>
       <div style="display:flex;align-items:center;gap:4px;">
         <span style="font-size:12px;color:var(--text3);">qty:</span>
-        <input type="number" class="eod-item-qty" data-idx="${ii}" value="${it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):1)}" min="0" step="0.1" style="width:70px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--mono);font-size:14px;outline:none;text-align:center;">
+        <input type="number" class="eod-item-qty" data-idx="${ii}" value="${Math.max(it.qty||1,labelToQty(it.label))}" min="0" step="0.1" style="width:70px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:var(--mono);font-size:14px;outline:none;text-align:center;">
       </div>
     </div>
   `).join('');
@@ -6508,7 +6508,7 @@ function saveEODOrderEdit(){
   document.querySelectorAll('.eod-item-qty').forEach(inp=>{
     const ii=parseInt(inp.dataset.idx);
     if(o.items&&o.items[ii]){
-      const oldQty=o.items[ii].qty||(o.items[ii].label&&labelToQty(o.items[ii].label)>1?labelToQty(o.items[ii].label):0);
+      const oldQty=Math.max(o.items[ii].qty||1,labelToQty(o.items[ii].label));
       const newQty=parseFloat(inp.value)||0;
       const diff=newQty-oldQty;
       // Adjust inventory: positive diff = more sold = deduct more, negative = less sold = restock
@@ -6527,7 +6527,7 @@ function saveEODOrderEdit(){
                 const ratio=oldQty>0?diff/oldQty:0;
                 Object.entries(it.flavors).forEach(([fname,fqty])=>{
                   if(fqty<=0)return;
-                  const flavorDiff=Math.round(fqty*(newQty/oldQty)*10)/10-fqty;
+                  const flavorDiff=oldQty>0?Math.round(fqty*(newQty/oldQty)*10)/10-fqty:0;
                   const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===fname.toLowerCase());
                   if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-flavorDiff));
                 });
@@ -6581,7 +6581,7 @@ function saveEODOrderEdit(){
     });
     if(found){
       // Use actual qty (not label) so custom amounts calculate correctly
-      const qty=it.qty||((it.label&&labelToQty(it.label)>1)?labelToQty(it.label):1);
+      const qty=Math.max(it.qty||1,labelToQty(it.label));
       cost+=cpuItem(found)*qty;
     }
   });
@@ -7064,7 +7064,7 @@ function searchEODLogs(query){
       if(matchItem||matchCust||matchWho||matchNote){
         // Build matched items display — highlight matching items
         const itemsStr=(o.items||[]).map(it=>{
-          const qy=it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):1);
+          const qy=Math.max(it.qty||1,labelToQty(it.label));
           const name=it.itemName||'';
           const isMatch=name.toLowerCase().includes(q);
           return isMatch?`<span style="color:var(--accent);font-weight:700;">${fmt(qy)}x ${name}</span>`:`${fmt(qy)}x ${name}`;
@@ -7084,7 +7084,7 @@ function searchEODLogs(query){
     totalRevenue+=r.order.total||0;
     (r.order.items||[]).forEach(it=>{
       if((it.itemName||'').toLowerCase().includes(q)){
-        totalQty+=(it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0));
+        totalQty+=Math.max(it.qty||1,labelToQty(it.label));
       }
     });
   });
@@ -7171,7 +7171,7 @@ function viewEODLog(i,filterPerson){
     let cost=0;
     (o.items||[]).forEach(it=>{
       const found=eodItemLookup[(it.itemName||'').toLowerCase()];
-      let qty=it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):0);
+      let qty=Math.max(it.qty||1,labelToQty(it.label));
       // Recovery: match price to tier if qty<=1 and no label
       if(qty<=1 && found && found.prices && found.prices.length){
         const itemPrice=it.price||0;
@@ -7399,7 +7399,7 @@ function viewEODLog(i,filterPerson){
       ${filtered.map((o,fi)=>{
         // find the real index in allOrders for edit button
         const oi=allOrders.indexOf(o);
-        const items=(o.items||[]).map(it=>{const q=it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):1);return`${fmt(q)}x ${it.itemName}`;}).join(', ');
+        const items=(o.items||[]).map(it=>{const q=Math.max(it.qty||1,labelToQty(it.label));return`${fmt(q)}x ${it.itemName}`;}).join(', ');
         return`<div style="padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="var d=this.querySelector('.eod-detail');if(d)d.style.display=d.style.display==='block'?'none':'block';">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -7425,7 +7425,7 @@ function viewEODLog(i,filterPerson){
             </div>
             ${(o.items||[]).length?`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
               <div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-family:var(--mono);">ITEMS</div>
-              ${(o.items||[]).map(it=>{const q=it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):1);return`<div style="font-size:14px;color:var(--text);padding:4px 0;font-family:var(--mono);">${fmt(q)}x ${it.itemName}</div>`;}).join('')}
+              ${(o.items||[]).map(it=>{const q=Math.max(it.qty||1,labelToQty(it.label));return`<div style="font-size:14px;color:var(--text);padding:4px 0;font-family:var(--mono);">${fmt(q)}x ${it.itemName}</div>`;}).join('')}
             </div>`:''}
             <div style="display:flex;gap:8px;margin-top:12px;">
               <button onclick="event.stopPropagation();openEditEODOrder(${i},${oi})" style="flex:1;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:8px;padding:10px;color:var(--accent);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;">✏️ Edit</button>
@@ -8091,7 +8091,7 @@ function exportEODLog(){
   if(r.orders&&r.orders.length){
     lines.push('ALL ORDERS ('+r.orders.length+')');
     r.orders.forEach((o,idx2)=>{
-      const items=(o.items||[]).map(it=>{const q=it.qty||(it.label&&labelToQty(it.label)>1?labelToQty(it.label):1);return fmt(q)+'x '+it.itemName;}).join(', ');
+      const items=(o.items||[]).map(it=>{const q=Math.max(it.qty||1,labelToQty(it.label));return fmt(q)+'x '+it.itemName;}).join(', ');
       lines.push((idx2+1)+'. '+(o.customer||'Quick Sell')+' - '+fmtP(o.total)+' - '+o.payMethod);
       if(items)lines.push('   Items: '+items);
       if(o.note)lines.push('   Note: '+o.note);
