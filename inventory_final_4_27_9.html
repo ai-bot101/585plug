@@ -879,6 +879,14 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
     <div class="mact"><button class="mc" onclick="closeOv('edit-modal')">Cancel</button><button class="mp" onclick="saveEdit()">Save</button></div>
   </div>
 </div>
+<!-- SELF-BUY FLAVOR PICKER -->
+<div class="ov" id="sb-flavor-modal" style="z-index:160;">
+  <div class="mc-box" style="max-width:360px;">
+    <h3 style="margin-bottom:12px;" id="sb-flavor-title">Pick Flavor</h3>
+    <div id="sb-flavor-list" style="max-height:50vh;overflow-y:auto;"></div>
+    <div class="mact"><button class="mc" onclick="closeOv('sb-flavor-modal')">Cancel</button></div>
+  </div>
+</div>
 <!-- BUY FOR MYSELF SHEET -->
 <div class="order-overlay" id="self-buy-overlay">
   <div class="order-sheet">
@@ -1429,9 +1437,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v36';
-const _BUILD_TS=1777131100288; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v36]';},1000);
+const _APP_VERSION='deploy-v37';
+const _BUILD_TS=1777131399411; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v37]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -8274,15 +8282,46 @@ function sbSearch(q){
 function addSBItem(cat,ri){
   const item=(inv[cat]||[])[ri];if(!item)return;
   if(selfBuyItems.find(o=>o.cat===cat&&o.ri===ri)){showToast(item.name+' already added','err');return;}
-  selfBuyItems.push({cat,ri,itemName:item.name,qty:1});
+  // If item has flavors, show flavor picker first
+  const flavorsAvail=(item.flavors||[]).filter(f=>f.name&&f.stock>0);
+  if(flavorsAvail.length>0){
+    _sbFlavorPending={cat,ri,itemName:item.name,target:'self'};
+    document.getElementById('sb-flavor-title').textContent='Pick Flavor — '+item.name;
+    document.getElementById('sb-flavor-list').innerHTML=flavorsAvail.map(f=>
+      `<div onclick="_pickSBFlavor('${f.name.replace(/'/g,"\\'")}')" style="padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background 0.15s;" onmouseover="this.style.background='rgba(108,99,255,0.08)'" onmouseout="this.style.background='transparent'">
+        <span style="font-size:14px;font-weight:600;color:var(--text);text-transform:capitalize;">${f.name}</span>
+        <span style="font-size:11px;color:var(--text3);font-family:var(--mono);">${f.stock} left</span>
+      </div>`
+    ).join('');
+    document.getElementById('sb-flavor-modal').classList.add('open');
+    return;
+  }
+  selfBuyItems.push({cat,ri,itemName:item.name,qty:1,flavorText:''});
   document.getElementById('sb-search-inp').value='';
   document.getElementById('sb-isr').classList.remove('open');
   renderSBItems();updateSBCost();
 }
+let _sbFlavorPending=null;
+function _pickSBFlavor(fname){
+  const p=_sbFlavorPending;if(!p)return;
+  closeOv('sb-flavor-modal');
+  if(p.target==='self'){
+    selfBuyItems.push({cat:p.cat,ri:p.ri,itemName:p.itemName,qty:1,flavorText:fname});
+    document.getElementById('sb-search-inp').value='';
+    document.getElementById('sb-isr').classList.remove('open');
+    renderSBItems();updateSBCost();
+  }else if(p.target==='owner'){
+    _osbItems.push({cat:p.cat,ri:p.ri,itemName:p.itemName,qty:1,flavorText:fname});
+    document.getElementById('osb-search-inp').value='';
+    document.getElementById('osb-isr').classList.remove('open');
+    _renderOSBItems();_updateOSBCost();
+  }
+  _sbFlavorPending=null;
+}
 function renderSBItems(){
   const list=document.getElementById('self-buy-items-list');
   if(!selfBuyItems.length){list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0 12px;">No items added yet</div>';return;}
-  list.innerHTML=selfBuyItems.map((o,i)=>`<div class="order-item-row"><div class="oir-name">${o.itemName}</div><div class="oir-qty"><input type="number" value="${o.qty}" min="0.1" step="0.1" onchange="updSBQ(${i},this.value)"></div><button class="oir-remove" onclick="remSBI(${i})">x</button></div>`).join('');
+  list.innerHTML=selfBuyItems.map((o,i)=>`<div class="order-item-row"><div class="oir-name">${o.itemName}${o.flavorText?'<span style="font-size:10px;color:var(--accent);margin-left:6px;">'+o.flavorText+'</span>':''}</div><div class="oir-qty"><input type="number" value="${o.qty}" min="0.1" step="0.1" onchange="updSBQ(${i},this.value)"></div><button class="oir-remove" onclick="remSBI(${i})">x</button></div>`).join('');
 }
 function updSBQ(i,v){selfBuyItems[i].qty=parseFloat(v)||0;updateSBCost();}
 function remSBI(i){selfBuyItems.splice(i,1);renderSBItems();updateSBCost();}
@@ -8350,7 +8389,21 @@ function osbSearch(q){
 function _addOSBItem(cat,ri){
   const item=(inv[cat]||[])[ri];if(!item)return;
   if(_osbItems.find(o=>o.cat===cat&&o.ri===ri)){showToast(item.name+' already added','err');return;}
-  _osbItems.push({cat,ri,itemName:item.name,qty:1});
+  // If item has flavors, show flavor picker first
+  const flavorsAvail=(item.flavors||[]).filter(f=>f.name&&f.stock>0);
+  if(flavorsAvail.length>0){
+    _sbFlavorPending={cat,ri,itemName:item.name,target:'owner'};
+    document.getElementById('sb-flavor-title').textContent='Pick Flavor — '+item.name;
+    document.getElementById('sb-flavor-list').innerHTML=flavorsAvail.map(f=>
+      `<div onclick="_pickSBFlavor('${f.name.replace(/'/g,"\\'")}')" style="padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background 0.15s;" onmouseover="this.style.background='rgba(108,99,255,0.08)'" onmouseout="this.style.background='transparent'">
+        <span style="font-size:14px;font-weight:600;color:var(--text);text-transform:capitalize;">${f.name}</span>
+        <span style="font-size:11px;color:var(--text3);font-family:var(--mono);">${f.stock} left</span>
+      </div>`
+    ).join('');
+    document.getElementById('sb-flavor-modal').classList.add('open');
+    return;
+  }
+  _osbItems.push({cat,ri,itemName:item.name,qty:1,flavorText:''});
   document.getElementById('osb-search-inp').value='';
   document.getElementById('osb-isr').classList.remove('open');
   _renderOSBItems();_updateOSBCost();
@@ -8358,7 +8411,7 @@ function _addOSBItem(cat,ri){
 function _renderOSBItems(){
   const list=document.getElementById('osb-items-list');
   if(!_osbItems.length){list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0 12px;">No items added yet — search above</div>';return;}
-  list.innerHTML=_osbItems.map((o,i)=>`<div class="order-item-row"><div class="oir-name">${o.itemName}</div><div class="oir-qty"><input type="number" value="${o.qty}" min="0.1" step="0.1" onchange="_updOSBQ(${i},this.value)"></div><button class="oir-remove" onclick="_remOSBI(${i})">x</button></div>`).join('');
+  list.innerHTML=_osbItems.map((o,i)=>`<div class="order-item-row"><div class="oir-name">${o.itemName}${o.flavorText?'<span style="font-size:10px;color:var(--orange);margin-left:6px;">'+o.flavorText+'</span>':''}</div><div class="oir-qty"><input type="number" value="${o.qty}" min="0.1" step="0.1" onchange="_updOSBQ(${i},this.value)"></div><button class="oir-remove" onclick="_remOSBI(${i})">x</button></div>`).join('');
 }
 function _updOSBQ(i,v){_osbItems[i].qty=parseFloat(v)||0;_updateOSBCost();}
 function _remOSBI(i){_osbItems.splice(i,1);_renderOSBItems();_updateOSBCost();}
@@ -8391,7 +8444,12 @@ function confirmOwnerStaffBuy(){
     const item=(inv[o.cat]||[])[o.ri];if(!item)return;
     const cost=staffCost(item,o.qty);totalOwed+=cost;
     item.left=Math.max(0,Math.round((gl(item)-o.qty)*10)/10);
-    logItems.push({cat:o.cat,itemName:o.itemName,qty:o.qty,cost});
+    // Deduct flavor stock
+    if(o.flavorText&&Array.isArray(item.flavors)){
+      const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===o.flavorText.toLowerCase());
+      if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-o.qty));
+    }
+    logItems.push({cat:o.cat,itemName:o.itemName,qty:o.qty,cost,flavorText:o.flavorText||''});
   });
   const e={type:'selfbuy',who:_osbStaff,items:logItems,totalOwed,amtReceived:totalOwed,profit:0,commission:0,payMethod:'cash',payMethodLabel:'Cash',timestamp:Date.now(),date:tday(),time:tstr(),loggedBy:cu.name};
   log.unshift(e);persist();closeOwnerStaffBuy();
@@ -8407,7 +8465,12 @@ function confirmSelfBuy(){
     const item=(inv[o.cat]||[])[o.ri];if(!item)return;
     const cost=staffCost(item,o.qty);totalOwed+=cost;
     item.left=Math.round((gl(item)-o.qty)*10)/10;
-    logItems.push({cat:o.cat,itemName:o.itemName,qty:o.qty,cost});
+    // Deduct flavor stock
+    if(o.flavorText&&Array.isArray(item.flavors)){
+      const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===o.flavorText.toLowerCase());
+      if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-o.qty));
+    }
+    logItems.push({cat:o.cat,itemName:o.itemName,qty:o.qty,cost,flavorText:o.flavorText||''});
   });
   const e={type:'selfbuy',who:cu.name,items:logItems,totalOwed,amtReceived:totalOwed,profit:0,commission:0,payMethod:'cash',payMethodLabel:ml,timestamp:Date.now(),date:tday(),time:tstr()};
   log.unshift(e);persist();closeSelfBuy();
