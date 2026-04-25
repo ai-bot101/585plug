@@ -1437,9 +1437,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v38';
-const _BUILD_TS=1777131579636; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v38]';},1000);
+const _APP_VERSION='deploy-v39';
+const _BUILD_TS=1777132378743; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v39]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2569,7 +2569,7 @@ function _autoRepairStock(){
   log.forEach(entry=>{
     if(!entry||typeof entry!=='object')return;
     if(entry.type==='order'||entry.type==='selfbuy'){
-      const items=Array.isArray(entry.orderItems)?entry.orderItems:[];
+      const items=Array.isArray(entry.orderItems)?entry.orderItems:(Array.isArray(entry.items)?entry.items:[]);
       items.forEach(oi=>{
         const name=(oi.itemName||oi.name||'').toLowerCase().trim();
         if(!name)return;
@@ -2791,31 +2791,32 @@ function syncStockToEOD(e){
       const correctLeft=Math.round(Math.max(0,item.bought-totalSold)*10)/10;
       const currentLeft=gl(item);
       item.left=correctLeft;
-      // Sync flavor stock
+      // Sync flavor stock using per-flavor sold data (not proportional scaling)
       if(Array.isArray(item.flavors)){
         const fSoldData=flavorSoldMap[key]||{};
-        // Rebuild each flavor: bought_per_flavor is unknown, so estimate as current + sold
-        // Then new_stock = estimated_bought - sold = current (no change unless overall left changed)
-        // Better approach: scale flavor stocks so sum matches new item.left
-        const totalFlavorNow=item.flavors.reduce((s,f)=>s+(f.stock||0),0);
-        if(totalFlavorNow>0&&correctLeft!==currentLeft){
-          // Scale all flavor stocks proportionally to match new item.left
-          const ratio=correctLeft/Math.max(1,totalFlavorNow);
-          let assigned=0;
-          item.flavors.forEach((f,i)=>{
-            if(!f.name)return;
-            const newStock=Math.max(0,Math.round((f.stock||0)*ratio));
-            f.stock=newStock;
-            assigned+=newStock;
-          });
-          // Fix rounding: add/remove from largest flavor
-          const diff2=Math.round(correctLeft)-assigned;
-          if(diff2!==0){
-            const biggest=item.flavors.reduce((best,f)=>(!best||(f.stock||0)>(best.stock||0))?f:best,null);
-            if(biggest)biggest.stock=Math.max(0,(biggest.stock||0)+diff2);
+        const hasFlavorSales=Object.keys(fSoldData).length>0;
+        // Backfill f.bought for existing flavors that don't have it
+        item.flavors.forEach(f=>{
+          if(!f.name)return;
+          if(!f.bought&&f.bought!==0){
+            // Estimate initial: current stock + what was sold of this flavor
+            const fkey=f.name.toLowerCase();
+            const sold=fSoldData[fkey]||0;
+            f.bought=(f.stock||0)+sold;
           }
-        } else if(totalFlavorNow===0&&correctLeft>0){
-          // Flavors all at 0 but item has stock — distribute evenly
+        });
+        if(hasFlavorSales){
+          // Rebuild each flavor: bought - sold = correct stock
+          item.flavors.forEach(f=>{
+            if(!f.name)return;
+            const fkey=f.name.toLowerCase();
+            const sold=fSoldData[fkey]||0;
+            f.stock=Math.max(0,Math.round((f.bought||0)-sold));
+          });
+        }
+        // If total flavor stock doesn't match item left, adjust proportionally as fallback
+        const totalFlavorNow=item.flavors.reduce((s,f)=>s+(f.stock||0),0);
+        if(totalFlavorNow===0&&correctLeft>0){
           const each=Math.floor(correctLeft/item.flavors.length);
           let leftover=Math.round(correctLeft)-each*item.flavors.length;
           item.flavors.forEach(f=>{f.stock=each;if(leftover>0){f.stock++;leftover--;}});
@@ -4084,7 +4085,13 @@ function updateFlavor(prefix, idx, field, val) {
 
 function getFlavors(prefix) {
   const flavors = prefix === 'm' ? mFlavors : emFlavors;
-  return flavors.filter(f => f.name && f.name.trim()).map(f => ({name: f.name.trim(), stock: parseInt(f.stock)||0}));
+  return flavors.filter(f => f.name && f.name.trim()).map(f => {
+    const stock = parseInt(f.stock)||0;
+    // If user changed the stock value, that's the new 'bought' baseline
+    // If stock matches bought (unchanged), keep the original bought
+    const bought = (f.bought && stock === (parseInt(f.bought)||0)) ? f.bought : stock;
+    return {name: f.name.trim(), stock, bought};
+  });
 }
 
 // ── PHOTO UPLOAD ──
@@ -4303,7 +4310,7 @@ function openEdit(cat,idx){
   // Load price tiers
   emPriceTiers = Array.isArray(item.prices) ? item.prices.map(p=>({label:p.label,price:p.price,addOnOnly:!!p.addOnOnly})) : [];
   renderPriceTiers('em');
-  emFlavors = Array.isArray(item.flavors) ? item.flavors.map(f=>({name:f.name,stock:f.stock||0})) : [];
+  emFlavors = Array.isArray(item.flavors) ? item.flavors.map(f=>({name:f.name,stock:f.stock||0,bought:f.bought||f.stock||0})) : [];
   renderFlavors('em');
   document.getElementById('em-bought').value=item.bought||'';
   document.getElementById('em-left').value=item.left!==null?item.left:'';
@@ -6411,7 +6418,7 @@ function buildEODRecord(dateStr){
       type:e.type,
       source:e.source||(e.webOrderKey?'website':'manual'),
       customer:e.customer||e.name||'',
-      items:e.orderItems ? e.orderItems.map(oi=>({...oi})) : (e.items ? e.items.map(it=>({itemName:it.itemName||it.name||'',qty:it.qty||0,label:it.label||'',price:it.cost||it.price||0})) : (e.name?[{itemName:e.name,qty:e.amount,label:e.label||''}]:[])),
+      items:e.orderItems ? e.orderItems.map(oi=>({...oi})) : (e.items ? e.items.map(it=>({itemName:it.itemName||it.name||'',qty:it.qty||0,label:it.label||'',price:it.cost||it.price||0,flavorText:it.flavorText||'',flavors:it.flavors||null})) : (e.name?[{itemName:e.name,qty:e.amount,label:e.label||''}]:[])),
       total:e.amtReceived||e.total||0,
       amtReceived:e.amtReceived||e.total||0,
       profit:e.profit||0,
