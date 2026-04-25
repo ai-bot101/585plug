@@ -880,7 +880,7 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
   </div>
 </div>
 <!-- SELF-BUY FLAVOR PICKER -->
-<div class="ov" id="sb-flavor-modal" style="z-index:160;">
+<div class="ov" id="sb-flavor-modal" style="z-index:350;">
   <div class="mc-box" style="max-width:360px;">
     <h3 style="margin-bottom:12px;" id="sb-flavor-title">Pick Flavor</h3>
     <div id="sb-flavor-list" style="max-height:50vh;overflow-y:auto;"></div>
@@ -1437,9 +1437,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v37';
-const _BUILD_TS=1777131399411; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v37]';},1000);
+const _APP_VERSION='deploy-v38';
+const _BUILD_TS=1777131579636; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v38]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
