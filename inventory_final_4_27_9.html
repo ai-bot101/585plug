@@ -1429,9 +1429,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v35';
-const _BUILD_TS=1777070687709; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v35]';},1000);
+const _APP_VERSION='deploy-v36';
+const _BUILD_TS=1777131100288; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v36]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2087,7 +2087,7 @@ function pickPriceTier(cat,ri,ti){
   const item=(inv[cat]||[])[ri];if(!item)return;
   const tier=(item.prices||[])[ti];if(!tier)return;
   const label=tier.label||'';
-  const qty=labelToQty(label);
+  const qty=1; // Don't bake labelToQty into qty — deduction uses Math.max(qty,labelToQty) instead
   const price=parseFloat(tier.price)||0;
   // Check if same item already in order
   if(orderItems.find(o=>o.cat===cat&&o.ri===ri&&!o.flavorText)){showToast(item.name+' already in order','err');return;}
@@ -2398,7 +2398,7 @@ function confirmOrder(){
     if(orderPayMethod==='split'){pendingData.splitCash=splitCash;pendingData.splitVirtual=splitVirtual;}
     // Deduct inventory immediately (restored if cancelled) — wrapped in try/catch so order still saves even if deduction fails
     try{
-      const objs2=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||'',flavors:o.flavors||null}));
+      const objs2=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:Math.max(o.qty||1,labelToQty(o.label||'')),cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||'',flavors:o.flavors||null}));
       objs2.forEach(({item,qty,flavorText,flavors})=>{
         if(!item)return;
         item.left=Math.max(0,Math.round((gl(item)-qty)*10)/10);
@@ -2451,7 +2451,7 @@ function confirmOrder(){
     const key=customer.trim().toLowerCase();
     customerCredits[key]=(customerCredits[key]||0)-short;
   }
-  const objs=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty,cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||'',flavors:o.flavors||null}));
+  const objs=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:Math.max(o.qty||1,labelToQty(o.label||'')),cat:o.cat,itemName:o.itemName,flavorText:o.flavorText||'',flavors:o.flavors||null}));
   objs.forEach(({item,qty,flavorText,flavors})=>{
     if(!item)return;
     item.left=Math.max(0,Math.round((gl(item)-qty)*10)/10);
@@ -3634,7 +3634,7 @@ async function deleteLogEntry(idx) {
       // Multi-item order
       entry.orderItems.forEach(oi => {
         const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
-        const qty = (oi.qty||1)*labelToQty(oi.label);
+        const qty = Math.max(oi.qty||1,labelToQty(oi.label));
         for (const c of C()) {
           const found = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
           if (found) {
@@ -4429,7 +4429,7 @@ function processWebsiteOrders(pendingOrders) {
         const logEntry = log[logIdx];
         (logEntry.orderItems||[]).forEach(oi => {
           const itemName = (oi.itemName||'').toLowerCase();
-          const qty = (oi.qty||1)*labelToQty(oi.label);
+          const qty = Math.max(oi.qty||1,labelToQty(oi.label));
           let foundItem=null;
           for (const c of C()) {
             const f = (inv[c]||[]).find(item => (item.name||'').toLowerCase() === itemName);
@@ -4443,7 +4443,7 @@ function processWebsiteOrders(pendingOrders) {
         const heldOrder = pendingWebOrders[fbKey];
         (heldOrder.orderItems||[]).forEach(oi => {
           const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
-          const qty = (oi.qty||1)*labelToQty(oi.label);
+          const qty = Math.max(oi.qty||1,labelToQty(oi.label));
           const cat = oi.cat||'';
           let realCat = cat;
           if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
@@ -4462,7 +4462,7 @@ function processWebsiteOrders(pendingOrders) {
         // Order wasn't held locally but stock WAS deducted — restore from order data
         (order.orderItems||[]).forEach(oi => {
           const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
-          const qty = (oi.qty||1)*labelToQty(oi.label);
+          const qty = Math.max(oi.qty||1,labelToQty(oi.label));
           const cat = oi.cat||'';
           let realCat = cat;
           if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
@@ -4525,7 +4525,7 @@ function processWebsiteOrders(pendingOrders) {
         let _deductOk=0, _deductFail=0;
         (order.orderItems||[]).forEach(oi=>{
           const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
-          const qty=(oi.qty||1)*labelToQty(oi.label); // multiply item count by weight/unit from label
+          const qty=Math.max(oi.qty||1,labelToQty(oi.label));
           const cat=(oi.cat||'').trim();
           let realCat=cat;
           if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase().trim()===cat.toLowerCase());if(m)realCat=m;}
@@ -4884,7 +4884,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   const objs = (order.orderItems||[]).map(oi => {
     const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
     const cat = oi.cat||'';
-    const qty = (oi.qty||1)*labelToQty(oi.label);
+    const qty = Math.max(oi.qty||1,labelToQty(oi.label));
     let found = null;
     if (cat && inv[cat]) {
       found = (inv[cat]||[]).find(item => (item.name||'').toLowerCase() === itemName);
@@ -4922,7 +4922,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   if (!order._stockDeductedLocally) {
     (order.orderItems||[]).forEach(oi => {
       const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
-      const qty = (oi.qty||1)*labelToQty(oi.label);
+      const qty = Math.max(oi.qty||1,labelToQty(oi.label));
       const cat = oi.cat||'';
       let realCat = cat;
       if (cat && !inv[cat]) { const m = C().find(c => c.toLowerCase() === cat.toLowerCase()); if (m) realCat = m; }
@@ -4996,7 +4996,7 @@ function cancelWebOrder(fbKey) {
   if(order._stockDeductedLocally){
     (order.orderItems||[]).forEach(oi=>{
       const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
-      const qty=(oi.qty||1)*labelToQty(oi.label);
+      const qty=Math.max(oi.qty||1,labelToQty(oi.label));
       const cat=oi.cat||'';
       let realCat=cat;
       if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
@@ -5046,7 +5046,7 @@ function cancelAllPending(){
     // Restore stock + flavors
     (order.orderItems||[]).forEach(oi=>{
       const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
-      const qty=(oi.qty||1)*labelToQty(oi.label);
+      const qty=Math.max(oi.qty||1,labelToQty(oi.label));
       const cat=oi.cat||'';
       let realCat=cat;
       if(cat&&!inv[cat]){const match=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(match)realCat=match;}
@@ -5115,7 +5115,7 @@ function doReverseConfirmed(fbKey) {
   const orderItems = logEntry ? logEntry.orderItems : [];
   orderItems.forEach(oi => {
     const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
-    const qty = (oi.qty||1)*labelToQty(oi.label);
+    const qty = Math.max(oi.qty||1,labelToQty(oi.label));
     const cat = oi.cat || '';
 
     let realCat = cat;
@@ -5148,7 +5148,7 @@ function doReverseConfirmed(fbKey) {
     // No log entry found — create adjustment entries so repairStock doesn't re-deduct
     orderItems.forEach(oi => {
       const itemName = (oi.itemName||oi.name||'').toLowerCase().trim();
-      const qty = (oi.qty||1)*labelToQty(oi.label);
+      const qty = Math.max(oi.qty||1,labelToQty(oi.label));
       if (!itemName || !qty) return;
       log.unshift({type:'adjustment',name:itemName,amount:qty,direction:'add',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'Confirmed order reversed (no log match)'});
     });
@@ -5270,7 +5270,7 @@ function clearConfirmedOrders(){
       // ALWAYS restore stock when clearing confirmed orders
       (e.orderItems||[]).forEach(oi=>{
         const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
-        const qty=(oi.qty||1)*labelToQty(oi.label);
+        const qty=Math.max(oi.qty||1,labelToQty(oi.label));
         const cat=oi.cat||'';
         let realCat=cat;
         if(cat&&!inv[cat]){const match=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(match)realCat=match;}
