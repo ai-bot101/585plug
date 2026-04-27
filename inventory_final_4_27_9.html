@@ -1437,9 +1437,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v45';
-const _BUILD_TS=1777269732188; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v45]';},1000);
+const _APP_VERSION='deploy-v46';
+const _BUILD_TS=1777270817394; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v46]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -1533,13 +1533,12 @@ function _restoreFlavorStock(foundItem,oi,qty){
     });
   }else if(oi.flavorText){
     const fl=foundItem.flavors.find(f=>f.name&&f.name.toLowerCase()===oi.flavorText.toLowerCase());
-    if(fl)fl.stock=Math.round((fl.stock||0)+1); // 1 physical unit, not gram weight
+    if(fl)fl.stock=Math.round((fl.stock||0)+qty);
   }
 }
 // Helper: deduct flavor stock for an order item from the found inventory item
 function _deductFlavorStock(foundItem,oi,qty){
   if(!foundItem||!Array.isArray(foundItem.flavors))return;
-  // Flavors are physical units — always deduct by 1 per item, not by gram weight
   if(oi.flavors&&typeof oi.flavors==='object'){
     Object.entries(oi.flavors).forEach(([fname,fqty])=>{
       if(fqty<=0)return;
@@ -1548,7 +1547,7 @@ function _deductFlavorStock(foundItem,oi,qty){
     });
   }else if(oi.flavorText){
     const fl=foundItem.flavors.find(f=>f.name&&f.name.toLowerCase()===oi.flavorText.toLowerCase());
-    if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-1)); // 1 physical unit, not gram weight
+    if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-qty));
   }
 }
 function uIdx(name){return cfg.users.findIndex(u=>u.name===name);}
@@ -2290,6 +2289,11 @@ function renderOrdItems(){const list=document.getElementById('order-items-list')
 function updOQ(i,v){
   const newQty=parseFloat(v)||0;
   orderItems[i].qty=newQty;
+  // Keep flavors object in sync for single-flavor items
+  if(orderItems[i].flavors&&typeof orderItems[i].flavors==='object'){
+    const fkeys=Object.keys(orderItems[i].flavors);
+    if(fkeys.length===1)orderItems[i].flavors[fkeys[0]]=newQty;
+  }
   // Update label to match the new qty so EOD log shows the right amount
   const item=(inv[orderItems[i].cat]||[])[orderItems[i].ri];
   if(item){
@@ -2419,7 +2423,7 @@ function confirmOrder(){
           });
         }else if(flavorText&&Array.isArray(item.flavors)){
           const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===flavorText.toLowerCase());
-          if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-1));
+          if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-qty));
         }
       });
     }catch(stockErr){console.error('Stock deduction error (order still saved):',stockErr);}
@@ -2473,7 +2477,7 @@ function confirmOrder(){
         });
       } else if(flavorText){
         const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===flavorText.toLowerCase());
-        if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-1));
+        if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-qty));
       }
     }
   });
@@ -3610,7 +3614,7 @@ async function deleteSelfbuy(idx){
             });
           } else if(it.flavorText){
             const fl=found.flavors.find(f=>f.name&&f.name.toLowerCase()===it.flavorText.toLowerCase());
-            if(fl)fl.stock=(fl.stock||0)+1; // 1 physical unit
+            if(fl)fl.stock=Math.round((fl.stock||0)+(it.qty||1));
           }
         }
         break;
@@ -3651,7 +3655,7 @@ async function deleteLogEntry(idx) {
                 });
               } else if (oi.flavorText && oi.flavorText.indexOf(',') === -1) {
                 const fl = found.flavors.find(f => f.name && f.name.toLowerCase() === oi.flavorText.toLowerCase());
-                if (fl) fl.stock = (fl.stock||0) + 1; // 1 physical unit, not gram weight
+                if (fl) fl.stock = Math.round((fl.stock||0) + (oi.qty||1));
               }
             }
             break;
@@ -4973,7 +4977,7 @@ function finalizeConfirmOrder(fbKey, assignedTo){
           });
         } else if (oi.flavorText) {
           const fl = foundItem.flavors.find(f => f.name && f.name.toLowerCase() === oi.flavorText.toLowerCase());
-          if (fl) fl.stock = Math.max(0, (fl.stock||0) - 1);
+          if (fl) fl.stock = Math.max(0, Math.round((fl.stock||0) - (oi.qty||1)));
         }
       }
     });
@@ -5164,8 +5168,7 @@ function doReverseConfirmed(fbKey) {
       if (found) { found.left = Math.round((gl(found) + qty)*10)/10; foundItem = found; }
     }
     // Restore flavor stock — handle both object format (website) and string format (manual)
-    // NOTE: flavors are physical UNITS (count), not weight — always restore by pick count, not labelToQty
-    _restoreFlavorStock(foundItem, oi, 1);
+    _restoreFlavorStock(foundItem, oi, oi.qty||1);
   });
 
   // Remove from sales log
