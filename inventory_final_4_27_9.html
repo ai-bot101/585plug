@@ -1437,9 +1437,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v39';
-const _BUILD_TS=1777132378743; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v39]';},1000);
+const _APP_VERSION='deploy-v41';
+const _BUILD_TS=1777267065284; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v41]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -4416,7 +4416,25 @@ let _openPayPickers=new Set(); // track which pending order pay pickers are open
 // This gives INSTANT updates the moment any device changes anything
 
 // ── WEBSITE ORDER AUTO-IMPORT ──
-let processedOrderIds = new Set(); // tracks locally confirmed/cancelled fbKeys so SSE can't re-add them
+// Persistent Set — survives page refreshes so cancelled/confirmed orders can't zombie back
+const _POI_KEY='_processedOrderIds';
+const _POI_TTL=24*60*60*1000; // expire entries after 24 hours
+const processedOrderIds=(function(){
+  let _map={};
+  try{_map=JSON.parse(localStorage.getItem(_POI_KEY)||'{}');}catch(e){_map={};}
+  // Prune expired entries on load
+  const now=Date.now();
+  let pruned=false;
+  Object.keys(_map).forEach(k=>{if(now-_map[k]>_POI_TTL){delete _map[k];pruned=true;}});
+  if(pruned)try{localStorage.setItem(_POI_KEY,JSON.stringify(_map));}catch(e){}
+  function _save(){try{localStorage.setItem(_POI_KEY,JSON.stringify(_map));}catch(e){}}
+  return{
+    has(k){return !!_map[k];},
+    add(k){_map[k]=Date.now();_save();},
+    delete(k){delete _map[k];_save();},
+    clear(){_map={};_save();}
+  };
+})();
 
 function processWebsiteOrders(pendingOrders) {
   if (!pendingOrders || typeof pendingOrders !== 'object') return;
