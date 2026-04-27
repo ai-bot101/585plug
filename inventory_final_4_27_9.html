@@ -1437,9 +1437,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v41';
-const _BUILD_TS=1777267065284; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v41]';},1000);
+const _APP_VERSION='deploy-v42';
+const _BUILD_TS=1777267582761; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v42]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2791,22 +2791,14 @@ function syncStockToEOD(e){
       const correctLeft=Math.round(Math.max(0,item.bought-totalSold)*10)/10;
       const currentLeft=gl(item);
       item.left=correctLeft;
-      // Sync flavor stock using per-flavor sold data (not proportional scaling)
+      // Sync flavor stock — ONLY if f.bought was explicitly set (user saved the item)
+      // Old EOD logs don't have per-flavor data, so backfilling is unreliable
       if(Array.isArray(item.flavors)){
         const fSoldData=flavorSoldMap[key]||{};
         const hasFlavorSales=Object.keys(fSoldData).length>0;
-        // Backfill f.bought for existing flavors that don't have it
-        item.flavors.forEach(f=>{
-          if(!f.name)return;
-          if(!f.bought&&f.bought!==0){
-            // Estimate initial: current stock + what was sold of this flavor
-            const fkey=f.name.toLowerCase();
-            const sold=fSoldData[fkey]||0;
-            f.bought=(f.stock||0)+sold;
-          }
-        });
-        if(hasFlavorSales){
-          // Rebuild each flavor: bought - sold = correct stock
+        const allHaveBought=item.flavors.every(f=>!f.name||f.bought||f.bought===0);
+        if(hasFlavorSales&&allHaveBought){
+          // All flavors have reliable bought baselines — rebuild accurately
           item.flavors.forEach(f=>{
             if(!f.name)return;
             const fkey=f.name.toLowerCase();
@@ -2814,6 +2806,7 @@ function syncStockToEOD(e){
             f.stock=Math.max(0,Math.round((f.bought||0)-sold));
           });
         }
+        // else: don't touch flavors — real-time deductions keep them accurate
         // If total flavor stock doesn't match item left, adjust proportionally as fallback
         const totalFlavorNow=item.flavors.reduce((s,f)=>s+(f.stock||0),0);
         if(totalFlavorNow===0&&correctLeft>0){
