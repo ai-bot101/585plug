@@ -1437,9 +1437,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v42';
-const _BUILD_TS=1777267582761; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v42]';},1000);
+const _APP_VERSION='deploy-v44';
+const _BUILD_TS=1777268582802; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v44]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2955,10 +2955,10 @@ const uid='le_'+e.timestamp;
 if(e.type==='selfbuy'){
   const pc=isV(e.payMethod)?'virt':'cash';
   const sbIdx=log.indexOf(e);
-  const ois=(e.items||[]).map(o=>`${fmt(o.qty)}x ${o.itemName} (${fmtP(o.cost)})`).join(', ');
+  const ois=(e.items||[]).map(o=>`${fmt(o.qty)}x ${o.itemName}${o.flavorText?' 🍬 '+o.flavorText:''} (${fmtP(o.cost)})`).join(', ');
   const sbEditBtn=cu?.role==='owner'?`<button onclick="event.stopPropagation();openEditSelfbuy(${sbIdx})" style="background:rgba(108,99,255,0.08);border:1px solid rgba(108,99,255,0.2);border-radius:6px;padding:3px 8px;color:var(--accent);font-size:10px;cursor:pointer;font-family:var(--sans);margin-top:4px;">✏️ Edit</button>`:'';
   const sbDelBtn=cu?.role==='owner'?`<button onclick="event.stopPropagation();deleteSelfbuy(${sbIdx})" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:6px;padding:3px 8px;color:var(--red);font-size:10px;cursor:pointer;font-family:var(--sans);margin-top:4px;">🗑️ Delete</button>`:'';
-  const expand=`<div class="ae-expand"><div class="ex-row"><span class="ex-label">Sold By</span><span class="ex-val">${e.who}</span></div><div class="ex-row"><span class="ex-label">Payment</span><span class="ex-val">${e.payMethodLabel||'Cash'}</span></div><div class="ex-row"><span class="ex-label">Total</span><span class="ex-val">${fmtP(e.totalOwed||0)}</span></div><div class="ex-row"><span class="ex-label">Time</span><span class="ex-val">${e.date} ${e.time||''}</span></div><div class="ex-items"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Items:</div>${(e.items||[]).map(o=>`<div class="ex-item">${fmt(o.qty)}x ${o.itemName} — ${fmtP(o.cost)}</div>`).join('')}</div></div>`;
+  const expand=`<div class="ae-expand"><div class="ex-row"><span class="ex-label">Sold By</span><span class="ex-val">${e.who}</span></div><div class="ex-row"><span class="ex-label">Payment</span><span class="ex-val">${e.payMethodLabel||'Cash'}</span></div><div class="ex-row"><span class="ex-label">Total</span><span class="ex-val">${fmtP(e.totalOwed||0)}</span></div><div class="ex-row"><span class="ex-label">Time</span><span class="ex-val">${e.date} ${e.time||''}</span></div><div class="ex-items"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Items:</div>${(e.items||[]).map(o=>`<div class="ex-item">${fmt(o.qty)}x ${o.itemName}${o.flavorText?' <span style="color:var(--accent);font-size:11px;">🍬 '+o.flavorText+'</span>':''} — ${fmtP(o.cost)}</div>`).join('')}</div></div>`;
   return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot" style="background:var(--orange)"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.who} — self purchase</span></div><div class="ae-oi">${ois}</div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${expand}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.totalOwed||0)}</span></div>${sbEditBtn}${sbDelBtn}</div></div>`;
 }
 if(e.type==='order'){const pc=(isV(e.payMethod)||e.payMethod==='split')?'virt':'cash';const ois=(e.orderItems||[]).map(o=>`${fmt(o.qty)}x ${o.itemName}${o.flavorText?' 🍬 '+o.flavorText:''}${o.label?' ('+o.label+')':''}`).join(', ');const creditBadge=e.creditApplied>0?`<span style="font-size:10px;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.25);border-radius:5px;padding:1px 6px;color:var(--green);font-family:var(--mono);">-${fmtP(e.creditApplied)} credit</span>`:'';
@@ -7427,7 +7427,7 @@ function viewEODLog(i,filterPerson){
       ${filtered.map((o,fi)=>{
         // find the real index in allOrders for edit button
         const oi=allOrders.indexOf(o);
-        const items=(o.items||[]).map(it=>{const q=Math.max(it.qty||1,labelToQty(it.label));return`${fmt(q)}x ${it.itemName}`;}).join(', ');
+        const items=(o.items||[]).map(it=>{const q=Math.max(it.qty||1,labelToQty(it.label));const _ft=it.flavorText||(it.flavors?Object.keys(it.flavors).join(', '):'');return`${fmt(q)}x ${it.itemName}${_ft?' 🍬 '+_ft:''}`;}).join(', ');
         return`<div style="padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="var d=this.querySelector('.eod-detail');if(d)d.style.display=d.style.display==='block'?'none':'block';">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -7453,7 +7453,7 @@ function viewEODLog(i,filterPerson){
             </div>
             ${(o.items||[]).length?`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
               <div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-family:var(--mono);">ITEMS</div>
-              ${(o.items||[]).map(it=>{const q=Math.max(it.qty||1,labelToQty(it.label));return`<div style="font-size:14px;color:var(--text);padding:4px 0;font-family:var(--mono);">${fmt(q)}x ${it.itemName}</div>`;}).join('')}
+              ${(o.items||[]).map(it=>{const q=Math.max(it.qty||1,labelToQty(it.label));const _ft=it.flavorText||(it.flavors?Object.keys(it.flavors).join(', '):'');return`<div style="font-size:14px;color:var(--text);padding:4px 0;font-family:var(--mono);">${fmt(q)}x ${it.itemName}${_ft?' <span style="color:var(--accent);font-size:12px;">🍬 '+_ft+'</span>':''}</div>`;}).join('')}
             </div>`:''}
             <div style="display:flex;gap:8px;margin-top:12px;">
               <button onclick="event.stopPropagation();openEditEODOrder(${i},${oi})" style="flex:1;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:8px;padding:10px;color:var(--accent);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;">✏️ Edit</button>
