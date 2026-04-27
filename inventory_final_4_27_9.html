@@ -1437,9 +1437,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v44';
-const _BUILD_TS=1777268582802; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v44]';},1000);
+const _APP_VERSION='deploy-v45';
+const _BUILD_TS=1777269732188; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v45]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -4042,23 +4042,29 @@ function renderFlavors(prefix) {
     return;
   }
   container.innerHTML = flavors.map((f, i) => `
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
       <input type="text" value="${f.name||''}" placeholder="e.g. Strawberry, Blueberry..."
         onchange="updateFlavor('${prefix}',${i},'name',this.value)"
-        style="flex:2;min-width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;">
-      <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;flex:1;min-width:70px;">
-        <span style="color:var(--orange);font-family:var(--mono);font-size:11px;margin-right:4px;">QTY</span>
+        style="flex:2;min-width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;">
+      <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 8px;min-width:65px;">
+        <span style="color:var(--accent);font-family:var(--mono);font-size:9px;margin-right:3px;white-space:nowrap;">BGT</span>
+        <input type="number" value="${f.bought||''}" placeholder="0" min="0" step="1"
+          onchange="updateFlavor('${prefix}',${i},'bought',this.value)"
+          style="width:45px;background:transparent;border:none;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;">
+      </div>
+      <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 8px;min-width:65px;">
+        <span style="color:var(--orange);font-family:var(--mono);font-size:9px;margin-right:3px;white-space:nowrap;">LEFT</span>
         <input type="number" value="${f.stock||''}" placeholder="0" min="0" step="1"
           onchange="updateFlavor('${prefix}',${i},'stock',this.value)"
-          style="width:100%;background:transparent;border:none;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;">
+          style="width:45px;background:transparent;border:none;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;">
       </div>
-      <button onclick="removeFlavor('${prefix}',${i})" style="background:rgba(244,107,107,0.1);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:9px 12px;color:var(--red);font-size:14px;cursor:pointer;flex-shrink:0;">✕</button>
+      <button onclick="removeFlavor('${prefix}',${i})" style="background:rgba(244,107,107,0.1);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:9px 10px;color:var(--red);font-size:14px;cursor:pointer;flex-shrink:0;">✕</button>
     </div>`).join('');
 }
 
 function addFlavor(prefix) {
-  if (prefix === 'm') mFlavors.push({name:'', stock:0});
-  else emFlavors.push({name:'', stock:0});
+  if (prefix === 'm') mFlavors.push({name:'', stock:0, bought:0});
+  else emFlavors.push({name:'', stock:0, bought:0});
   renderFlavors(prefix);
   const container = document.getElementById(prefix + '-flavors');
   const inputs = container.querySelectorAll('input[type="text"]');
@@ -4073,16 +4079,14 @@ function removeFlavor(prefix, idx) {
 
 function updateFlavor(prefix, idx, field, val) {
   const flavors = prefix === 'm' ? mFlavors : emFlavors;
-  if (flavors[idx]) flavors[idx][field] = field === 'stock' ? (parseInt(val)||0) : val;
+  if (flavors[idx]) flavors[idx][field] = (field === 'stock' || field === 'bought') ? (parseInt(val)||0) : val;
 }
 
 function getFlavors(prefix) {
   const flavors = prefix === 'm' ? mFlavors : emFlavors;
   return flavors.filter(f => f.name && f.name.trim()).map(f => {
     const stock = parseInt(f.stock)||0;
-    // If user changed the stock value, that's the new 'bought' baseline
-    // If stock matches bought (unchanged), keep the original bought
-    const bought = (f.bought && stock === (parseInt(f.bought)||0)) ? f.bought : stock;
+    const bought = parseInt(f.bought)||stock;
     return {name: f.name.trim(), stock, bought};
   });
 }
