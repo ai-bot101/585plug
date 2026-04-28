@@ -1437,9 +1437,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v48';
-const _BUILD_TS=1777384578751; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v48]';},1000);
+const _APP_VERSION='deploy-v49';
+const _BUILD_TS=1777391724272; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v49]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -3969,18 +3969,22 @@ function renderPriceTiers(prefix) {
     return;
   }
   container.innerHTML = tiers.map((t, i) => `
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+      <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;">
+        <button onclick="movePriceTier('${prefix}',${i},-1)" style="background:${i===0?'var(--bg3)':'rgba(108,99,255,0.1)'};border:1px solid ${i===0?'var(--border)':'rgba(108,99,255,0.25)'};border-radius:5px;padding:2px 6px;color:${i===0?'var(--text3)':'var(--accent)'};font-size:11px;cursor:${i===0?'default':'pointer'};line-height:1;"${i===0?' disabled':''}>▲</button>
+        <button onclick="movePriceTier('${prefix}',${i},1)" style="background:${i===tiers.length-1?'var(--bg3)':'rgba(108,99,255,0.1)'};border:1px solid ${i===tiers.length-1?'var(--border)':'rgba(108,99,255,0.25)'};border-radius:5px;padding:2px 6px;color:${i===tiers.length-1?'var(--text3)':'var(--accent)'};font-size:11px;cursor:${i===tiers.length-1?'default':'pointer'};line-height:1;"${i===tiers.length-1?' disabled':''}>▼</button>
+      </div>
       <input type="text" value="${t.label}" placeholder="e.g. Eighth, 1 for, Gram..."
         onchange="updatePriceTier('${prefix}',${i},'label',this.value)"
-        style="flex:2;min-width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;">
-      <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;flex:1;min-width:70px;">
+        style="flex:2;min-width:80px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;">
+      <div style="display:flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 10px;flex:1;min-width:65px;">
         <span style="color:var(--green);font-family:var(--mono);font-size:13px;margin-right:4px;">$</span>
         <input type="number" value="${t.price||''}" placeholder="0" min="0" step="1"
           onchange="updatePriceTier('${prefix}',${i},'price',this.value)"
           style="width:100%;background:transparent;border:none;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;">
       </div>
       <button onclick="toggleAddOn('${prefix}',${i})" style="background:${t.addOnOnly?'rgba(108,99,255,0.15)':'var(--bg3)'};border:${t.addOnOnly?'2px solid var(--accent)':'1px solid var(--border)'};border-radius:8px;padding:7px 10px;color:${t.addOnOnly?'var(--accent)':'var(--text3)'};font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;font-family:var(--sans);white-space:nowrap;" title="Add-On Only — this price only available when added to an order with other items">🔗${t.addOnOnly?' ON':''}</button>
-      <button onclick="removePriceTier('${prefix}',${i})" style="background:rgba(244,107,107,0.1);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:9px 12px;color:var(--red);font-size:14px;cursor:pointer;flex-shrink:0;">✕</button>
+      <button onclick="removePriceTier('${prefix}',${i})" style="background:rgba(244,107,107,0.1);border:1px solid rgba(244,107,107,0.2);border-radius:8px;padding:9px 10px;color:var(--red);font-size:14px;cursor:pointer;flex-shrink:0;">✕</button>
     </div>`).join('');
 }
 
@@ -3992,6 +3996,16 @@ function addPriceTier(prefix) {
   const container = document.getElementById(prefix + '-price-tiers');
   const inputs = container.querySelectorAll('input[type="text"]');
   if (inputs.length) inputs[inputs.length-1].focus();
+}
+
+function movePriceTier(prefix, idx, dir) {
+  const tiers = prefix === 'm' ? mPriceTiers : emPriceTiers;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= tiers.length) return;
+  const tmp = tiers[idx];
+  tiers[idx] = tiers[newIdx];
+  tiers[newIdx] = tmp;
+  renderPriceTiers(prefix);
 }
 
 function removePriceTier(prefix, idx) {
