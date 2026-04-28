@@ -1437,9 +1437,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v46';
-const _BUILD_TS=1777270817394; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v46]';},1000);
+const _APP_VERSION='deploy-v47';
+const _BUILD_TS=1777357639852; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v47]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -5879,6 +5879,7 @@ function fbPoll(){
 
 
 let fbPushInFlight=false; // true while a push is actively sending to Firebase
+let _lastLoadTime=Date.now(); // tracks when this device loaded — used for nuke detection
 async function fbPullNow(){
   // Skip pull if there's a pending or in-flight push — prevents overwriting unsaved edits
   if(fbPushTimer||fbPushInFlight){return;}
@@ -5894,49 +5895,54 @@ async function fbPullNow(){
       // to prevent race condition where newly added items get wiped by stale Firebase data
       if(fbPushTimer||fbPushInFlight){return;}
       fbLastTimestamp=data.updatedAt;
+      // If a nuke happened on another device, accept it fully — skip all PROTECT logic
+      const wasNuked=data._nukeAt&&data._nukeAt>(_lastLoadTime||0);
+      if(wasNuked){
+        _lastLoadTime=data._nukeAt;
+        console.log('[PULL] Nuke detected from another device — accepting full wipe');
+      }
       // always overwrite ALL fields so resets/clears propagate to all devices
       inv=data.inv||{};C().forEach(c=>{if(!inv[c])inv[c]=[];});
       // PROTECT locally-confirmed orders from being lost during log overwrite
       // If we confirmed an order locally but our push hasn't reached Firebase yet,
       // the incoming log won't have the entry — merge it back in
       const incomingLog=Array.isArray(data.log)?data.log:[];
-      const localConfirmed=log.filter(e=>e.webOrderKey&&processedOrderIds.has(e.webOrderKey));
-      const missingFromIncoming=localConfirmed.filter(lc=>!incomingLog.some(il=>il.webOrderKey===lc.webOrderKey));
-      if(missingFromIncoming.length>0){
-        _debugOverlayLog('[PROTECT] Preserved '+missingFromIncoming.length+' locally-confirmed orders from log overwrite: '+missingFromIncoming.map(e=>(e.webOrderKey||'').substr(0,18)).join(', '));
-        incomingLog.unshift(...missingFromIncoming);
-      }
-      // PROTECT recent local entries (selfbuys, sales, adjustments) that haven't synced yet
-      // If an entry exists locally but not in incoming, and it was created in the last 30 seconds,
-      // it means our push hasn't reached Firebase yet — preserve it
-      const RECENT_WINDOW=30000; // 30 seconds
-      const now=Date.now();
-      const recentLocal=log.filter(e=>{
-        if(!e.timestamp||now-e.timestamp>RECENT_WINDOW)return false;
-        // Check if this entry exists in incoming log (match by timestamp + who + type)
-        return !incomingLog.some(il=>il.timestamp===e.timestamp&&il.who===e.who&&il.type===e.type);
-      });
-      if(recentLocal.length>0){
-        _debugOverlayLog('[PROTECT] Preserved '+recentLocal.length+' recent local entries: '+recentLocal.map(e=>e.type).join(', '));
-        incomingLog.unshift(...recentLocal);
-      }
-      // PROTECT _cleared flags: if local log has _cleared=true on entries,
-      // carry those flags over to the incoming log so EOD dedup still works
-      const clearedSet=new Set();
-      log.forEach(e=>{
-        if(e._cleared){
-          const fp=(e.time||'')+'|'+(e.who||'')+'|'+(e.amtReceived||e.total||0)+'|'+(e.date||'');
-          clearedSet.add(fp);
+      // Skip all PROTECT logic if a nuke was detected — accept the wipe fully
+      if(!wasNuked){
+        const localConfirmed=log.filter(e=>e.webOrderKey&&processedOrderIds.has(e.webOrderKey));
+        const missingFromIncoming=localConfirmed.filter(lc=>!incomingLog.some(il=>il.webOrderKey===lc.webOrderKey));
+        if(missingFromIncoming.length>0){
+          _debugOverlayLog('[PROTECT] Preserved '+missingFromIncoming.length+' locally-confirmed orders from log overwrite: '+missingFromIncoming.map(e=>(e.webOrderKey||'').substr(0,18)).join(', '));
+          incomingLog.unshift(...missingFromIncoming);
         }
-      });
-      if(clearedSet.size>0){
-        incomingLog.forEach(e=>{
-          const fp=(e.time||'')+'|'+(e.who||'')+'|'+(e.amtReceived||e.total||0)+'|'+(e.date||'');
-          if(clearedSet.has(fp))e._cleared=true;
+        // PROTECT recent local entries (selfbuys, sales, adjustments) that haven't synced yet
+        const RECENT_WINDOW=30000;
+        const now=Date.now();
+        const recentLocal=log.filter(e=>{
+          if(!e.timestamp||now-e.timestamp>RECENT_WINDOW)return false;
+          return !incomingLog.some(il=>il.timestamp===e.timestamp&&il.who===e.who&&il.type===e.type);
         });
+        if(recentLocal.length>0){
+          _debugOverlayLog('[PROTECT] Preserved '+recentLocal.length+' recent local entries: '+recentLocal.map(e=>e.type).join(', '));
+          incomingLog.unshift(...recentLocal);
+        }
+        // PROTECT _cleared flags
+        const clearedSet=new Set();
+        log.forEach(e=>{
+          if(e._cleared){
+            const fp=(e.time||'')+'|'+(e.who||'')+'|'+(e.amtReceived||e.total||0)+'|'+(e.date||'');
+            clearedSet.add(fp);
+          }
+        });
+        if(clearedSet.size>0){
+          incomingLog.forEach(e=>{
+            const fp=(e.time||'')+'|'+(e.who||'')+'|'+(e.amtReceived||e.total||0)+'|'+(e.date||'');
+            if(clearedSet.has(fp))e._cleared=true;
+          });
+        }
       }
       // Filter out any entries we intentionally deleted locally (push may still be in-flight)
-      if(_deletedLogKeys.size>0){
+      if(_deletedLogKeys.size>0&&!wasNuked){
         const before=incomingLog.length;
         const filtered=incomingLog.filter(e=>{
           if(!e||!e.timestamp)return true;
@@ -5999,7 +6005,21 @@ function fbPush(){
       // any entries we don't have locally before pushing.
       // SKIP merge entirely during a full nuke — we WANT to overwrite Firebase with empty log
       if(_nukeInProgress){_nukeInProgress=false;}
-      else try{
+      else{
+        // Check if another device nuked — if so, don't push our stale data
+        try{
+          const nukeCheck=await fetch(FB_URL+'/_nukeAt.json');
+          if(nukeCheck.ok){
+            const remoteNuke=await nukeCheck.json();
+            if(remoteNuke&&remoteNuke>_lastLoadTime){
+              console.log('[PUSH] Aborted — another device wiped data. Pulling fresh data instead.');
+              fbPushTimer=null;fbPushInFlight=false;
+              _lastLoadTime=Date.now();
+              fbPullNow();return;
+            }
+          }
+        }catch(e){}
+        try{
         const mergeRes=await fetch(FB_URL+'/log.json');
         if(mergeRes.ok){
           const fbLog=await mergeRes.json();
@@ -6020,6 +6040,7 @@ function fbPush(){
           }
         }
       }catch(mergeErr){console.warn('[MERGE-PUSH] Could not fetch Firebase log for merge:',mergeErr);}
+      } // end else (not nuke)
 
       // Use PATCH to update only inventory data — NEVER touch pending_orders
       // This prevents a race condition where PUT overwrites orders that arrived
@@ -7600,6 +7621,7 @@ function doReset(type){
     // Wipe ALL data EXCEPT inventory items — keeps names, prices, stock, flavors
     _nukeInProgress=true; // skip merge-before-push so Firebase doesn't re-add old logs
     fbPushInFlight=true; // block fbPull from overwriting during debounce window
+    if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;} // cancel any pending push
     log=[];
     eodLogs=[];
     staffBuyLogs=[];
@@ -7608,27 +7630,49 @@ function doReset(type){
     vipCustomers={};
     customerDeals={};
     dayNotes={};
-    _deletedLogKeys.clear(); // not needed — nuke flag handles it
+    _deletedLogKeys.clear();
     // Reset inventory: left = bought (no sales = nothing sold)
     C().forEach(cat=>{
       (inv[cat]||[]).forEach(item=>{
         if(item.bought)item.left=item.bought;
-        // Reset flavor stock too
         if(Array.isArray(item.flavors)){
           item.flavors.forEach(f=>{if(f.bought)f.stock=f.bought;});
         }
       });
     });
-    // Also clear all pending/confirmed web orders from Firebase
-    Object.keys(pendingWebOrders).forEach(fbKey=>{
-      fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
-    });
     pendingWebOrders={};
     processedOrderIds.clear();
-    // Nuke the entire pending_orders node in Firebase to kill ghost orders
-    fetch(FB_URL+'/pending_orders.json',{method:'DELETE'}).catch(()=>{});
-    persist();renderAll();closeOv('reset-modal');
-    showToast('All logs & data wiped — stock reset ✅','ok');
+    // Save locally first
+    persistEncrypted().catch(()=>{});
+    // Push IMMEDIATELY to Firebase — no debounce, await completion
+    // This prevents other devices from pushing stale data back
+    const _nukeTs=Date.now();
+    const nukePayload={
+      inv,log:[],cfg,
+      customerCredits:{},vipCustomers:{},customerDeals:{},dayNotes:{},
+      eodLogs:[],staffBuyLogs:[],failedAttempts,loginLog,cashRecons,
+      cancelledOrders:[],staffDebts,commissionPaused,autoDailyDebts:{},
+      updatedAt:_nukeTs,
+      _nukeAt:_nukeTs // signal to other devices: this was a wipe
+    };
+    fbLastTimestamp=_nukeTs;
+    // Fire all cleanup requests in parallel — don't wait for each
+    Promise.all([
+      fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(nukePayload)}),
+      fetch(FB_URL+'/pending_orders.json',{method:'DELETE'})
+    ]).then(()=>{
+      _nukeInProgress=false;
+      fbPushInFlight=false;
+      document.getElementById('sdot').className='sdot ok';
+      document.getElementById('slabel').textContent='Live — '+tstr();
+      showToast('All logs & data wiped — synced to all devices ✅','ok');
+    }).catch(()=>{
+      _nukeInProgress=false;
+      fbPushInFlight=false;
+      showToast('Wiped locally but Firebase sync failed — try again','err');
+    });
+    renderAll();closeOv('reset-modal');
+    showToast('Wiping & syncing to Firebase...','ok');
   }
 }
 
