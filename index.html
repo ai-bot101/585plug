@@ -1052,6 +1052,23 @@ async function _restoreCustSession(){
   }catch(e){}
 }
 
+// Live-sync customer data every 10s so loyalty updates without reload
+setInterval(async()=>{
+  if(!_custUser||!_custUser.username)return;
+  try{
+    const res=await fetch(FB_URL+'/inv_d6bb4_test/customers/'+_custUser.username+'.json');
+    if(res.ok){
+      const data=await res.json();
+      if(data){
+        _custUser=data;
+        // If cart is open, re-render loyalty bar
+        const cartOverlay=document.querySelector('.cart-overlay.open');
+        if(cartOverlay)_renderLoyaltyInCart();
+      }
+    }
+  }catch(e){}
+},10000);
+
 function _getLoyaltyProgress(){
   if(!_custUser)return{count:0,progress:0,isGiftOrder:false};
   const count=_custUser.orderCount||0;
