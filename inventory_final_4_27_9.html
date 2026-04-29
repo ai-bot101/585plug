@@ -8696,10 +8696,21 @@ function uploadLoyaltyGift(){document.getElementById('loyalty-gift-file').click(
 async function handleLoyaltyGiftUpload(input){
   if(!input.files||!input.files[0])return;
   const file=input.files[0];
-  if(file.size>2*1024*1024){showToast('Image too large (max 2MB)','err');return;}
-  const reader=new FileReader();
-  reader.onload=async function(e){
-    const dataUrl=e.target.result;
+  if(file.size>20*1024*1024){showToast('Image too large (max 20MB)','err');return;}
+  showToast('Compressing image...','');
+  const img=new Image();
+  img.onload=async function(){
+    const maxW=800,maxH=800;
+    let w=img.width,h=img.height;
+    if(w>maxW||h>maxH){
+      const scale=Math.min(maxW/w,maxH/h);
+      w=Math.round(w*scale);h=Math.round(h*scale);
+    }
+    const canvas=document.createElement('canvas');
+    canvas.width=w;canvas.height=h;
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(img,0,0,w,h);
+    const dataUrl=canvas.toDataURL('image/jpeg',0.7);
     try{
       await fetch(FB_URL+'/loyalty_gift.json',{
         method:'PUT',headers:{'Content-Type':'application/json'},
@@ -8709,7 +8720,8 @@ async function handleLoyaltyGiftUpload(input){
       _renderLoyaltyGiftPreview(dataUrl);
     }catch(err){showToast('Upload failed','err');}
   };
-  reader.readAsDataURL(file);
+  img.onerror=function(){showToast('Could not read image','err');};
+  img.src=URL.createObjectURL(file);
 }
 
 async function _loadLoyaltyGiftPreview(){
