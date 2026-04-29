@@ -5146,6 +5146,11 @@ function cancelWebOrder(fbKey) {
   delete pendingWebOrders[fbKey];
   processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
 
+  // Decrement customer loyalty count if this was a logged-in customer order
+  if(order.custUsername){
+    _decrementCustOrder(order.custUsername);
+  }
+
   // Mark cancelled in Firebase FIRST, then DELETE — double protection
   fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({cancelled:true})}).then(()=>{
@@ -5188,6 +5193,7 @@ function cancelAllPending(){
       }
       _restoreFlavorStock(foundItem,oi,qty);
     });
+    if(order.custUsername)_decrementCustOrder(order.custUsername);
     delete pendingWebOrders[fbKey];
     processedOrderIds.add(fbKey);
     fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
@@ -5281,6 +5287,10 @@ function doReverseConfirmed(fbKey) {
       log.unshift({type:'adjustment',name:itemName,amount:qty,direction:'add',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'Confirmed order reversed (no log match)'});
     });
   }
+
+  // Decrement customer loyalty count if this was a logged-in customer order
+  const _custUser4Cancel=logEntry?.custUsername||null;
+  if(_custUser4Cancel)_decrementCustOrder(_custUser4Cancel);
 
   // Delete from Firebase pending_orders
   fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
@@ -8644,6 +8654,24 @@ function confirmSelfBuy(){
 }
 
 // ── REGISTERED CUSTOMERS & LOYALTY GIFT ──
+async function _decrementCustOrder(username){
+  try{
+    const res=await fetch(FB_URL+'/customers/'+username+'.json');
+    if(!res.ok)return;
+    const data=await res.json();
+    if(!data)return;
+    const newCount=Math.max(0,(data.orderCount||0)-1);
+    // Also remove the most recent order from their history
+    const orders=Array.isArray(data.orders)?data.orders:[];
+    if(orders.length>0)orders.shift();
+    await fetch(FB_URL+'/customers/'+username+'.json',{
+      method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({orderCount:newCount,orders})
+    });
+    console.log('[LOYALTY] Decremented @'+username+' order count to '+newCount);
+  }catch(e){console.error('[LOYALTY] Failed to decrement customer order:',e);}
+}
+
 async function loadRegisteredCustomers(){
   const el=document.getElementById('reg-customers-list');
   if(!el)return;
