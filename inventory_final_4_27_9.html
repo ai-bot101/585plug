@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Calculator</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -331,7 +334,6 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
 </style>
 </head>
 <body>
-<div style="position:fixed;top:0;left:0;right:0;background:#ff6600;color:#fff;text-align:center;padding:4px;font-family:monospace;font-size:12px;font-weight:bold;z-index:99999;letter-spacing:2px;">⚠️ TEST MODE — NOT LIVE ⚠️</div>
 <div id="site-gate">
   <div class="gate-card">
     <div class="gate-logo">🔢</div>
@@ -516,27 +518,22 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       <div id="cancelled-orders-section" style="display:none;margin-bottom:14px;"></div>
     </div>
     <div id="cust-view" style="display:none">
-      <!-- LOYALTY GIFT IMAGE UPLOAD -->
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-          <div style="font-family:var(--mono);font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;">🎁 Loyalty Gift Image</div>
-          <button onclick="uploadLoyaltyGift()" style="background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.25);border-radius:8px;padding:6px 12px;color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);">Upload Image</button>
+      <!-- LOYALTY GIFT IMAGE -->
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-family:var(--head);font-size:13px;letter-spacing:1.5px;color:var(--text2);">LOYALTY GIFT IMAGE</div>
+          <button class="actionBtn" onclick="uploadLoyaltyGift()" style="font-size:11px;padding:6px 12px;">📷 Upload Image</button>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">This image shows in the customer's cart on every 5th order so they can pick a free gift.</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">This image shows to customers on their 5th order so they can pick a free gift</div>
         <div id="loyalty-gift-preview" style="text-align:center;"></div>
         <input type="file" id="loyalty-gift-file" accept="image/*" style="display:none;" onchange="handleLoyaltyGiftUpload(this)">
       </div>
       <!-- REGISTERED CUSTOMERS -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-        <div style="font-family:var(--mono);font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:1.5px;">Registered Customers</div>
-        <button onclick="loadRegisteredCustomers()" style="background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.25);border-radius:8px;padding:6px 12px;color:var(--green);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);">Refresh</button>
-      </div>
+      <div style="font-family:var(--head);font-size:13px;letter-spacing:1.5px;color:var(--text2);margin-bottom:10px;">REGISTERED CUSTOMERS</div>
       <div id="reg-customers-list"><div class="empty">Loading...</div></div>
-      <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px;">
-        <div style="font-family:var(--mono);font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Credit Search</div>
-        <div class="swrap"><span class="sico">&#x2315;</span><input type="text" placeholder="Search customer name..." oninput="searchCustomers(this.value)" id="cust-search"></div>
-        <div id="cust-results"><div class="empty">Type a customer name to search</div></div>
-      </div>
+      <div style="height:16px;"></div>
+      <div class="swrap"><span class="sico">&#x2315;</span><input type="text" placeholder="Search customer name..." oninput="searchCustomers(this.value)" id="cust-search"></div>
+      <div id="cust-results"><div class="empty">Type a customer name to search</div></div>
     </div>
   </div>
 </div>
@@ -1454,12 +1451,13 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='SYNC-FIX-v18';
-const _BUILD_TS=1713812400000;
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v13]';},1000);
+const _APP_VERSION='deploy-v52';
+const _BUILD_TS=1777471265027; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v52]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
+// Show "just updated" banner if we reloaded due to auto-update
 if(sessionStorage.getItem('_autoUpdated')){
   sessionStorage.removeItem('_autoUpdated');
   setTimeout(()=>{
@@ -1473,23 +1471,24 @@ if(sessionStorage.getItem('_autoUpdated')){
 
 // ── AUTO-UPDATE: check Firebase for new deploy version every 15s ──
 // Uses the same Firebase invVersion that deploy.sh pushes — bypasses Cloudflare cache entirely
-let _updateDetected=false;
+let _updateDetected=false; // prevent multiple reload triggers
 const _autoUpdateInterval=setInterval(async()=>{
-  if(_updateDetected)return;
+  if(_updateDetected)return; // already reloading, stop checking
   try{
     const r=await fetch(FB_URL+'/invVersion.json?t='+Date.now());
     if(!r.ok){_debugOverlayLog('[UPDATE] Firebase check failed: HTTP '+r.status);return;}
     const serverV=await r.json();
     _debugOverlayLog('[UPDATE] local='+_APP_VERSION+' server='+serverV);
     if(serverV&&serverV!==_APP_VERSION){
-      _updateDetected=true;
-      clearInterval(_autoUpdateInterval);
+      _updateDetected=true; // lock — no more checks
+      clearInterval(_autoUpdateInterval); // stop the interval entirely
       _debugOverlayLog('[UPDATE] ⚡ New version detected! Refreshing...');
       const b=document.createElement('div');
       b.style.cssText='position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,rgba(108,99,255,0.95),rgba(80,70,200,0.95));color:#fff;padding:14px;text-align:center;font-family:var(--sans);font-size:15px;font-weight:700;z-index:99999;letter-spacing:1px;';
       b.textContent='🔄 New update detected — refreshing...';
       document.body.appendChild(b);
       sessionStorage.setItem('_autoUpdated','1');
+      // Force bypass cache on reload
       setTimeout(()=>{window.location.href=location.pathname+'?_v='+Date.now();},1500);
     }
   }catch(e){_debugOverlayLog('[UPDATE] Error: '+e.message);}
@@ -1759,6 +1758,7 @@ async function tryLogin(){
           if(data.inv)inv=data.inv;
           C().forEach(c=>{if(!inv[c])inv[c]=[];});
           // PROTECT locally-confirmed orders from being lost during login sync
+          // Same logic as fbPullNow — merge back any confirmed orders that haven't synced yet
           const incomingLog=Array.isArray(data.log)?data.log:[];
           const localConfirmed=log.filter(e=>e.webOrderKey&&processedOrderIds.has(e.webOrderKey));
           const missingFromIncoming=localConfirmed.filter(lc=>!incomingLog.some(il=>il.webOrderKey===lc.webOrderKey));
@@ -1766,6 +1766,7 @@ async function tryLogin(){
             console.log('[LOGIN-PROTECT] Preserved '+missingFromIncoming.length+' locally-confirmed orders from login overwrite');
             incomingLog.unshift(...missingFromIncoming);
           }
+          // PROTECT recent local entries (selfbuys, sales) that may not have synced
           const _loginNow=Date.now();
           const recentLocal=log.filter(e=>{
             if(!e.timestamp||_loginNow-e.timestamp>30000)return false;
@@ -2646,7 +2647,7 @@ function _autoRepairStock(){
     (Array.isArray(order.orderItems)?order.orderItems:[]).forEach(oi=>{
       const name=(oi.itemName||oi.name||'').toLowerCase().trim();
       if(!name)return;
-      soldMap[name]=(soldMap[name]||0)+(Math.max(parseFloat(oi.qty)||1,labelToQty(oi.label)));
+      soldMap[name]=(soldMap[name]||0)+Math.max(parseFloat(oi.qty)||1,labelToQty(oi.label));
     });
   });
   // Compare and fix
@@ -2687,8 +2688,8 @@ function syncStockToEOD(e){
   for(let j=log.length-1;j>=0;j--){
     const entry=log[j];
     if(!entry||!entry.date)continue;
-    if(entry.date===today)continue;
-    if(eodDates.has(entry.date))continue;
+    if(entry.date===today)continue; // keep today's entries
+    if(eodDates.has(entry.date))continue; // day has EOD, keep it
     if(entry.type==='sell'||entry.type==='order'||entry.type==='selfbuy'){
       if(entry.timestamp)_deletedLogKeys.add(entry.timestamp+'|'+(entry.who||'')+'|'+(entry.type||''));
       log.splice(j,1);
@@ -2698,10 +2699,12 @@ function syncStockToEOD(e){
   if(orphansRemoved>0)console.log('[SYNC-EOD] Cleaned '+orphansRemoved+' orphaned log entries from days with no EOD log');
 
   if(!eodLogs.length&&orphansRemoved>0){
+    // No EOD logs at all — just reset stock to match bought and clean dashboard
     let resetCount=0;
     C().forEach(cat=>{
       (inv[cat]||[]).forEach(item=>{
         if(!item.name||!item.bought)return;
+        // Only reset if no pending orders hold stock for this item
         let pendingHeld=0;
         Object.values(pendingWebOrders||{}).forEach(order=>{
           (order.orderItems||[]).forEach(oi=>{
@@ -2935,7 +2938,7 @@ function clearTodaySales(e){
   showToast('Today sales cleared — revenue reset to $0','ok');
 }
 function renderCatTabs(){const allN=C().flatMap(c=>inv[c]||[]).length;document.getElementById('ctabs').innerHTML=`<div class="ctab ${activeCat==='ALL'?'active':''}" onclick="setCat('ALL')">ALL <span class="cnt">${allN}</span></div>`+C().map(c=>`<div class="ctab ${activeCat===c?'active':''}" onclick="setCat('${c}')">${c} <span class="cnt">${(inv[c]||[]).length}</span></div>`).join('');}
-function renderItems(){const area=document.getElementById('iarea'),own=cu?.role==='owner';const show2=activeCat==='ALL'?C():[activeCat];const mcat=document.getElementById('m-cat');if(mcat){const prev=mcat.value;mcat.innerHTML=C().map(c=>`<option value="${c}">${c}</option>`).join('');if(prev&&C().includes(prev))mcat.value=prev;}let html='';for(const cat of show2){let items=(inv[cat]||[]);if(srch)items=items.filter(i=>i.name.toLowerCase().includes(srch));if(!items.length&&!own)continue;html+=`<div class="sec-head"><h2>${cat}</h2><span class="cnt">${items.length}</span></div><div class="igrid">`;items.forEach(item=>{const ri=(inv[cat]||[]).indexOf(item);const left=gl(item),bought=item.bought||0,pct=gp(item);const so2=left===0&&bought>0,isLow=pct<=25&&pct>0&&bought>0,fc=pct<=10?'crit':pct<=25?'low':'';const prices=item.prices||[];const pa=''; // price pills removed// cost display for owner
+function renderItems(){const area=document.getElementById('iarea'),own=cu?.role==='owner';const show2=activeCat==='ALL'?C():[activeCat];const mcat=document.getElementById('m-cat');if(mcat)mcat.innerHTML=C().map(c=>`<option value="${c}">${c}</option>`).join('');let html='';for(const cat of show2){let items=(inv[cat]||[]);if(srch)items=items.filter(i=>i.name.toLowerCase().includes(srch));if(!items.length&&!own)continue;html+=`<div class="sec-head"><h2>${cat}</h2><span class="cnt">${items.length}</span></div><div class="igrid">`;items.forEach(item=>{const ri=(inv[cat]||[]).indexOf(item);const left=gl(item),bought=item.bought||0,pct=gp(item);const so2=left===0&&bought>0,isLow=pct<=25&&pct>0&&bought>0,fc=pct<=10?'crit':pct<=25?'low':'';const prices=item.prices||[];const pa=''; // price pills removed// cost display for owner
 const cpu2=cpuItem(item);
 const costDisplay=own?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
   <div style="font-size:9px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;white-space:nowrap;">Cost/unit:</div>
@@ -3687,6 +3690,7 @@ async function deleteSelfbuy(idx){
       }
     }
   });
+  // Mark as intentionally deleted so merge-before-push doesn't re-add from Firebase
   if(entry.timestamp)_deletedLogKeys.add(entry.timestamp+'|'+(entry.who||'')+'|'+(entry.type||''));
   log.splice(idx,1);
   persist();renderAll();
@@ -4487,10 +4491,10 @@ let fbListening=false;
 let fbLastPush=0;
 let fbPushTimer=null;
 let _pendingFbPatches={}; // queued patches to include in next fbPush (for atomic writes)
-let _openEditPanels=new Set(); // track which pending order edit panels are open
-let _openPayPickers=new Set(); // track which pending order pay pickers are open
 let _deletedLogKeys=new Set(); // merge-before-push: skip entries we intentionally removed
 let _nukeInProgress=false; // when true, skip merge-before-push entirely (full wipe)
+let _openEditPanels=new Set(); // track which pending order edit panels are open across renders
+let _openPayPickers=new Set(); // track which pending order pay pickers are open across renders
 
 // Start live listener using Firebase SSE (Server-Sent Events)
 // This gives INSTANT updates the moment any device changes anything
@@ -4801,7 +4805,8 @@ function renderPendingOrders() {
     }).join('')}
   </div>`;
 
-  // Only render to ONE section to avoid duplicate element IDs in the DOM
+  // Only render to ONE section to avoid duplicate element IDs in the DOM.
+  // getElementById('pending-edit-panel-...') would find the wrong (hidden) panel otherwise.
   if (cu && cu.role==='owner') {
     if (ownerEl) { ownerEl.innerHTML = html; ownerEl.style.display = 'block'; }
     if (staffEl) { staffEl.innerHTML = ''; staffEl.style.display = 'none'; }
@@ -4809,13 +4814,12 @@ function renderPendingOrders() {
     if (staffEl) { staffEl.innerHTML = html; staffEl.style.display = 'block'; }
     if (ownerEl) { ownerEl.innerHTML = ''; ownerEl.style.display = 'none'; }
   }
-
-  // Restore open edit panels and pay pickers that were open before rebuild
+  // Restore any open edit panels and pay pickers that were open before the re-render
   _openEditPanels.forEach(fbKey=>{
-    if(pendingWebOrders[fbKey])toggleEditPending(fbKey);
+    if(pendingWebOrders[fbKey]&&!pendingWebOrders[fbKey].confirmed&&!pendingWebOrders[fbKey].cancelled)toggleEditPending(fbKey);
   });
   _openPayPickers.forEach(fbKey=>{
-    if(pendingWebOrders[fbKey])togglePendingPayPicker(fbKey);
+    if(pendingWebOrders[fbKey]&&!pendingWebOrders[fbKey].confirmed&&!pendingWebOrders[fbKey].cancelled)togglePendingPayPicker(fbKey);
   });
 }
 function updatePendingTotal(fbKey,val){
@@ -4852,17 +4856,17 @@ function togglePendingPayPicker(fbKey){
   const el=document.getElementById('pending-pay-picker-'+fbKey);
   if(!el)return;
   if(el.style.display!=='none'){el.style.display='none';_openPayPickers.delete(fbKey);return;}
-  _openPayPickers.add(fbKey);
   const methods=PM.filter(m=>m.id!=='nopay');
   const current=pendingWebOrders[fbKey]?.payMethod||'cash';
   el.innerHTML=methods.map(m=>`<button onclick="updatePendingPayMethod('${fbKey}','${m.id}','${m.label}')" style="padding:6px 10px;margin:2px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ${m.id===current?'var(--accent)':'var(--border)'};background:${m.id===current?'rgba(108,99,255,0.15)':'var(--bg3)'};color:${m.id===current?'var(--accent)':'var(--text2)'};font-family:var(--sans);">${m.icon} ${m.label}</button>`).join('');
   el.style.display='block';
+  _openPayPickers.add(fbKey);
 }
 function updatePendingPayMethod(fbKey,methodId,methodLabel){
   if(!pendingWebOrders[fbKey])return;
+  _openPayPickers.delete(fbKey); // close picker after selection
   pendingWebOrders[fbKey].payMethod=methodId;
   pendingWebOrders[fbKey].payMethodLabel=methodLabel;
-  _openPayPickers.delete(fbKey); // close picker after selection
   // Sync to Firebase
   fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({['pending_orders/'+fbKey+'/payMethod']:methodId,['pending_orders/'+fbKey+'/payMethodLabel']:methodLabel})
@@ -4877,7 +4881,6 @@ function toggleEditPending(fbKey){
   if(panel.style.display!=='none'){panel.style.display='none';_openEditPanels.delete(fbKey);return;}
   const order=pendingWebOrders[fbKey];
   if(!order||!order.orderItems||!order.orderItems.length){showToast('No items to edit','err');return;}
-  _openEditPanels.add(fbKey);
   let html=`<div style="background:rgba(108,99,255,0.06);border:1px solid rgba(108,99,255,0.2);border-radius:8px;padding:10px;">
     <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px;letter-spacing:1px;font-family:var(--mono);">✏️ EDIT ORDER ITEMS</div>`;
   order.orderItems.forEach((item,idx)=>{
@@ -4897,6 +4900,7 @@ function toggleEditPending(fbKey){
   html+=`</div>`;
   panel.innerHTML=html;
   panel.style.display='block';
+  _openEditPanels.add(fbKey);
 }
 
 function removePendingItem(fbKey,itemIdx){
@@ -5272,11 +5276,9 @@ function doReverseConfirmed(fbKey) {
   // ── Also remove from any EOD log that captured this order ──
   eodLogs.forEach(r=>{
     if(!r.orders||!r.orders.length)return;
-    // Match by webOrderKey (most reliable) or by timestamp
     const oidx=r.orders.findIndex(o=>o.webOrderKey===fbKey);
     if(oidx<0)return;
     r.orders.splice(oidx,1);
-    // Recalculate EOD totals
     const _cv=calcCashVirt(r.orders);
     r.grandTotal=r.orders.reduce((s,o)=>s+(o.amtReceived||o.total||0),0);
     r.cashTotal=_cv.cash;
@@ -5984,6 +5986,9 @@ async function fbPullNow(){
       }
       // always overwrite ALL fields so resets/clears propagate to all devices
       inv=data.inv||{};C().forEach(c=>{if(!inv[c])inv[c]=[];});
+      // PROTECT locally-confirmed orders from being lost during log overwrite
+      // If we confirmed an order locally but our push hasn't reached Firebase yet,
+      // the incoming log won't have the entry — merge it back in
       const incomingLog=Array.isArray(data.log)?data.log:[];
       // Skip all PROTECT logic if a nuke was detected — accept the wipe fully
       if(!wasNuked){
@@ -5993,6 +5998,7 @@ async function fbPullNow(){
           _debugOverlayLog('[PROTECT] Preserved '+missingFromIncoming.length+' locally-confirmed orders from log overwrite: '+missingFromIncoming.map(e=>(e.webOrderKey||'').substr(0,18)).join(', '));
           incomingLog.unshift(...missingFromIncoming);
         }
+        // PROTECT recent local entries (selfbuys, sales, adjustments) that haven't synced yet
         const RECENT_WINDOW=30000;
         const now=Date.now();
         const recentLocal=log.filter(e=>{
@@ -6003,6 +6009,7 @@ async function fbPullNow(){
           _debugOverlayLog('[PROTECT] Preserved '+recentLocal.length+' recent local entries: '+recentLocal.map(e=>e.type).join(', '));
           incomingLog.unshift(...recentLocal);
         }
+        // PROTECT _cleared flags
         const clearedSet=new Set();
         log.forEach(e=>{
           if(e._cleared){
@@ -6017,6 +6024,7 @@ async function fbPullNow(){
           });
         }
       }
+      // Filter out any entries we intentionally deleted locally (push may still be in-flight)
       if(_deletedLogKeys.size>0&&!wasNuked){
         const before=incomingLog.length;
         const filtered=incomingLog.filter(e=>{
@@ -6104,7 +6112,7 @@ function fbPush(){
               if(!e||!e.timestamp)return false;
               const key=e.timestamp+'|'+(e.who||'')+'|'+(e.type||'');
               if(localKeys.has(key))return false;
-              if(_deletedLogKeys.has(key))return false;
+              if(_deletedLogKeys.has(key))return false; // intentionally deleted — don't re-add
               return true;
             });
             if(missing.length>0){
@@ -6189,6 +6197,7 @@ async function encryptData(obj){
   combined.set(iv,0);
   combined.set(new Uint8Array(ciphertext),iv.length);
   // Convert to base64 in chunks to avoid "Maximum call stack size exceeded"
+  // when data is large (String.fromCharCode(...bigArray) blows the stack)
   let binary='';
   const CHUNK=8192;
   for(let i=0;i<combined.length;i+=CHUNK){
@@ -7214,7 +7223,7 @@ function searchEODLogs(query){
     totalRevenue+=r.order.total||0;
     (r.order.items||[]).forEach(it=>{
       if((it.itemName||'').toLowerCase().includes(q)){
-        totalQty+=(Math.max(it.qty||1,labelToQty(it.label)));
+        totalQty+=Math.max(it.qty||1,labelToQty(it.label));
       }
     });
   });
@@ -7257,7 +7266,6 @@ async function deleteEODLog(i){
   // Also remove all sales log entries for this day so the day disappears from dashboard
   const remaining=eodLogs.filter(l=>l.date===eodDate);
   if(remaining.length===0){
-    // No more EOD logs for this date — remove day's log entries
     for(let j=log.length-1;j>=0;j--){
       if(log[j]&&log[j].date===eodDate&&(log[j].type==='sell'||log[j].type==='order'||log[j].type==='selfbuy')){
         const e=log[j];
@@ -7694,9 +7702,9 @@ function doReset(type){
 
   }else if(type==='nukelogs'){
     // Wipe ALL data EXCEPT inventory items — keeps names, prices, stock, flavors
-    _nukeInProgress=true;
-    fbPushInFlight=true;
-    if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+    _nukeInProgress=true; // skip merge-before-push so Firebase doesn't re-add old logs
+    fbPushInFlight=true; // block fbPull from overwriting during debounce window
+    if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;} // cancel any pending push
     log=[];
     eodLogs=[];
     staffBuyLogs=[];
@@ -7706,6 +7714,7 @@ function doReset(type){
     customerDeals={};
     dayNotes={};
     _deletedLogKeys.clear();
+    // Reset inventory: left = bought (no sales = nothing sold)
     C().forEach(cat=>{
       (inv[cat]||[]).forEach(item=>{
         if(item.bought)item.left=item.bought;
@@ -7716,7 +7725,10 @@ function doReset(type){
     });
     pendingWebOrders={};
     processedOrderIds.clear();
+    // Save locally first
     persistEncrypted().catch(()=>{});
+    // Push IMMEDIATELY to Firebase — no debounce, await completion
+    // This prevents other devices from pushing stale data back
     const _nukeTs=Date.now();
     const nukePayload={
       inv,log:[],cfg,
@@ -7724,9 +7736,10 @@ function doReset(type){
       eodLogs:[],staffBuyLogs:[],failedAttempts,loginLog,cashRecons,
       cancelledOrders:[],staffDebts,commissionPaused,autoDailyDebts:{},
       updatedAt:_nukeTs,
-      _nukeAt:_nukeTs
+      _nukeAt:_nukeTs // signal to other devices: this was a wipe
     };
     fbLastTimestamp=_nukeTs;
+    // Fire all cleanup requests in parallel — don't wait for each
     Promise.all([
       fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(nukePayload)}),
       fetch(FB_URL+'/pending_orders.json',{method:'DELETE'})
@@ -8054,85 +8067,6 @@ function toggleVIP(name){
   if(vipCustomers[key]){delete vipCustomers[key];}else{vipCustomers[key]=true;}
   persist();searchCustomers(document.getElementById('cust-search').value);renderCredits();showToast(vipCustomers[key]?name+' is now VIP ⭐':name+' removed from VIP','ok');
 }
-// ── REGISTERED CUSTOMERS & LOYALTY GIFT ──
-async function loadRegisteredCustomers(){
-  const el=document.getElementById('reg-customers-list');
-  if(!el)return;
-  el.innerHTML='<div class="empty">Loading...</div>';
-  try{
-    const res=await fetch(FB_URL+'/customers.json');
-    if(!res.ok)throw new Error('Failed');
-    const data=await res.json();
-    if(!data||!Object.keys(data).length){el.innerHTML='<div class="empty">No registered customers yet</div>';return;}
-    const customers=Object.entries(data).map(([user,d])=>({username:user,...d})).sort((a,b)=>(b.orderCount||0)-(a.orderCount||0));
-    el.innerHTML=customers.map(c=>{
-      const oc=c.orderCount||0;
-      const progress=oc%5;
-      const nextGift=5-progress;
-      const pct=Math.round((progress/5)*100);
-      const ordersHtml=(c.orders||[]).slice(0,5).map(o=>
-        `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
-          <span style="color:var(--text2);">${o.date||''} ${o.time||''}</span>
-          <span style="color:var(--text);">${o.items||''}</span>
-          <span style="color:var(--green);font-family:var(--mono);">$${o.total||0}</span>
-          ${o.giftChoice?'<span style="color:var(--accent);">🎁 '+o.giftChoice+'</span>':''}
-        </div>`
-      ).join('');
-      return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <div>
-            <span style="font-size:15px;font-weight:600;color:var(--text);">${c.name||c.username}</span>
-            <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:6px;">@${c.username}</span>
-          </div>
-          <span style="font-size:12px;color:var(--green);font-family:var(--mono);font-weight:600;">${oc} orders</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;">Gift Progress</div>
-          <div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;">
-            <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:3px;"></div>
-          </div>
-          <div style="font-size:11px;color:var(--accent);font-family:var(--mono);">${progress}/5</div>
-        </div>
-        <div style="font-size:10px;color:var(--text3);margin-bottom:6px;">${nextGift===5?'🎁 Just earned a gift!':nextGift+' more until next free gift'} · Joined ${c.createdAt?new Date(c.createdAt).toLocaleDateString():''}</div>
-        ${ordersHtml?'<details style="margin-top:6px;"><summary style="font-size:11px;color:var(--accent);cursor:pointer;font-family:var(--sans);">Recent Orders</summary><div style="margin-top:6px;">'+ordersHtml+'</div></details>':''}
-      </div>`;
-    }).join('');
-  }catch(e){el.innerHTML='<div class="empty">Error loading customers</div>';console.error(e);}
-}
-
-function uploadLoyaltyGift(){document.getElementById('loyalty-gift-file').click();}
-
-async function handleLoyaltyGiftUpload(input){
-  if(!input.files||!input.files[0])return;
-  const file=input.files[0];
-  if(file.size>2*1024*1024){showToast('Image too large (max 2MB)','err');return;}
-  const reader=new FileReader();
-  reader.onload=async function(e){
-    const dataUrl=e.target.result;
-    try{
-      await fetch(FB_URL+'/loyalty_gift.json',{
-        method:'PUT',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({imageUrl:dataUrl,uploadedAt:Date.now()})
-      });
-      showToast('Gift image uploaded! 🎁','ok');
-      _renderLoyaltyGiftPreview(dataUrl);
-    }catch(err){showToast('Upload failed','err');}
-  };
-  reader.readAsDataURL(file);
-}
-
-async function _loadLoyaltyGiftPreview(){
-  try{
-    const res=await fetch(FB_URL+'/loyalty_gift.json');
-    if(res.ok){const d=await res.json();if(d&&d.imageUrl)_renderLoyaltyGiftPreview(d.imageUrl);}
-  }catch(e){}
-}
-
-function _renderLoyaltyGiftPreview(url){
-  const el=document.getElementById('loyalty-gift-preview');
-  if(el)el.innerHTML='<img src="'+url+'" style="max-width:100%;max-height:150px;border-radius:10px;border:1px solid var(--border);margin-top:4px;" alt="Gift">';
-}
-
 function searchCustomers(q){
   const res=document.getElementById('cust-results');
   if(!q.trim()){
@@ -8161,8 +8095,8 @@ function searchCustomers(q){
     const credit=customerCredits[c.name.toLowerCase()]||0;
     const orderRows=c.orders.map(e=>{
       const pc=isV(e.payMethod)?'virt':'cash';
-      const items=e.orderItems?(e.orderItems.map(o=>{const q=Math.max(o.qty||1,labelToQty(o.label));return fmt(q)+'x '+o.itemName;}).join(', ')):
-                  e.items?(e.items.map(o=>{const q=Math.max(o.qty||1,labelToQty(o.label));return fmt(q)+'x '+o.itemName;}).join(', ')):
+      const items=e.orderItems?(e.orderItems.map(o=>{const q=o.qty||(o.label&&labelToQty(o.label)>1?labelToQty(o.label):1);return fmt(q)+'x '+o.itemName;}).join(', ')):
+                  e.items?(e.items.map(o=>{const q=o.qty||(o.label&&labelToQty(o.label)>1?labelToQty(o.label):1);return fmt(q)+'x '+o.itemName;}).join(', ')):
                   (e.name||'');
       return`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;">
         <div>
@@ -8607,6 +8541,7 @@ function osbSearch(q){
 function _addOSBItem(cat,ri){
   const item=(inv[cat]||[])[ri];if(!item)return;
   if(_osbItems.find(o=>o.cat===cat&&o.ri===ri)){showToast(item.name+' already added','err');return;}
+  // If item has flavors, show flavor picker first
   const flavorsAvail=(item.flavors||[]).filter(f=>f.name&&f.stock>0);
   if(flavorsAvail.length>0){
     _sbFlavorPending={cat,ri,itemName:item.name,target:'owner'};
@@ -8661,6 +8596,7 @@ function confirmOwnerStaffBuy(){
     const item=(inv[o.cat]||[])[o.ri];if(!item)return;
     const cost=staffCost(item,o.qty);totalOwed+=cost;
     item.left=Math.max(0,Math.round((gl(item)-o.qty)*10)/10);
+    // Deduct flavor stock
     if(o.flavorText&&Array.isArray(item.flavors)){
       const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===o.flavorText.toLowerCase());
       if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-o.qty));
@@ -8681,6 +8617,7 @@ function confirmSelfBuy(){
     const item=(inv[o.cat]||[])[o.ri];if(!item)return;
     const cost=staffCost(item,o.qty);totalOwed+=cost;
     item.left=Math.round((gl(item)-o.qty)*10)/10;
+    // Deduct flavor stock
     if(o.flavorText&&Array.isArray(item.flavors)){
       const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===o.flavorText.toLowerCase());
       if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-o.qty));
@@ -8694,13 +8631,90 @@ function confirmSelfBuy(){
   showToast('Purchase logged · '+fmtP(totalOwed)+' owed','ok');
 }
 
+// ── REGISTERED CUSTOMERS & LOYALTY GIFT ──
+async function loadRegisteredCustomers(){
+  const el=document.getElementById('reg-customers-list');
+  if(!el)return;
+  el.innerHTML='<div class="empty">Loading...</div>';
+  try{
+    const res=await fetch(FB_URL+'/customers.json');
+    if(!res.ok)throw new Error('Failed');
+    const data=await res.json();
+    if(!data||!Object.keys(data).length){el.innerHTML='<div class="empty">No registered customers yet</div>';return;}
+    const customers=Object.entries(data).map(([user,d])=>({username:user,...d})).sort((a,b)=>(b.orderCount||0)-(a.orderCount||0));
+    el.innerHTML=customers.map(c=>{
+      const oc=c.orderCount||0;
+      const progress=oc%5;
+      const nextGift=5-progress;
+      const pct=Math.round((progress/5)*100);
+      const ordersHtml=(c.orders||[]).slice(0,5).map(o=>
+        `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+          <span style="color:var(--text2);">${o.date||''} ${o.time||''}</span>
+          <span style="color:var(--text);">${o.items||''}</span>
+          <span style="color:var(--green);font-family:var(--mono);">$${o.total||0}</span>
+          ${o.giftChoice?'<span style="color:var(--accent);">🎁 '+o.giftChoice+'</span>':''}
+        </div>`
+      ).join('');
+      return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div>
+            <span style="font-size:15px;font-weight:600;color:var(--text);">${c.name||c.username}</span>
+            <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:6px;">@${c.username}</span>
+          </div>
+          <span style="font-size:12px;color:var(--green);font-family:var(--mono);font-weight:600;">${oc} orders</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;">Gift Progress</div>
+          <div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:3px;"></div>
+          </div>
+          <div style="font-size:11px;color:var(--accent);font-family:var(--mono);">${progress}/5</div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px;">${nextGift===5?'🎁 Just earned a gift!':nextGift+' more until next free gift'} · Joined ${c.createdAt?new Date(c.createdAt).toLocaleDateString():''}</div>
+        ${ordersHtml?'<details style="margin-top:6px;"><summary style="font-size:11px;color:var(--accent);cursor:pointer;font-family:var(--sans);">Recent Orders</summary><div style="margin-top:6px;">'+ordersHtml+'</div></details>':''}
+      </div>`;
+    }).join('');
+  }catch(e){el.innerHTML='<div class="empty">Error loading customers</div>';console.error(e);}
+}
+
+function uploadLoyaltyGift(){document.getElementById('loyalty-gift-file').click();}
+
+async function handleLoyaltyGiftUpload(input){
+  if(!input.files||!input.files[0])return;
+  const file=input.files[0];
+  if(file.size>2*1024*1024){showToast('Image too large (max 2MB)','err');return;}
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    const dataUrl=e.target.result;
+    try{
+      await fetch(FB_URL+'/loyalty_gift.json',{
+        method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({imageUrl:dataUrl,uploadedAt:Date.now()})
+      });
+      showToast('Gift image uploaded! 🎁','ok');
+      _renderLoyaltyGiftPreview(dataUrl);
+    }catch(err){showToast('Upload failed','err');}
+  };
+  reader.readAsDataURL(file);
+}
+
+async function _loadLoyaltyGiftPreview(){
+  try{
+    const res=await fetch(FB_URL+'/loyalty_gift.json');
+    if(res.ok){const d=await res.json();if(d&&d.imageUrl)_renderLoyaltyGiftPreview(d.imageUrl);}
+  }catch(e){}
+}
+
+function _renderLoyaltyGiftPreview(url){
+  const el=document.getElementById('loyalty-gift-preview');
+  if(el)el.innerHTML='<img src="'+url+'" style="max-width:100%;max-height:150px;border-radius:10px;border:1px solid var(--border);margin-top:4px;" alt="Gift">';
+}
+
 restoreEncrypted().then(()=>{
   const et2=document.getElementById('earnings-toggle');if(et2)et2.checked=cfg.showEarnings||false;
 }).catch(()=>{
   const et3=document.getElementById('earnings-toggle');if(et3)et3.checked=false;
 });
-// Prevent scroll/swipe from changing number inputs (causes accidental value changes)
-document.addEventListener('wheel',function(e){if(e.target&&e.target.type==='number'){e.target.blur();}},{passive:true});
 </script>
 </body>
 </html>
