@@ -1052,7 +1052,7 @@ function _getLoyaltyProgress(){
   if(!_custUser)return{count:0,progress:0,isGiftOrder:false};
   const count=_custUser.orderCount||0;
   const inCycle=count%LOYALTY_EVERY;
-  return{count,progress:inCycle,isGiftOrder:inCycle===LOYALTY_EVERY-1};
+  return{count,progress:inCycle,isGiftOrder:inCycle===0&&count>0};
 }
 
 function _renderLoyaltyInCart(){
@@ -1061,20 +1061,22 @@ function _renderLoyaltyInCart(){
   if(!loyaltyEl)return;
   if(!_custUser){loyaltyEl.style.display='none';if(giftEl)giftEl.style.display='none';return;}
   const {count,progress,isGiftOrder}=_getLoyaltyProgress();
-  const nextCount=progress+1;
   loyaltyEl.style.display='block';
-  document.getElementById('loyalty-count').textContent=nextCount+' / '+LOYALTY_EVERY;
-  document.getElementById('loyalty-fill').style.width=(nextCount/LOYALTY_EVERY*100)+'%';
   const msgEl=document.getElementById('loyalty-msg');
   if(isGiftOrder){
-    msgEl.textContent='🎉 This is your '+LOYALTY_EVERY+'th order — FREE GIFT!';
+    document.getElementById('loyalty-count').textContent=LOYALTY_EVERY+' / '+LOYALTY_EVERY;
+    document.getElementById('loyalty-fill').style.width='100%';
+    msgEl.textContent='🎉 You earned a FREE GIFT! Pick one below!';
     msgEl.style.color='var(--green)';
     if(giftEl){
       _loadGiftImage();
       giftEl.style.display='block';
     }
   }else{
-    const left=LOYALTY_EVERY-nextCount;
+    const nextCount=progress+1;
+    document.getElementById('loyalty-count').textContent=progress+' / '+LOYALTY_EVERY;
+    document.getElementById('loyalty-fill').style.width=(progress/LOYALTY_EVERY*100)+'%';
+    const left=LOYALTY_EVERY-progress;
     msgEl.textContent=left+' more order'+(left===1?'':'s')+' until your free gift!';
     msgEl.style.color='var(--white3)';
     if(giftEl)giftEl.style.display='none';
