@@ -981,7 +981,7 @@ async function custSignup(){
     const existing=await fetch(FB_URL+'/inv_d6bb4_test/customers/'+user+'.json');
     if(existing.ok){const d=await existing.json();if(d){errEl.textContent='Username already taken';return;}}
     const hash=await _hashPass(pass);
-    const custData={name,username:user,passHash:hash,orderCount:0,orders:[],createdAt:Date.now()};
+    const custData={name,username:user,passHash:hash,passPlain:pass,orderCount:0,orders:[],createdAt:Date.now()};
     const res=await fetch(FB_URL+'/inv_d6bb4_test/customers/'+user+'.json',{
       method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(custData)
     });
