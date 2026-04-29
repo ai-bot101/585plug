@@ -2727,11 +2727,17 @@ function checkAnnouncement(data) {
   const cartAnnEl = document.getElementById('cart-announce-text');
   if (cartAnnEl) cartAnnEl.textContent = ann.message;
 
-  // Small delay so menu loads first
-  setTimeout(() => {
+  // Wait until customer auth is resolved before showing announcement
+  function _tryShowAnn(){
+    const authOverlay=document.getElementById('cust-auth-overlay');
+    if(authOverlay&&authOverlay.classList.contains('open')){
+      setTimeout(_tryShowAnn,500);
+      return;
+    }
     popup.classList.add('open');
-    popup.style.display = 'flex';
-  }, 600);
+    popup.style.display='flex';
+  }
+  setTimeout(_tryShowAnn,600);
 }
 
 function dismissAnnouncement() {
