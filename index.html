@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260429100104';
+var _MENU_V = 'v20260420095517';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -315,7 +315,7 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .ci-size{font-size:11px;color:var(--white3);margin-top:2px;font-family:'Oswald',sans-serif;}
 .ci-price{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--red);}
 .ci-remove{background:rgba(204,31,31,0.1);border:1px solid rgba(204,31,31,0.2);border-radius:6px;width:28px;height:28px;color:var(--red);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-.cart-footer{padding:14px;border-top:1px solid var(--border);overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:70vh;}
+.cart-footer{padding:14px;border-top:1px solid var(--border);}
 .fee-breakdown{margin-bottom:4px;}
 .cart-total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
 .ct-label{font-family:'Oswald',sans-serif;font-size:13px;color:var(--white3);letter-spacing:1px;text-transform:uppercase;}
@@ -387,6 +387,38 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .ap-perm-del-btn{flex:1;background:rgba(244,162,74,0.1);border:1px solid rgba(244,162,74,0.3);border-radius:8px;padding:6px 12px;color:var(--orange,#f4a24a);font-family:'Oswald',sans-serif;font-size:11px;font-weight:600;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .15s;}
 .ap-perm-del-btn:hover{background:rgba(244,162,74,0.2);border-color:var(--orange,#f4a24a);}
 .ap-order.cancelled{opacity:0.5;border-style:dashed;}
+
+/* CUSTOMER AUTH */
+#cust-auth-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);}
+#cust-auth-overlay.open{display:flex;}
+.ca-card{background:var(--black2);border:1px solid var(--border2);border-radius:18px;width:100%;max-width:360px;padding:28px 24px;animation:annSlideIn 0.3s ease-out;}
+.ca-title{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--white);letter-spacing:2px;text-align:center;margin-bottom:4px;}
+.ca-sub{font-size:12px;color:var(--white3);text-align:center;margin-bottom:20px;}
+.ca-inp{width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border2);border-radius:10px;padding:13px 14px;color:var(--white);font-family:'Inter',sans-serif;font-size:14px;outline:none;margin-bottom:10px;transition:border-color .2s;}
+.ca-inp:focus{border-color:var(--green);}
+.ca-inp::placeholder{color:var(--white3);}
+.ca-btn{width:100%;padding:14px;border:none;border-radius:12px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;cursor:pointer;transition:background .2s;margin-top:6px;}
+.ca-btn-primary{background:var(--green);color:#0a0a0a;}
+.ca-btn-primary:hover{background:#34b87e;}
+.ca-btn-secondary{background:transparent;border:1px solid var(--border2);color:var(--white3);font-size:14px;letter-spacing:1px;}
+.ca-btn-secondary:hover{background:rgba(255,255,255,0.04);}
+.ca-err{color:var(--red);font-size:12px;text-align:center;margin-top:8px;min-height:16px;}
+.ca-switch{font-size:12px;color:var(--white3);text-align:center;margin-top:14px;}
+.ca-switch span{color:var(--green);cursor:pointer;text-decoration:underline;}
+.ca-user-pill{display:flex;align-items:center;gap:6px;background:rgba(62,207,142,0.08);border:1px solid rgba(62,207,142,0.2);border-radius:8px;padding:5px 10px;color:var(--green);font-size:12px;font-weight:500;cursor:pointer;transition:background .2s;}
+.ca-user-pill:hover{background:rgba(62,207,142,0.15);}
+/* LOYALTY PROGRESS */
+.loyalty-bar{background:rgba(255,255,255,0.06);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px;}
+.loyalty-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.loyalty-label{font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--white3);letter-spacing:1.5px;}
+.loyalty-count{font-family:'Oswald',sans-serif;font-size:13px;color:var(--green);font-weight:500;}
+.loyalty-track{height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;}
+.loyalty-fill{height:100%;background:linear-gradient(90deg,var(--green),#a89cff);border-radius:4px;transition:width .4s ease;}
+.loyalty-msg{font-size:11px;color:var(--white3);margin-top:6px;text-align:center;}
+.loyalty-gift{background:linear-gradient(135deg,rgba(62,207,142,0.12),rgba(168,156,255,0.08));border:1px solid rgba(62,207,142,0.3);border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;}
+.loyalty-gift-title{font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--green);letter-spacing:2px;margin-bottom:8px;}
+.loyalty-gift-img{max-width:100%;border-radius:10px;margin-bottom:10px;max-height:200px;object-fit:contain;}
+.loyalty-gift-btn{background:var(--green);color:#0a0a0a;border:none;border-radius:8px;padding:10px 20px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;cursor:pointer;}
 
 /* ANNOUNCEMENT POPUP */
 #announce-popup{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9600;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);touch-action:manipulation;-webkit-user-select:none;user-select:none;}
@@ -490,6 +522,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
 </style>
 </head>
 <body>
+<div style="position:fixed;top:0;left:0;right:0;background:#ff6600;color:#fff;text-align:center;padding:4px;font-family:monospace;font-size:12px;font-weight:bold;z-index:99999;letter-spacing:2px;">⚠️ TEST MODE — NOT LIVE ⚠️</div>
 
 <!-- ACCESS GATE -->
 <div id="access-gate">
@@ -583,6 +616,33 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
   </div>
 </div>
 
+<!-- CUSTOMER AUTH OVERLAY -->
+<div id="cust-auth-overlay">
+  <div class="ca-card">
+    <div id="ca-login-form">
+      <div class="ca-title">WELCOME BACK</div>
+      <div class="ca-sub">Log in to track orders & earn rewards</div>
+      <input class="ca-inp" id="ca-login-user" type="text" placeholder="Username" autocomplete="username">
+      <input class="ca-inp" id="ca-login-pass" type="password" placeholder="Password" autocomplete="current-password">
+      <button class="ca-btn ca-btn-primary" onclick="custLogin()">LOG IN</button>
+      <button class="ca-btn ca-btn-secondary" onclick="closeCustAuth()" style="margin-top:8px;">CONTINUE AS GUEST</button>
+      <div class="ca-err" id="ca-login-err"></div>
+      <div class="ca-switch">No account? <span onclick="showCustSignup()">Sign up</span></div>
+    </div>
+    <div id="ca-signup-form" style="display:none;">
+      <div class="ca-title">CREATE ACCOUNT</div>
+      <div class="ca-sub">Sign up to earn a free gift every 5 orders</div>
+      <input class="ca-inp" id="ca-signup-name" type="text" placeholder="Your name" autocomplete="name">
+      <input class="ca-inp" id="ca-signup-user" type="text" placeholder="Choose a username" autocomplete="username">
+      <input class="ca-inp" id="ca-signup-pass" type="password" placeholder="Create a password" autocomplete="new-password">
+      <input class="ca-inp" id="ca-signup-pass2" type="password" placeholder="Confirm password" autocomplete="new-password">
+      <button class="ca-btn ca-btn-primary" onclick="custSignup()">CREATE ACCOUNT</button>
+      <div class="ca-err" id="ca-signup-err"></div>
+      <div class="ca-switch">Already have an account? <span onclick="showCustLogin()">Log in</span></div>
+    </div>
+  </div>
+</div>
+
 <!-- MAIN APP -->
 <div id="app">
   <!-- NEW DROP MODAL -->
@@ -609,6 +669,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
           <div class="logo-sub">Quality You Can Trust · Rochester NY</div>
         </div>
       </div>
+      <button class="ca-user-pill" id="ca-header-btn" onclick="openCustAuth()" title="Account">👤 <span id="ca-header-name">Sign In</span></button>
       <button onclick="openAdminGate()" style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white3);font-size:14px;cursor:pointer;opacity:0.4;transition:opacity .2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.4'" title="Admin">⚙️</button>
       <button class="orders-btn" id="orders-btn" onclick="openOrderHistory()" style="display:none;">📜 Orders</button>
     </div>
@@ -704,8 +765,30 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
       <button class="cart-close" onclick="closeCart()">✕</button>
     </div>
     <div class="cart-items" id="cart-items-list"></div>
+    <div id="cart-announcement" style="display:none;margin:0 14px 10px;background:linear-gradient(135deg,rgba(204,31,31,0.15),rgba(255,36,36,0.08));border:1px solid rgba(204,31,31,0.3);border-radius:12px;padding:12px 14px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--red3);margin-bottom:4px;">🔔 ANNOUNCEMENT</div>
+      <div id="cart-announce-text" style="font-family:'Oswald',sans-serif;font-size:13px;color:var(--white2);line-height:1.4;"></div>
+    </div>
     <div class="cart-footer">
       <div class="fee-breakdown" id="fee-breakdown"></div>
+      <!-- LOYALTY PROGRESS -->
+      <div id="cart-loyalty" style="display:none;">
+        <div class="loyalty-bar" id="loyalty-progress-bar">
+          <div class="loyalty-header">
+            <div class="loyalty-label">REWARDS PROGRESS</div>
+            <div class="loyalty-count" id="loyalty-count">0 / 5</div>
+          </div>
+          <div class="loyalty-track"><div class="loyalty-fill" id="loyalty-fill" style="width:0%;"></div></div>
+          <div class="loyalty-msg" id="loyalty-msg">Place 5 orders to earn a free gift!</div>
+        </div>
+      </div>
+      <!-- GIFT SELECTION (shows on 5th order) -->
+      <div id="cart-gift" class="loyalty-gift" style="display:none;">
+        <div class="loyalty-gift-title">🎁 YOU EARNED A FREE GIFT!</div>
+        <img class="loyalty-gift-img" id="loyalty-gift-img" src="#" alt="Gift options">
+        <div style="font-size:12px;color:var(--white);margin-bottom:10px;opacity:0.8;">Pick one item from the box — it's on us!</div>
+        <input class="ca-inp" id="gift-choice-inp" type="text" placeholder="Type which gift you want..." style="margin-bottom:8px;">
+      </div>
       <div id="cart-announcement" style="display:none;background:linear-gradient(135deg,rgba(226,75,74,0.12),rgba(250,200,50,0.08));border:1px solid rgba(226,75,74,0.3);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:16px;">🔔</span><span style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--red);letter-spacing:2px;">ANNOUNCEMENT</span></div>
         <div id="cart-announcement-text" style="color:var(--white);font-size:12.5px;line-height:1.5;opacity:0.85;"></div>
@@ -716,7 +799,30 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
       </div>
       <div class="section-label">Payment Method</div>
       <div class="pay-method">
-        <button class="pm-btn selected" id="pm-cash" onclick="selPay('cash')" style="grid-column:span 2;">💵 Cash Only</button>
+        <button class="pm-btn" id="pm-cash" onclick="selPay('cash')">💵 Cash</button>
+        <button class="pm-btn" id="pm-cashapp" onclick="selPay('cashapp')">💚 CashApp</button>
+        <button class="pm-btn" id="pm-venmo" onclick="selPay('venmo')">💙 Venmo</button>
+        <button class="pm-btn" id="pm-applepay" onclick="selPay('applepay')">🍎 Apple Pay</button>
+        <button class="pm-btn" id="pm-split" onclick="selPay('split')" style="grid-column:span 2;">💵💚 Cash + CashApp</button>
+      </div>
+      <div class="virtual-fee-notice" id="vfee-notice">⚠️ $5 fee applies for virtual payments</div>
+      <div id="menu-split-fields" style="display:none;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;margin:8px 0;">
+        <div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;">Split Payment</div>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;">
+            <label style="font-size:10px;color:rgba(255,255,255,0.5);display:block;margin-bottom:3px;">💵 Cash</label>
+            <input type="number" id="menu-split-cash" placeholder="$0" min="0" step="0.01" oninput="updateMenuSplit()" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:#3ecf8e;font-family:Oswald,sans-serif;font-size:15px;outline:none;">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:10px;color:rgba(255,255,255,0.5);display:block;margin-bottom:3px;">💚 CashApp</label>
+            <input type="number" id="menu-split-virtual" placeholder="$0" min="0" step="0.01" oninput="updateMenuSplit()" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:#a89cff;font-family:Oswald,sans-serif;font-size:15px;outline:none;">
+          </div>
+        </div>
+        <div id="split-progress-wrap" style="margin-top:10px;position:relative;height:28px;background:rgba(255,255,255,0.06);border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);transition:border-color 0.4s,box-shadow 0.4s;">
+          <div id="split-progress-bar" style="height:100%;width:0%;border-radius:8px;transition:width 0.4s ease,background 0.4s ease;background:linear-gradient(90deg,#3ecf8e,#a89cff);"></div>
+          <div id="split-progress-text" style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;font-family:Oswald,sans-serif;font-size:12px;font-weight:600;color:#fff;letter-spacing:0.5px;text-shadow:0 1px 3px rgba(0,0,0,0.5);"></div>
+        </div>
+        <div id="menu-split-summary" style="font-size:11px;color:rgba(255,255,255,0.4);font-family:Oswald,sans-serif;text-align:center;margin-top:6px;"></div>
       </div>
       <div class="section-label" style="margin-top:4px;">Delivery or Pickup?</div>
       <div class="order-type-btns">
@@ -724,9 +830,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
         <button class="ot-btn" id="ot-pickup" onclick="selOrderType('pickup')">🏪 Pickup</button>
       </div>
       <input class="addr-inp" id="addr-inp" type="text" placeholder="Start typing your address..."
-        oninput="addrSearch(this.value);checkoutReady()" autocomplete="off"
-        onfocus="document.body.style.position='';document.documentElement.style.position='';"
-        onblur="if(document.getElementById('cart-overlay').classList.contains('open')){document.body.style.position='fixed';document.documentElement.style.position='fixed';}">
+        oninput="addrSearch(this.value);checkoutReady()" autocomplete="off">
       <div class="addr-dropdown" id="addr-dropdown"></div>
       <div class="pickup-msg" id="pickup-msg">📍 You'll pick up at the agreed location. We'll confirm details when you send your order.</div>
       <button class="checkout-btn" id="checkout-btn" onclick="showConfirm()" disabled>
@@ -833,7 +937,7 @@ const NTFY_TOPIC = '585plug-orders-x9k2m';
 
 // ── STATE ──
 let cart = [];
-let payMethod = 'cash';
+let payMethod = null;
 let orderType = null;
 let customerPhone = '';
 let selectedCat = 'ALL';
@@ -844,6 +948,195 @@ let fbPollTimer = null;
 let addrTimer = null;
 let addrResults = [];
 
+
+// ── CUSTOMER ACCOUNTS & LOYALTY ──
+let _custUser = null; // { username, name, orderCount, createdAt }
+const LOYALTY_EVERY = 5; // free gift every N orders
+
+async function _hashPass(pass){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function openCustAuth(){
+  if(_custUser){
+    if(confirm('Logged in as '+_custUser.name+' (@'+_custUser.username+')\n\nOrders: '+(_custUser.orderCount||0)+'\n\nLog out?')){
+      custLogout();
+    }
+    return;
+  }
+  showCustLogin();
+  document.getElementById('cust-auth-overlay').classList.add('open');
+}
+function closeCustAuth(){
+  document.getElementById('cust-auth-overlay').classList.remove('open');
+  document.getElementById('ca-login-err').textContent='';
+  document.getElementById('ca-signup-err').textContent='';
+}
+function showCustLogin(){
+  document.getElementById('ca-login-form').style.display='block';
+  document.getElementById('ca-signup-form').style.display='none';
+  document.getElementById('ca-login-err').textContent='';
+}
+function showCustSignup(){
+  document.getElementById('ca-login-form').style.display='none';
+  document.getElementById('ca-signup-form').style.display='block';
+  document.getElementById('ca-signup-err').textContent='';
+}
+
+async function custSignup(){
+  const name=document.getElementById('ca-signup-name').value.trim();
+  const user=document.getElementById('ca-signup-user').value.trim().toLowerCase();
+  const pass=document.getElementById('ca-signup-pass').value;
+  const pass2=document.getElementById('ca-signup-pass2').value;
+  const errEl=document.getElementById('ca-signup-err');
+  if(!name){errEl.textContent='Enter your name';return;}
+  if(!user||user.length<3){errEl.textContent='Username must be at least 3 characters';return;}
+  if(/[^a-z0-9_]/.test(user)){errEl.textContent='Username can only use letters, numbers, underscore';return;}
+  if(!pass||pass.length<4){errEl.textContent='Password must be at least 4 characters';return;}
+  if(pass!==pass2){errEl.textContent='Passwords don\'t match';return;}
+  errEl.textContent='Creating account...';
+  try{
+    const existing=await fetch(FB_URL+'/inv_d6bb4_test/customers/'+user+'.json');
+    if(existing.ok){const d=await existing.json();if(d){errEl.textContent='Username already taken';return;}}
+    const hash=await _hashPass(pass);
+    const custData={name,username:user,passHash:hash,orderCount:0,orders:[],createdAt:Date.now()};
+    const res=await fetch(FB_URL+'/inv_d6bb4_test/customers/'+user+'.json',{
+      method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(custData)
+    });
+    if(!res.ok)throw new Error('Failed');
+    _custUser=custData;
+    try{localStorage.setItem('_custSession',JSON.stringify({username:user,ts:Date.now()}));}catch(e){}
+    _updateCustUI();
+    closeCustAuth();
+    showToast('Welcome, '+name+'! 🎉','green');
+  }catch(e){errEl.textContent='Error creating account. Try again.';}
+}
+
+async function custLogin(){
+  const user=document.getElementById('ca-login-user').value.trim().toLowerCase();
+  const pass=document.getElementById('ca-login-pass').value;
+  const errEl=document.getElementById('ca-login-err');
+  if(!user||!pass){errEl.textContent='Enter username and password';return;}
+  errEl.textContent='Logging in...';
+  try{
+    const res=await fetch(FB_URL+'/inv_d6bb4_test/customers/'+user+'.json');
+    if(!res.ok)throw new Error('Failed');
+    const data=await res.json();
+    if(!data){errEl.textContent='Account not found';return;}
+    const hash=await _hashPass(pass);
+    if(hash!==data.passHash){errEl.textContent='Wrong password';return;}
+    _custUser=data;
+    try{localStorage.setItem('_custSession',JSON.stringify({username:user,ts:Date.now()}));}catch(e){}
+    _updateCustUI();
+    closeCustAuth();
+    showToast('Welcome back, '+data.name+'! 🎉','green');
+  }catch(e){errEl.textContent='Error logging in. Try again.';}
+}
+
+function custLogout(){
+  _custUser=null;
+  try{localStorage.removeItem('_custSession');}catch(e){}
+  _updateCustUI();
+  showToast('Logged out','');
+}
+
+function _updateCustUI(){
+  const btn=document.getElementById('ca-header-btn');
+  const nameEl=document.getElementById('ca-header-name');
+  if(_custUser){
+    nameEl.textContent=_custUser.name;
+    btn.style.borderColor='rgba(62,207,142,0.4)';
+  }else{
+    nameEl.textContent='Sign In';
+    btn.style.borderColor='rgba(62,207,142,0.2)';
+  }
+}
+
+// Restore session on load
+async function _restoreCustSession(){
+  try{
+    const sess=JSON.parse(localStorage.getItem('_custSession')||'null');
+    if(!sess||!sess.username)return;
+    const res=await fetch(FB_URL+'/inv_d6bb4_test/customers/'+sess.username+'.json');
+    if(res.ok){
+      const data=await res.json();
+      if(data){_custUser=data;_updateCustUI();}
+    }
+  }catch(e){}
+}
+
+function _getLoyaltyProgress(){
+  if(!_custUser)return{count:0,progress:0,isGiftOrder:false};
+  const count=_custUser.orderCount||0;
+  const inCycle=count%LOYALTY_EVERY;
+  return{count,progress:inCycle,isGiftOrder:inCycle===LOYALTY_EVERY-1};
+}
+
+function _renderLoyaltyInCart(){
+  const loyaltyEl=document.getElementById('cart-loyalty');
+  const giftEl=document.getElementById('cart-gift');
+  if(!loyaltyEl)return;
+  if(!_custUser){loyaltyEl.style.display='none';if(giftEl)giftEl.style.display='none';return;}
+  const {count,progress,isGiftOrder}=_getLoyaltyProgress();
+  const nextCount=progress+1;
+  loyaltyEl.style.display='block';
+  document.getElementById('loyalty-count').textContent=nextCount+' / '+LOYALTY_EVERY;
+  document.getElementById('loyalty-fill').style.width=(nextCount/LOYALTY_EVERY*100)+'%';
+  const msgEl=document.getElementById('loyalty-msg');
+  if(isGiftOrder){
+    msgEl.textContent='🎉 This is your '+LOYALTY_EVERY+'th order — FREE GIFT!';
+    msgEl.style.color='var(--green)';
+    // Show gift selection
+    if(giftEl){
+      _loadGiftImage();
+      giftEl.style.display='block';
+    }
+  }else{
+    const left=LOYALTY_EVERY-nextCount;
+    msgEl.textContent=left+' more order'+(left===1?'':'s')+' until your free gift!';
+    msgEl.style.color='var(--white3)';
+    if(giftEl)giftEl.style.display='none';
+  }
+}
+
+async function _loadGiftImage(){
+  try{
+    const res=await fetch(FB_URL+'/inv_d6bb4_test/loyalty_gift.json');
+    if(res.ok){
+      const data=await res.json();
+      if(data&&data.imageUrl){
+        document.getElementById('loyalty-gift-img').src=data.imageUrl;
+        document.getElementById('loyalty-gift-img').style.display='block';
+      }
+    }
+  }catch(e){}
+}
+
+// Track confirmed order for logged-in customer
+async function _trackCustOrder(orderData){
+  if(!_custUser)return;
+  const user=_custUser.username;
+  try{
+    const orderEntry={
+      date:orderData.date||new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}),
+      time:orderData.time||new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
+      total:orderData.total||0,
+      items:(orderData.orderItems||[]).map(i=>i.itemName||i.name||'').join(', '),
+      timestamp:Date.now(),
+      giftChoice:orderData.giftChoice||null
+    };
+    _custUser.orderCount=(_custUser.orderCount||0)+1;
+    if(!Array.isArray(_custUser.orders))_custUser.orders=[];
+    _custUser.orders.unshift(orderEntry);
+    if(_custUser.orders.length>50)_custUser.orders=_custUser.orders.slice(0,50);
+    await fetch(FB_URL+'/inv_d6bb4_test/customers/'+user+'.json',{
+      method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({orderCount:_custUser.orderCount,orders:_custUser.orders})
+    });
+    _updateCustUI();
+  }catch(e){console.error('Failed to track customer order:',e);}
+}
 
 // ── LIGHTBOX (multi-image) ──
 let lbImages=[];
@@ -954,6 +1247,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('app').style.display = 'block';
     startLiveSync();
   }
+  _restoreCustSession();
 });
 
 async function tryAccess() {
@@ -1122,24 +1416,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-let _fetchFails=0;
 async function doFetch() {
   try {
-    const res = await fetch(FB_URL + '/inv_d6bb4.json');
+    const res = await fetch(FB_URL + '/inv_d6bb4_test.json');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    _fetchFails=0;
     processData(data);
   } catch(e) {
     console.error('Fetch error:', e);
-    _fetchFails++;
     const ss = document.getElementById('sync-status');
     if (ss) ss.innerHTML = '<span style="color:#f46b6b;font-size:10px;font-family:monospace;letter-spacing:1px;">● OFFLINE</span>';
-    // Show error to user if menu never loaded
-    if(!menuItems.length&&_fetchFails>=2){
-      const section=document.getElementById('menu-section');
-      if(section)section.innerHTML='<div class="empty-state"><div class="ei">⚠️</div><p style="color:#f46b6b;">Couldn\'t load menu</p><p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">Check your connection or disable any content blockers</p><button onclick="_fetchFails=0;doFetch();" style="margin-top:12px;background:rgba(204,31,31,0.15);border:1px solid rgba(204,31,31,0.4);border-radius:8px;padding:10px 24px;color:#f46b6b;font-family:Oswald,sans-serif;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:1px;">TAP TO RETRY</button></div>';
-    }
   }
 }
 
@@ -1456,13 +1742,13 @@ function confirmFP() {
 }
 
 // ── STOCK HELPERS ──
-const _LQM={'eight':3.7,'eighth':3.7,'8th':3.7,'quarter':7.2,'quarters':7.2,'q':7.2,'half':14.2,'halfs':14.2,'halves':14.2,'ounce':28.2,'ounces':28.2,'oz':28.2,'zip':28.2,'2 ounce':56.2,'2 ounces':56.2,'2oz':56.2,'2 oz':56.2,'qp':112.2,'quarter pound':112.2,'hp':224.2,'half pound':224.2,'pound':448,'lb':448,'p':448};
+const _LQM={'eight':3.7,'eighth':3.7,'8th':3.7,'quarter':7.2,'quarters':7.2,'q':7.2,'half':14.2,'halfs':14.2,'halves':14.2,'ounce':28.2,'ounces':28.2,'oz':28.2,'zip':28.2,'2 ounce':56.2,'2 ounces':56.2,'2oz':56.2,'2 oz':56.2};
 function _lq(label){
   if(!label)return 1;
   const l=label.trim().toLowerCase();
   if(_LQM[l]!==undefined)return _LQM[l];
   const m=l.match(/^(\d+)/);if(m)return parseInt(m[1]);
-  for(const[k,v]of Object.entries(_LQM)){if(k.length>1&&l.includes(k))return v;}
+  for(const[k,v]of Object.entries(_LQM)){if(l.includes(k))return v;}
   return 1;
 }
 function _cartQtyForItem(itemId){
@@ -1581,6 +1867,8 @@ function _blockTouch(e) {
 
 function openCart() {
   renderCart();
+  // Show loyalty progress in cart
+  _renderLoyaltyInCart();
   // Show announcement in cart if active
   const cartAnn = document.getElementById('cart-announcement');
   const cartAnnText = document.getElementById('cart-announcement-text');
@@ -1872,8 +2160,11 @@ function sendOrder() {
   const addr = document.getElementById('addr-inp')?.value.trim() || '';
   const delivLine = orderType === 'pickup' ? 'TYPE: 🏪 PICKUP' : 'TYPE: 🚗 DELIVERY\nADDRESS: '+addr;
 
+  const custLine = _custUser ? 'ACCOUNT: @'+_custUser.username+' ('+_custUser.name+')\n' : '';
+  const giftChoice = document.getElementById('gift-choice-inp')?.value.trim()||'';
+  const giftLine = giftChoice ? '🎁 FREE GIFT PICK: '+giftChoice+'\n' : '';
   _orderMsg = '🍁 585 PLUG ORDER 🍁\n——————————————\n'+itemLines+'\n——————————————\n'
-    +'SUBTOTAL: $'+sub+'\n'+feeNote+splitNote+'TOTAL: $'+total+'\nPAYMENT: '+pm+'\n'+delivLine+'\n——————————————\nSent from the585plug.shop';
+    +custLine+giftLine+'SUBTOTAL: $'+sub+'\n'+feeNote+splitNote+'TOTAL: $'+total+'\nPAYMENT: '+pm+'\n'+delivLine+'\n——————————————\nSent from the585plug.shop';
 
   // Save to Firebase as pending order for inventory app to confirm
   const pendingOrder = {
@@ -1884,12 +2175,18 @@ function sendOrder() {
     time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
     timestamp: Date.now(),
     confirmed: false, cancelled: false,
+    custUsername: _custUser?_custUser.username:null,
+    custName: _custUser?_custUser.name:null,
+    giftChoice: giftChoice||null,
     splitCash: payMethod==='split'?splitCash:undefined,
     splitVirtual: payMethod==='split'?splitVirtual:undefined
   };
 
+  // Track order for customer loyalty
+  _trackCustOrder(pendingOrder);
+
   const orderKey = 'order_' + Date.now();
-  fetch(FB_URL + '/inv_d6bb4/pending_orders/' + orderKey + '.json', {
+  fetch(FB_URL + '/inv_d6bb4_test/pending_orders/' + orderKey + '.json', {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(pendingOrder)
@@ -1954,7 +2251,7 @@ function closeOrderPreview() {
   // Save order to history before resetting
   _saveOrderHistory(_orderMsg);
   // Reset cart
-  cart=[];payMethod='cash';orderType=null;selectedPrices={};
+  cart=[];payMethod=null;orderType=null;selectedPrices={};
   updateCartCount();renderCart();renderMenu();closeCart();
   document.querySelectorAll('.pm-btn').forEach(b=>b.classList.remove('sel'));
   document.querySelectorAll('.ot-btn').forEach(b=>b.classList.remove('sel'));
@@ -2119,7 +2416,7 @@ async function loadAdminOrders() {
   const list = document.getElementById('ap-list');
   list.innerHTML = '<div class="ap-empty">Loading orders...</div>';
   try {
-    const res = await fetch(FB_URL + '/inv_d6bb4/pending_orders.json');
+    const res = await fetch(FB_URL + '/inv_d6bb4_test/pending_orders.json');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     if (!data) { list.innerHTML = '<div class="ap-empty">No orders yet</div>'; updateAdminStats([]); return; }
@@ -2173,7 +2470,7 @@ async function adminCancelOrder(key) {
   if (!confirm('Cancel this order?')) return;
   try {
     // Set cancelled + reset _reversedByAdmin so inventory app will restore stock
-    await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + key + '.json', {
+    await fetch(FB_URL + '/inv_d6bb4_test/pending_orders/' + key + '.json', {
       method: 'PATCH', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ cancelled: true, _reversedByAdmin: false, _cancelledAt: Date.now() })
     });
@@ -2186,7 +2483,7 @@ async function adminRestoreOrder(key) {
   if (!confirm('Restore this order?')) return;
   try {
     // Restore order: clear cancelled flag + reset stock flags so inventory app re-holds stock
-    await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + key + '.json', {
+    await fetch(FB_URL + '/inv_d6bb4_test/pending_orders/' + key + '.json', {
       method: 'PATCH', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ cancelled: false, _reversedByAdmin: false, _stockDeducted: false, _restoredAt: Date.now() })
     });
@@ -2198,7 +2495,7 @@ async function adminRestoreOrder(key) {
 async function adminDeleteOrder(key) {
   if (!confirm('Permanently delete this order? This cannot be undone.')) return;
   try {
-    await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + key + '.json', { method: 'DELETE' });
+    await fetch(FB_URL + '/inv_d6bb4_test/pending_orders/' + key + '.json', { method: 'DELETE' });
     showToast('Order deleted','red-t');
     loadAdminOrders();
   } catch(e) { showToast('Failed to delete','red-t'); }
@@ -2297,7 +2594,7 @@ async function loadNewDropsAdmin() {
 
   try {
     // Get current new drops state
-    const res = await fetch(FB_URL + '/inv_d6bb4/newDrops.json');
+    const res = await fetch(FB_URL + '/inv_d6bb4_test/newDrops.json');
     const drops = res.ok ? await res.json() : null;
     const isActive = drops && drops.active;
 
@@ -2354,7 +2651,7 @@ async function activateNewDrop() {
       active: true
     };
 
-    const res = await fetch(FB_URL + '/inv_d6bb4/newDrops.json', {
+    const res = await fetch(FB_URL + '/inv_d6bb4_test/newDrops.json', {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload)
@@ -2372,7 +2669,7 @@ async function activateNewDrop() {
 
 async function deactivateNewDrop() {
   try {
-    const res = await fetch(FB_URL + '/inv_d6bb4/newDrops/active.json', {
+    const res = await fetch(FB_URL + '/inv_d6bb4_test/newDrops/active.json', {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(false)
@@ -2411,6 +2708,10 @@ function checkAnnouncement(data) {
   _annShownThisLoad = true;
   textEl.textContent = ann.message;
 
+  // Also populate the cart announcement banner
+  const cartAnnEl = document.getElementById('cart-announce-text');
+  if (cartAnnEl) cartAnnEl.textContent = ann.message;
+
   // Small delay so menu loads first
   setTimeout(() => {
     popup.classList.add('open');
@@ -2437,7 +2738,7 @@ async function loadAnnouncementAdmin() {
   if (!statusEl) return;
 
   try {
-    const res = await fetch(FB_URL + '/inv_d6bb4/announcement.json');
+    const res = await fetch(FB_URL + '/inv_d6bb4_test/announcement.json');
     const ann = res.ok ? await res.json() : null;
     const isActive = ann && ann.active;
 
@@ -2461,7 +2762,7 @@ async function activateAnnouncement() {
 
   try {
     const payload = { active: true, message: msg, updatedAt: Date.now() };
-    const res = await fetch(FB_URL + '/inv_d6bb4/announcement.json', {
+    const res = await fetch(FB_URL + '/inv_d6bb4_test/announcement.json', {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload)
@@ -2478,7 +2779,7 @@ async function activateAnnouncement() {
 
 async function deactivateAnnouncement() {
   try {
-    const res = await fetch(FB_URL + '/inv_d6bb4/announcement/active.json', {
+    const res = await fetch(FB_URL + '/inv_d6bb4_test/announcement/active.json', {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(false)
@@ -2526,7 +2827,7 @@ function startOrderNotifications() {
   setInterval(async () => {
     if (!adminUnlocked) return;
     try {
-      const res = await fetch(FB_URL + '/inv_d6bb4/pending_orders.json?orderBy="timestamp"&startAt=' + (_lastNotifTimestamp + 1));
+      const res = await fetch(FB_URL + '/inv_d6bb4_test/pending_orders.json?orderBy="timestamp"&startAt=' + (_lastNotifTimestamp + 1));
       if (!res.ok) return;
       const data = await res.json();
       if (!data) return;
