@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260420095517';
+var _MENU_V = 'v20260429100104';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -315,7 +315,7 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .ci-size{font-size:11px;color:var(--white3);margin-top:2px;font-family:'Oswald',sans-serif;}
 .ci-price{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--red);}
 .ci-remove{background:rgba(204,31,31,0.1);border:1px solid rgba(204,31,31,0.2);border-radius:6px;width:28px;height:28px;color:var(--red);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-.cart-footer{padding:14px;border-top:1px solid var(--border);}
+.cart-footer{padding:14px;border-top:1px solid var(--border);overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:70vh;}
 .fee-breakdown{margin-bottom:4px;}
 .cart-total-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
 .ct-label{font-family:'Oswald',sans-serif;font-size:13px;color:var(--white3);letter-spacing:1px;text-transform:uppercase;}
@@ -522,7 +522,6 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
 </style>
 </head>
 <body>
-<div style="position:fixed;top:0;left:0;right:0;background:#ff6600;color:#fff;text-align:center;padding:4px;font-family:monospace;font-size:12px;font-weight:bold;z-index:99999;letter-spacing:2px;">⚠️ TEST MODE — NOT LIVE ⚠️</div>
 
 <!-- ACCESS GATE -->
 <div id="access-gate">
@@ -616,7 +615,6 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
   </div>
 </div>
 
-<!-- CUSTOMER AUTH OVERLAY -->
 <div id="cust-auth-overlay">
   <div class="ca-card">
     <div id="ca-login-form">
@@ -765,10 +763,6 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
       <button class="cart-close" onclick="closeCart()">✕</button>
     </div>
     <div class="cart-items" id="cart-items-list"></div>
-    <div id="cart-announcement" style="display:none;margin:0 14px 10px;background:linear-gradient(135deg,rgba(204,31,31,0.15),rgba(255,36,36,0.08));border:1px solid rgba(204,31,31,0.3);border-radius:12px;padding:12px 14px;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--red3);margin-bottom:4px;">🔔 ANNOUNCEMENT</div>
-      <div id="cart-announce-text" style="font-family:'Oswald',sans-serif;font-size:13px;color:var(--white2);line-height:1.4;"></div>
-    </div>
     <div class="cart-footer">
       <div class="fee-breakdown" id="fee-breakdown"></div>
       <!-- LOYALTY PROGRESS -->
@@ -799,30 +793,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
       </div>
       <div class="section-label">Payment Method</div>
       <div class="pay-method">
-        <button class="pm-btn" id="pm-cash" onclick="selPay('cash')">💵 Cash</button>
-        <button class="pm-btn" id="pm-cashapp" onclick="selPay('cashapp')">💚 CashApp</button>
-        <button class="pm-btn" id="pm-venmo" onclick="selPay('venmo')">💙 Venmo</button>
-        <button class="pm-btn" id="pm-applepay" onclick="selPay('applepay')">🍎 Apple Pay</button>
-        <button class="pm-btn" id="pm-split" onclick="selPay('split')" style="grid-column:span 2;">💵💚 Cash + CashApp</button>
-      </div>
-      <div class="virtual-fee-notice" id="vfee-notice">⚠️ $5 fee applies for virtual payments</div>
-      <div id="menu-split-fields" style="display:none;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;margin:8px 0;">
-        <div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;">Split Payment</div>
-        <div style="display:flex;gap:8px;">
-          <div style="flex:1;">
-            <label style="font-size:10px;color:rgba(255,255,255,0.5);display:block;margin-bottom:3px;">💵 Cash</label>
-            <input type="number" id="menu-split-cash" placeholder="$0" min="0" step="0.01" oninput="updateMenuSplit()" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:#3ecf8e;font-family:Oswald,sans-serif;font-size:15px;outline:none;">
-          </div>
-          <div style="flex:1;">
-            <label style="font-size:10px;color:rgba(255,255,255,0.5);display:block;margin-bottom:3px;">💚 CashApp</label>
-            <input type="number" id="menu-split-virtual" placeholder="$0" min="0" step="0.01" oninput="updateMenuSplit()" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:#a89cff;font-family:Oswald,sans-serif;font-size:15px;outline:none;">
-          </div>
-        </div>
-        <div id="split-progress-wrap" style="margin-top:10px;position:relative;height:28px;background:rgba(255,255,255,0.06);border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);transition:border-color 0.4s,box-shadow 0.4s;">
-          <div id="split-progress-bar" style="height:100%;width:0%;border-radius:8px;transition:width 0.4s ease,background 0.4s ease;background:linear-gradient(90deg,#3ecf8e,#a89cff);"></div>
-          <div id="split-progress-text" style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;font-family:Oswald,sans-serif;font-size:12px;font-weight:600;color:#fff;letter-spacing:0.5px;text-shadow:0 1px 3px rgba(0,0,0,0.5);"></div>
-        </div>
-        <div id="menu-split-summary" style="font-size:11px;color:rgba(255,255,255,0.4);font-family:Oswald,sans-serif;text-align:center;margin-top:6px;"></div>
+        <button class="pm-btn selected" id="pm-cash" onclick="selPay('cash')" style="grid-column:span 2;">💵 Cash Only</button>
       </div>
       <div class="section-label" style="margin-top:4px;">Delivery or Pickup?</div>
       <div class="order-type-btns">
@@ -830,7 +801,9 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
         <button class="ot-btn" id="ot-pickup" onclick="selOrderType('pickup')">🏪 Pickup</button>
       </div>
       <input class="addr-inp" id="addr-inp" type="text" placeholder="Start typing your address..."
-        oninput="addrSearch(this.value);checkoutReady()" autocomplete="off">
+        oninput="addrSearch(this.value);checkoutReady()" autocomplete="off"
+        onfocus="document.body.style.position='';document.documentElement.style.position='';"
+        onblur="if(document.getElementById('cart-overlay').classList.contains('open')){document.body.style.position='fixed';document.documentElement.style.position='fixed';}">
       <div class="addr-dropdown" id="addr-dropdown"></div>
       <div class="pickup-msg" id="pickup-msg">📍 You'll pick up at the agreed location. We'll confirm details when you send your order.</div>
       <button class="checkout-btn" id="checkout-btn" onclick="showConfirm()" disabled>
@@ -937,7 +910,7 @@ const NTFY_TOPIC = '585plug-orders-x9k2m';
 
 // ── STATE ──
 let cart = [];
-let payMethod = null;
+let payMethod = 'cash';
 let orderType = null;
 let customerPhone = '';
 let selectedCat = 'ALL';
@@ -948,18 +921,16 @@ let fbPollTimer = null;
 let addrTimer = null;
 let addrResults = [];
 
+// ── CUSTOMER AUTH & LOYALTY ──
+let _custUser=null;
+const LOYALTY_EVERY=5;
 
-// ── CUSTOMER ACCOUNTS & LOYALTY ──
-let _custUser = null; // { username, name, orderCount, createdAt }
-const LOYALTY_EVERY = 5; // free gift every N orders
-
-async function _hashPass(pass){
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass));
+async function _hashPass(p){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(p));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
 function _showCustAuthIfNeeded(){
-  // Don't show if already logged in or chose guest this session
   if(_custUser)return;
   if(sessionStorage.getItem('_custGuest')==='1')return;
   showCustLogin();
@@ -980,9 +951,9 @@ function closeCustAuth(){
   document.getElementById('cust-auth-overlay').classList.remove('open');
   document.getElementById('ca-login-err').textContent='';
   document.getElementById('ca-signup-err').textContent='';
-  // Mark as guest so we don't re-prompt until they close/reopen the tab
   if(!_custUser)sessionStorage.setItem('_custGuest','1');
 }
+
 function showCustLogin(){
   document.getElementById('ca-login-form').style.display='block';
   document.getElementById('ca-signup-form').style.display='none';
@@ -1050,7 +1021,6 @@ function custLogout(){
   try{sessionStorage.removeItem('_custGuest');}catch(e){}
   _updateCustUI();
   showToast('Logged out','');
-  // Re-show the auth prompt
   _showCustAuthIfNeeded();
 }
 
@@ -1066,7 +1036,6 @@ function _updateCustUI(){
   }
 }
 
-// Restore session on load
 async function _restoreCustSession(){
   try{
     const sess=JSON.parse(localStorage.getItem('_custSession')||'null');
@@ -1100,7 +1069,6 @@ function _renderLoyaltyInCart(){
   if(isGiftOrder){
     msgEl.textContent='🎉 This is your '+LOYALTY_EVERY+'th order — FREE GIFT!';
     msgEl.style.color='var(--green)';
-    // Show gift selection
     if(giftEl){
       _loadGiftImage();
       giftEl.style.display='block';
@@ -1126,7 +1094,6 @@ async function _loadGiftImage(){
   }catch(e){}
 }
 
-// Track confirmed order for logged-in customer
 async function _trackCustOrder(orderData){
   if(!_custUser)return;
   const user=_custUser.username;
@@ -1431,16 +1398,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+let _fetchFails=0;
 async function doFetch() {
   try {
     const res = await fetch(FB_URL + '/inv_d6bb4_test.json');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    _fetchFails=0;
     processData(data);
   } catch(e) {
     console.error('Fetch error:', e);
+    _fetchFails++;
     const ss = document.getElementById('sync-status');
     if (ss) ss.innerHTML = '<span style="color:#f46b6b;font-size:10px;font-family:monospace;letter-spacing:1px;">● OFFLINE</span>';
+    // Show error to user if menu never loaded
+    if(!menuItems.length&&_fetchFails>=2){
+      const section=document.getElementById('menu-section');
+      if(section)section.innerHTML='<div class="empty-state"><div class="ei">⚠️</div><p style="color:#f46b6b;">Couldn\'t load menu</p><p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">Check your connection or disable any content blockers</p><button onclick="_fetchFails=0;doFetch();" style="margin-top:12px;background:rgba(204,31,31,0.15);border:1px solid rgba(204,31,31,0.4);border-radius:8px;padding:10px 24px;color:#f46b6b;font-family:Oswald,sans-serif;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:1px;">TAP TO RETRY</button></div>';
+    }
   }
 }
 
@@ -1757,13 +1732,13 @@ function confirmFP() {
 }
 
 // ── STOCK HELPERS ──
-const _LQM={'eight':3.7,'eighth':3.7,'8th':3.7,'quarter':7.2,'quarters':7.2,'q':7.2,'half':14.2,'halfs':14.2,'halves':14.2,'ounce':28.2,'ounces':28.2,'oz':28.2,'zip':28.2,'2 ounce':56.2,'2 ounces':56.2,'2oz':56.2,'2 oz':56.2};
+const _LQM={'eight':3.7,'eighth':3.7,'8th':3.7,'quarter':7.2,'quarters':7.2,'q':7.2,'half':14.2,'halfs':14.2,'halves':14.2,'ounce':28.2,'ounces':28.2,'oz':28.2,'zip':28.2,'2 ounce':56.2,'2 ounces':56.2,'2oz':56.2,'2 oz':56.2,'qp':112.2,'quarter pound':112.2,'hp':224.2,'half pound':224.2,'pound':448,'lb':448,'p':448};
 function _lq(label){
   if(!label)return 1;
   const l=label.trim().toLowerCase();
   if(_LQM[l]!==undefined)return _LQM[l];
   const m=l.match(/^(\d+)/);if(m)return parseInt(m[1]);
-  for(const[k,v]of Object.entries(_LQM)){if(l.includes(k))return v;}
+  for(const[k,v]of Object.entries(_LQM)){if(k.length>1&&l.includes(k))return v;}
   return 1;
 }
 function _cartQtyForItem(itemId){
@@ -1882,7 +1857,6 @@ function _blockTouch(e) {
 
 function openCart() {
   renderCart();
-  // Show loyalty progress in cart
   _renderLoyaltyInCart();
   // Show announcement in cart if active
   const cartAnn = document.getElementById('cart-announcement');
@@ -2190,15 +2164,12 @@ function sendOrder() {
     time: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
     timestamp: Date.now(),
     confirmed: false, cancelled: false,
+    splitCash: payMethod==='split'?splitCash:undefined,
+    splitVirtual: payMethod==='split'?splitVirtual:undefined,
     custUsername: _custUser?_custUser.username:null,
     custName: _custUser?_custUser.name:null,
-    giftChoice: giftChoice||null,
-    splitCash: payMethod==='split'?splitCash:undefined,
-    splitVirtual: payMethod==='split'?splitVirtual:undefined
+    giftChoice: giftChoice||null
   };
-
-  // Track order for customer loyalty
-  _trackCustOrder(pendingOrder);
 
   const orderKey = 'order_' + Date.now();
   fetch(FB_URL + '/inv_d6bb4_test/pending_orders/' + orderKey + '.json', {
@@ -2219,6 +2190,8 @@ function sendOrder() {
     },
     body: notifItems + '\nPayment: ' + pm + '\n' + (orderType==='pickup'?'Pickup':'Delivery' + (addr?' — '+addr:'')) + '\nTotal: $' + total
   }).catch(e => console.error('Notification failed:', e));
+
+  _trackCustOrder(pendingOrder);
 
   // Show order preview modal instead of opening SMS
   const phoneFormatted = '('+OWNER_PHONE.slice(0,3)+') '+OWNER_PHONE.slice(3,6)+'-'+OWNER_PHONE.slice(6);
@@ -2266,7 +2239,7 @@ function closeOrderPreview() {
   // Save order to history before resetting
   _saveOrderHistory(_orderMsg);
   // Reset cart
-  cart=[];payMethod=null;orderType=null;selectedPrices={};
+  cart=[];payMethod='cash';orderType=null;selectedPrices={};
   updateCartCount();renderCart();renderMenu();closeCart();
   document.querySelectorAll('.pm-btn').forEach(b=>b.classList.remove('sel'));
   document.querySelectorAll('.ot-btn').forEach(b=>b.classList.remove('sel'));
@@ -2722,10 +2695,6 @@ function checkAnnouncement(data) {
 
   _annShownThisLoad = true;
   textEl.textContent = ann.message;
-
-  // Also populate the cart announcement banner
-  const cartAnnEl = document.getElementById('cart-announce-text');
-  if (cartAnnEl) cartAnnEl.textContent = ann.message;
 
   // Wait until customer auth is resolved before showing announcement
   function _tryShowAnn(){
