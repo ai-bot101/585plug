@@ -958,6 +958,14 @@ async function _hashPass(pass){
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
+function _showCustAuthIfNeeded(){
+  // Don't show if already logged in or chose guest this session
+  if(_custUser)return;
+  if(sessionStorage.getItem('_custGuest')==='1')return;
+  showCustLogin();
+  document.getElementById('cust-auth-overlay').classList.add('open');
+}
+
 function openCustAuth(){
   if(_custUser){
     if(confirm('Logged in as '+_custUser.name+' (@'+_custUser.username+')\n\nOrders: '+(_custUser.orderCount||0)+'\n\nLog out?')){
@@ -972,6 +980,8 @@ function closeCustAuth(){
   document.getElementById('cust-auth-overlay').classList.remove('open');
   document.getElementById('ca-login-err').textContent='';
   document.getElementById('ca-signup-err').textContent='';
+  // Mark as guest so we don't re-prompt until they close/reopen the tab
+  if(!_custUser)sessionStorage.setItem('_custGuest','1');
 }
 function showCustLogin(){
   document.getElementById('ca-login-form').style.display='block';
@@ -1037,8 +1047,11 @@ async function custLogin(){
 function custLogout(){
   _custUser=null;
   try{localStorage.removeItem('_custSession');}catch(e){}
+  try{sessionStorage.removeItem('_custGuest');}catch(e){}
   _updateCustUI();
   showToast('Logged out','');
+  // Re-show the auth prompt
+  _showCustAuthIfNeeded();
 }
 
 function _updateCustUI(){
@@ -1241,13 +1254,14 @@ function carouselGo(itemId, idx){
 }
 
 // ── ACCESS GATE ──
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   if (localStorage.getItem('585plug_v') === '1') {
     document.getElementById('access-gate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     startLiveSync();
+    await _restoreCustSession();
+    _showCustAuthIfNeeded();
   }
-  _restoreCustSession();
 });
 
 async function tryAccess() {
@@ -1258,6 +1272,7 @@ async function tryAccess() {
     document.getElementById('access-gate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     startLiveSync();
+    _showCustAuthIfNeeded();
   } else {
     document.getElementById('ag-err').textContent = 'Invalid code. Contact your plug.';
     document.getElementById('ag-code').value = '';
