@@ -1437,9 +1437,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v50';
-const _BUILD_TS=1777393775011; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v50]';},1000);
+const _APP_VERSION='deploy-v51';
+const _BUILD_TS=1777435138680; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v51]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -1582,6 +1582,16 @@ function _emergencyPush(){
 }
 window.addEventListener('beforeunload',_emergencyPush);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')_emergencyPush();});
+// Handle Safari back-button bfcache: page is restored from frozen state — pull fresh data
+window.addEventListener('pageshow',function(e){
+  if(e.persisted){
+    console.log('[BFCACHE] Page restored from back/forward cache — syncing fresh data');
+    if(cu&&_dataLoaded){
+      fbPullNow();
+      if(!fbListening)startAutoSync();
+    }
+  }
+});
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function getDays(){const d=[...new Set(log.map(e=>e.date))];d.sort((a,b)=>new Date(b)-new Date(a));if(!d.includes(tday()))d.unshift(tday());return d;}
 function cpuItem(item){
@@ -1733,7 +1743,26 @@ async function tryLogin(){
         if(data){
           if(data.inv)inv=data.inv;
           C().forEach(c=>{if(!inv[c])inv[c]=[];});
-          if(Array.isArray(data.log))log=data.log;
+          // PROTECT locally-confirmed orders from being lost during login sync
+          // Same logic as fbPullNow — merge back any confirmed orders that haven't synced yet
+          const incomingLog=Array.isArray(data.log)?data.log:[];
+          const localConfirmed=log.filter(e=>e.webOrderKey&&processedOrderIds.has(e.webOrderKey));
+          const missingFromIncoming=localConfirmed.filter(lc=>!incomingLog.some(il=>il.webOrderKey===lc.webOrderKey));
+          if(missingFromIncoming.length>0){
+            console.log('[LOGIN-PROTECT] Preserved '+missingFromIncoming.length+' locally-confirmed orders from login overwrite');
+            incomingLog.unshift(...missingFromIncoming);
+          }
+          // PROTECT recent local entries (selfbuys, sales) that may not have synced
+          const _loginNow=Date.now();
+          const recentLocal=log.filter(e=>{
+            if(!e.timestamp||_loginNow-e.timestamp>30000)return false;
+            return !incomingLog.some(il=>il.timestamp===e.timestamp&&il.who===e.who&&il.type===e.type);
+          });
+          if(recentLocal.length>0){
+            console.log('[LOGIN-PROTECT] Preserved '+recentLocal.length+' recent local entries');
+            incomingLog.unshift(...recentLocal);
+          }
+          log=incomingLog;
           if(data.cfg){const savedCu=cu;cfg=data.cfg;cu=savedCu;}
           customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
           dayNotes=data.dayNotes||{};
