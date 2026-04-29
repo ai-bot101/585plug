@@ -1437,9 +1437,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v51';
-const _BUILD_TS=1777435138680; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v51]';},1000);
+const _APP_VERSION='deploy-v52';
+const _BUILD_TS=1777471265027; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v52]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2700,6 +2700,13 @@ function syncStockToEOD(e){
         });
         const correctLeft=Math.round(Math.max(0,item.bought-pendingHeld)*10)/10;
         if(Math.abs(gl(item)-correctLeft)>0.05){item.left=correctLeft;resetCount++;}
+        // Reset flavor stock to bought (no sales recorded)
+        if(Array.isArray(item.flavors)){
+          item.flavors.forEach(f=>{
+            if(!f.name)return;
+            if(f.bought||f.bought===0) f.stock=f.bought;
+          });
+        }
       });
     });
     persist();renderAll();
@@ -2799,6 +2806,8 @@ function syncStockToEOD(e){
   // ── PREVIEW CHANGES ──
   const changes=[];
   let fixCount=0;
+  let flavorFixCount=0;
+  const flavorChanges=[];
   C().forEach(cat=>{
     (inv[cat]||[]).forEach(item=>{
       if(!item.name||!item.bought)return;
@@ -2810,10 +2819,31 @@ function syncStockToEOD(e){
         changes.push(item.name+': '+fmt(currentLeft)+' → '+fmt(correctLeft)+' (sold: '+fmt(totalSold)+')');
         fixCount++;
       }
+      // Preview flavor changes
+      if(Array.isArray(item.flavors)){
+        const fSoldData=flavorSoldMap[key]||{};
+        const allHaveBought=item.flavors.every(f=>!f.name||f.bought||f.bought===0);
+        if(allHaveBought){
+          item.flavors.forEach(f=>{
+            if(!f.name)return;
+            const fkey=f.name.toLowerCase();
+            const sold=fSoldData[fkey]||0;
+            const correctFlav=Math.max(0,Math.round((f.bought||0)-sold));
+            if(Math.abs((f.stock||0)-correctFlav)>0){
+              flavorChanges.push('  🍬 '+item.name+' → '+f.name+': '+(f.stock||0)+' → '+correctFlav+' (sold: '+sold+')');
+              flavorFixCount++;
+            }
+          });
+        }
+      }
     });
   });
-  if(!fixCount){showToast('Stock already matches EOD logs ✅','ok');return;}
-  if(!confirm('Sync stock to match EOD logs + activity log?\n\n'+changes.join('\n')+'\n\n'+fixCount+' items will be updated.\n\nSources: '+eodLogs.length+' EOD logs + '+orphanSales.length+' uncovered sales'))return;
+  if(!fixCount&&!flavorFixCount){showToast('Stock + flavors already match EOD logs ✅','ok');return;}
+  let confirmMsg='Sync stock to match EOD logs + activity log?\n\n';
+  if(fixCount)confirmMsg+=changes.join('\n')+'\n\n'+fixCount+' items will be updated.\n';
+  if(flavorFixCount)confirmMsg+=(fixCount?'\n':'')+'Flavor changes:\n'+flavorChanges.join('\n')+'\n\n'+flavorFixCount+' flavors will be updated.\n';
+  confirmMsg+='\nSources: '+eodLogs.length+' EOD logs + '+orphanSales.length+' uncovered sales';
+  if(!confirm(confirmMsg))return;
 
   // ── APPLY CHANGES ──
   C().forEach(cat=>{
@@ -2824,14 +2854,11 @@ function syncStockToEOD(e){
       const correctLeft=Math.round(Math.max(0,item.bought-totalSold)*10)/10;
       const currentLeft=gl(item);
       item.left=correctLeft;
-      // Sync flavor stock — ONLY if f.bought was explicitly set (user saved the item)
-      // Old EOD logs don't have per-flavor data, so backfilling is unreliable
+      // Sync flavor stock — uses f.bought baseline minus sales from logs
       if(Array.isArray(item.flavors)){
         const fSoldData=flavorSoldMap[key]||{};
-        const hasFlavorSales=Object.keys(fSoldData).length>0;
         const allHaveBought=item.flavors.every(f=>!f.name||f.bought||f.bought===0);
-        if(hasFlavorSales&&allHaveBought){
-          // All flavors have reliable bought baselines — rebuild accurately
+        if(allHaveBought){
           item.flavors.forEach(f=>{
             if(!f.name)return;
             const fkey=f.name.toLowerCase();
@@ -2839,8 +2866,7 @@ function syncStockToEOD(e){
             f.stock=Math.max(0,Math.round((f.bought||0)-sold));
           });
         }
-        // else: don't touch flavors — real-time deductions keep them accurate
-        // If total flavor stock doesn't match item left, adjust proportionally as fallback
+        // If total flavor stock is zero but item has stock, distribute evenly as fallback
         const totalFlavorNow=item.flavors.reduce((s,f)=>s+(f.stock||0),0);
         if(totalFlavorNow===0&&correctLeft>0){
           const each=Math.floor(correctLeft/item.flavors.length);
