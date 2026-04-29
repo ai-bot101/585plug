@@ -419,6 +419,9 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .loyalty-gift-title{font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--green);letter-spacing:2px;margin-bottom:8px;}
 .loyalty-gift-img{max-width:100%;border-radius:10px;margin-bottom:10px;max-height:200px;object-fit:contain;}
 .loyalty-gift-btn{background:var(--green);color:#0a0a0a;border:none;border-radius:8px;padding:10px 20px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;cursor:pointer;}
+.gift-opt-btn{background:rgba(255,255,255,0.06);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;color:var(--white);font-family:'Inter',sans-serif;font-size:14px;cursor:pointer;transition:all .2s;text-align:left;}
+.gift-opt-btn:hover{background:rgba(62,207,142,0.08);border-color:rgba(62,207,142,0.3);}
+.gift-opt-btn.selected{background:rgba(62,207,142,0.15);border-color:var(--green);color:var(--green);font-weight:600;}
 
 /* ANNOUNCEMENT POPUP */
 #announce-popup{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9600;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);touch-action:manipulation;-webkit-user-select:none;user-select:none;}
@@ -780,8 +783,9 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
       <div id="cart-gift" class="loyalty-gift" style="display:none;">
         <div class="loyalty-gift-title">🎁 YOU EARNED A FREE GIFT!</div>
         <img class="loyalty-gift-img" id="loyalty-gift-img" src="#" alt="Gift options">
-        <div style="font-size:12px;color:var(--white);margin-bottom:10px;opacity:0.8;">Pick one item from the box — it's on us!</div>
-        <input class="ca-inp" id="gift-choice-inp" type="text" placeholder="Type which gift you want..." style="margin-bottom:8px;">
+        <div style="font-size:12px;color:var(--white);margin-bottom:10px;opacity:0.8;">Pick one — it's on us!</div>
+        <div id="gift-options-btns" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;"></div>
+        <input type="hidden" id="gift-choice-inp" value="">
       </div>
       <div id="cart-announcement" style="display:none;background:linear-gradient(135deg,rgba(226,75,74,0.12),rgba(250,200,50,0.08));border:1px solid rgba(226,75,74,0.3);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:16px;">🔔</span><span style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--red);letter-spacing:2px;">ANNOUNCEMENT</span></div>
@@ -1091,8 +1095,21 @@ async function _loadGiftImage(){
         document.getElementById('loyalty-gift-img').src=data.imageUrl;
         document.getElementById('loyalty-gift-img').style.display='block';
       }
+      // Render gift option buttons
+      const btnsEl=document.getElementById('gift-options-btns');
+      if(btnsEl&&data&&Array.isArray(data.options)&&data.options.length){
+        btnsEl.innerHTML=data.options.map(opt=>
+          `<button class="gift-opt-btn" onclick="_selectGift(this,'${opt.replace(/'/g,"\\'")}')">🎁 ${opt}</button>`
+        ).join('');
+      }
     }
   }catch(e){}
+}
+
+function _selectGift(btn,name){
+  document.querySelectorAll('.gift-opt-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('gift-choice-inp').value=name;
 }
 
 async function _trackCustOrder(orderData){
