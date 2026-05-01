@@ -1463,9 +1463,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v56';
-const _BUILD_TS=1777645209541; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v56]';},1000);
+const _APP_VERSION='deploy-v57';
+const _BUILD_TS=1777646534262; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v57]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -3760,8 +3760,24 @@ async function deleteLogEntry(idx) {
 
   // Mark as intentionally deleted so merge-before-push doesn't re-add from Firebase
   if(entry.timestamp)_deletedLogKeys.add(entry.timestamp+'|'+(entry.who||'')+'|'+(entry.type||''));
+  // Also track by index-independent fingerprint in case timestamp is missing
+  const _delFP=(entry.time||'')+'|'+(entry.who||'')+'|'+(entry.amtReceived||entry.total||0)+'|'+(entry.date||'')+'|'+(entry.type||'');
   log.splice(idx, 1);
-  persist();
+  // Force immediate push — cancel any pending debounce to prevent race with Firebase pull
+  if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+  fbPushInFlight=true; // block pulls while we push
+  persistEncrypted().catch(()=>{});
+  // Direct immediate push to Firebase (skip debounce)
+  const _delPayload={
+    inv,log,cfg,
+    customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
+    updatedAt:Date.now()
+  };
+  fbLastTimestamp=_delPayload.updatedAt;
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(_delPayload)}).then(()=>{
+    fbPushInFlight=false;
+    _deletedLogKeys.clear();
+  }).catch(()=>{fbPushInFlight=false;});
   renderStats();
   renderItems();
   if (cu?.role === 'owner') renderDash();
@@ -7688,8 +7704,12 @@ function doReset(type){
     showToast('All stock quantities reset to zero','ok');
 
   }else if(type==='logs'){
+    _nukeInProgress=true; // skip merge-before-push so Firebase doesn't re-add old logs
+    fbPushInFlight=true; // block fbPull from overwriting during debounce window
+    if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
     log=[];
     customerCredits={};
+    _deletedLogKeys.clear();
     persist();renderAll();closeOv('reset-modal');
     showToast('Activity log cleared','ok');
 
