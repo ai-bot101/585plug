@@ -1463,9 +1463,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v57';
-const _BUILD_TS=1777646534262; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v57]';},1000);
+const _APP_VERSION='deploy-v58';
+const _BUILD_TS=1777647141897; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v58]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2400,7 +2400,10 @@ function calcComm(){
   const profit=calcProfit(objs,effectiveOrderAmt,vFee);
   const isOwner=cu?.role==='owner';
   // owner adding their own order = no commission, full profit goes to them
-  const{commission,pct}=isOwner?{commission:0,pct:0}:calcComm2(effectiveOrderAmt,profit);
+  // No commission if staff is buying for themselves (customer name matches staff name)
+  const _prevCustName=(customerName||'').trim().toLowerCase();
+  const _prevIsSelf=!isOwner&&_prevCustName&&_prevCustName===cu?.name?.trim().toLowerCase();
+  const{commission,pct}=(isOwner||_prevIsSelf)?{commission:0,pct:0}:calcComm2(effectiveOrderAmt,profit);
   let lines='';
   // owner sees full breakdown, staff only sees their earnings
   if(isOwner){
@@ -2540,7 +2543,9 @@ function confirmOrder(){
   // profit ignores the extra — extra is just credit, not real order revenue
   const effectiveAmt=total-extra-creditApplied;
   const profit=calcProfit(objs.map(o=>({item:o.item,qty:o.qty})),effectiveAmt,vFee2);
-  const{commission,deducted}=calcComm2(effectiveAmt,profit,cu.name);
+  // No commission if staff is buying for themselves (customer name matches staff name)
+  const _isSelfOrder=customer.trim().toLowerCase()===cu.name.trim().toLowerCase();
+  const{commission,deducted}=_isSelfOrder?{commission:0,deducted:0}:calcComm2(effectiveAmt,profit,cu.name);
   const e={type:'order',customer,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,label:o.label||'',price:o.price||0,flavors:o.flavors||null,flavorText:o.flavorText||''})),total,payMethod:orderPayMethod,payMethodLabel:ml,amtReceived:total,profit,commission,creditApplied,extraCredit:extra,shortPaid:short,note,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
   if(orderPayMethod==='split'){e.splitCash=splitCash;e.splitVirtual=splitVirtual;}
   log.unshift(e);persist();closeOrder();
@@ -5044,10 +5049,12 @@ function finalizeConfirmOrder(fbKey, assignedTo){
     return { item: found || null, qty };
   });
   const profit = calcProfit(objs, total, isVirtual);
-  // Only calc commission for staff, not owner
+  // Only calc commission for staff, not owner — and no commission if staff is the customer (self-buy)
   const ownerNames=cfg.users.filter(u=>u.role==='owner').map(u=>u.name);
   const isOwner=ownerNames.includes(assignedTo);
-  const {commission}=isOwner?{commission:0}:calcComm2(total, profit, assignedTo);
+  const _custName=(order.customerPhone||'').trim().toLowerCase();
+  const _isSelfOrder2=_custName&&_custName===assignedTo.trim().toLowerCase();
+  const {commission}=(isOwner||_isSelfOrder2)?{commission:0}:calcComm2(total, profit, assignedTo);
 
   const e = {
     type: 'order',
