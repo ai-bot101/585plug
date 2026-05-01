@@ -518,6 +518,32 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       <div id="cancelled-orders-section" style="display:none;margin-bottom:14px;"></div>
     </div>
     <div id="cust-view" style="display:none">
+      <!-- LOYALTY GIFT IMAGE -->
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-family:var(--head);font-size:13px;letter-spacing:1.5px;color:var(--text2);">LOYALTY GIFT IMAGE</div>
+          <button class="actionBtn" onclick="uploadLoyaltyGift()" style="font-size:11px;padding:6px 12px;">📷 Upload Image</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">This image shows to customers on their 5th order so they can pick a free gift</div>
+        <div id="loyalty-gift-preview" style="text-align:center;"></div>
+        <input type="file" id="loyalty-gift-file" accept="image/*" style="display:none;" onchange="handleLoyaltyGiftUpload(this)">
+      </div>
+      <!-- GIFT OPTIONS -->
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-family:var(--head);font-size:13px;letter-spacing:1.5px;color:var(--text2);">GIFT OPTIONS</div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Add the gift choices customers can pick from on their 5th order (no prices — it's free)</div>
+        <div id="gift-options-list"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <input type="text" id="gift-option-inp" placeholder="e.g. Rolling papers" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none;">
+          <button class="actionBtn" onclick="addGiftOption()" style="font-size:11px;padding:6px 12px;">+ Add</button>
+        </div>
+      </div>
+      <!-- REGISTERED CUSTOMERS -->
+      <div style="font-family:var(--head);font-size:13px;letter-spacing:1.5px;color:var(--text2);margin-bottom:10px;">REGISTERED CUSTOMERS</div>
+      <div id="reg-customers-list"><div class="empty">Loading...</div></div>
+      <div style="height:16px;"></div>
       <div class="swrap"><span class="sico">&#x2315;</span><input type="text" placeholder="Search customer name..." oninput="searchCustomers(this.value)" id="cust-search"></div>
       <div id="cust-results"><div class="empty">Type a customer name to search</div></div>
     </div>
@@ -1437,9 +1463,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v52';
-const _BUILD_TS=1777471265027; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v52]';},1000);
+const _APP_VERSION='deploy-v53';
+const _BUILD_TS=1777604713004; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v53]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -4455,7 +4481,7 @@ async function toggleSoldOut(cat,idx){
 async function delItem(cat,idx){if(!await _ownerGuard())return;const item=(inv[cat]||[])[idx];if(!confirm('Delete "'+item.name+'"?'))return;(inv[cat]||[]).splice(idx,1);persist();renderStats();renderItems();if(cu?.role==='owner')renderDash();showToast('Deleted: '+item.name,'err');}
 function setCat(c){activeCat=c;renderCatTabs();renderItems();}
 function filterItems(v){srch=v.toLowerCase();renderItems();}
-function switchView(v){['inv-view','log-view','dash-view','cust-view'].forEach(id=>document.getElementById(id).style.display='none');const map={inv:'inv-view',log:'log-view',dash:'dash-view',cust:'cust-view'};document.getElementById(map[v]).style.display='block';document.querySelectorAll('.vtab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.vtab').forEach(t=>{if((v==='inv'&&t.textContent.trim()==='Inventory')||(v==='log'&&t.textContent.trim()==='Sales Log')||(v==='dash'&&t.textContent.trim()==='Dashboard')||(v==='cust'&&t.textContent.trim()==='Customers'))t.classList.add('active');});if(v==='dash')renderDash();if(v==='log')renderStaffLog();}
+function switchView(v){['inv-view','log-view','dash-view','cust-view'].forEach(id=>document.getElementById(id).style.display='none');const map={inv:'inv-view',log:'log-view',dash:'dash-view',cust:'cust-view'};document.getElementById(map[v]).style.display='block';document.querySelectorAll('.vtab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.vtab').forEach(t=>{if((v==='inv'&&t.textContent.trim()==='Inventory')||(v==='log'&&t.textContent.trim()==='Sales Log')||(v==='dash'&&t.textContent.trim()==='Dashboard')||(v==='cust'&&t.textContent.trim()==='Customers'))t.classList.add('active');});if(v==='dash')renderDash();if(v==='log')renderStaffLog();if(v==='cust'){loadRegisteredCustomers();_loadLoyaltyGiftPreview();}}
 function openPwModal(){selPw=null;document.getElementById('pw-new').value='';document.getElementById('pw-conf').value='';document.getElementById('pwfields').style.display='none';document.getElementById('pwlist').innerHTML=cfg.users.map((u,i)=>`<div class="pwbtn" id="pwb${i}" onclick="pickPw(${i})"><div style="width:28px;height:28px;border-radius:7px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;background:${UC[i]}22;color:${UC[i]}">${u.name.charAt(0).toUpperCase()}</div><div><div class="pwn">${u.name}</div><div class="pwr">${u.role==='owner'?'Owner':'Staff'}</div></div></div>`).join('');document.getElementById('pw-modal').classList.add('open');}
 function pickPw(i){selPw=i;document.querySelectorAll('.pwbtn').forEach((b,j)=>b.classList.toggle('sel',j===i));document.getElementById('pwfields').style.display='block';document.getElementById('pw-new').focus();}
 async function savePw(){
@@ -4559,6 +4585,7 @@ function processWebsiteOrders(pendingOrders) {
           }
           _restoreFlavorStock(foundItem,oi,qty);
         });
+        if(heldOrder.custUsername)_decrementCustOrder(heldOrder.custUsername);
         _debugPending('DELETED-BY-EXTERNAL-CANCEL',fbKey,'held order cancelled from menu');
         delete pendingWebOrders[fbKey];
       } else if (order._stockDeducted) {
@@ -5162,6 +5189,7 @@ function cancelAllPending(){
       }
       _restoreFlavorStock(foundItem,oi,qty);
     });
+    if(order.custUsername)_decrementCustOrder(order.custUsername);
     delete pendingWebOrders[fbKey];
     processedOrderIds.add(fbKey);
     fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
@@ -5255,6 +5283,8 @@ function doReverseConfirmed(fbKey) {
       log.unshift({type:'adjustment',name:itemName,amount:qty,direction:'add',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'Confirmed order reversed (no log match)'});
     });
   }
+
+  if(logEntry&&logEntry.custUsername)_decrementCustOrder(logEntry.custUsername);
 
   // Delete from Firebase pending_orders
   fetch(FB_URL + '/pending_orders/' + fbKey + '.json', { method: 'DELETE' }).catch(()=>{});
@@ -8615,6 +8645,179 @@ function confirmSelfBuy(){
   renderStats();renderItems();
   if(cu?.role==='owner')renderDash();else renderStaffLog();
   showToast('Purchase logged · '+fmtP(totalOwed)+' owed','ok');
+}
+
+// CUSTOMER LOYALTY FUNCTIONS
+async function _decrementCustOrder(username){
+  try{
+    const res=await fetch(FB_URL+'/customers/'+username+'.json');
+    if(!res.ok)return;
+    const data=await res.json();
+    if(!data)return;
+    const newCount=Math.max(0,(data.orderCount||0)-1);
+    // Also remove the most recent order from their history
+    const orders=Array.isArray(data.orders)?data.orders:[];
+    if(orders.length>0)orders.shift();
+    await fetch(FB_URL+'/customers/'+username+'.json',{
+      method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({orderCount:newCount,orders})
+    });
+    console.log('[LOYALTY] Decremented @'+username+' order count to '+newCount);
+  }catch(e){console.error('[LOYALTY] Failed to decrement customer order:',e);}
+}
+
+async function loadRegisteredCustomers(){
+  const el=document.getElementById('reg-customers-list');
+  if(!el)return;
+  el.innerHTML='<div class="empty">Loading...</div>';
+  try{
+    const res=await fetch(FB_URL+'/customers.json');
+    if(!res.ok)throw new Error('Failed');
+    const data=await res.json();
+    if(!data||!Object.keys(data).length){el.innerHTML='<div class="empty">No registered customers yet</div>';return;}
+    const customers=Object.entries(data).map(([user,d])=>({username:user,...d})).sort((a,b)=>(b.orderCount||0)-(a.orderCount||0));
+    el.innerHTML=customers.map(c=>{
+      const oc=c.orderCount||0;
+      const progress=oc%5;
+      const nextGift=5-progress;
+      const pct=Math.round((progress/5)*100);
+      const ordersHtml=(c.orders||[]).slice(0,5).map(o=>
+        `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+          <span style="color:var(--text2);">${o.date||''} ${o.time||''}</span>
+          <span style="color:var(--text);">${o.items||''}</span>
+          <span style="color:var(--green);font-family:var(--mono);">$${o.total||0}</span>
+          ${o.giftChoice?'<span style="color:var(--accent);">🎁 '+o.giftChoice+'</span>':''}
+        </div>`
+      ).join('');
+      return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div>
+            <span style="font-size:15px;font-weight:600;color:var(--text);">${c.name||c.username}</span>
+            <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:6px;">@${c.username}</span>
+            <span style="font-size:10px;color:var(--orange,#f4a24a);font-family:var(--mono);margin-left:6px;">🔑 ${c.passPlain||'(hidden)'}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;color:var(--green);font-family:var(--mono);font-weight:600;">${oc} orders</span>
+            <button onclick="deleteCustomerAccount('${c.username}')" style="background:rgba(226,75,74,0.12);border:1px solid rgba(226,75,74,0.3);border-radius:6px;padding:3px 8px;color:var(--red);font-size:10px;font-family:var(--mono);cursor:pointer;letter-spacing:0.5px;">🗑 Delete</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;">Gift Progress</div>
+          <div style="flex:1;height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--green),var(--accent));border-radius:3px;"></div>
+          </div>
+          <div style="font-size:11px;color:var(--accent);font-family:var(--mono);">${progress}/5</div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px;">${nextGift===5?'🎁 Just earned a gift!':nextGift+' more until next free gift'} · Joined ${c.createdAt?new Date(c.createdAt).toLocaleDateString():''}</div>
+        ${ordersHtml?'<details style="margin-top:6px;"><summary style="font-size:11px;color:var(--accent);cursor:pointer;font-family:var(--sans);">Recent Orders</summary><div style="margin-top:6px;">'+ordersHtml+'</div></details>':''}
+      </div>`;
+    }).join('');
+  }catch(e){el.innerHTML='<div class="empty">Error loading customers</div>';console.error(e);}
+}
+
+async function deleteCustomerAccount(username){
+  if(!confirm('Delete account @'+username+'? This cannot be undone.'))return;
+  try{
+    const res=await fetch(FB_URL+'/customers/'+username+'.json',{method:'DELETE'});
+    if(!res.ok)throw new Error('Failed');
+    showToast('Account @'+username+' deleted','ok');
+    loadRegisteredCustomers();
+  }catch(e){showToast('Failed to delete account','err');console.error(e);}
+}
+
+function uploadLoyaltyGift(){document.getElementById('loyalty-gift-file').click();}
+
+async function handleLoyaltyGiftUpload(input){
+  if(!input.files||!input.files[0])return;
+  const file=input.files[0];
+  if(file.size>20*1024*1024){showToast('Image too large (max 20MB)','err');return;}
+  showToast('Compressing image...','');
+  const img=new Image();
+  img.onload=async function(){
+    const maxW=800,maxH=800;
+    let w=img.width,h=img.height;
+    if(w>maxW||h>maxH){
+      const scale=Math.min(maxW/w,maxH/h);
+      w=Math.round(w*scale);h=Math.round(h*scale);
+    }
+    const canvas=document.createElement('canvas');
+    canvas.width=w;canvas.height=h;
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(img,0,0,w,h);
+    const dataUrl=canvas.toDataURL('image/jpeg',0.7);
+    try{
+      await fetch(FB_URL+'/loyalty_gift.json',{
+        method:'PATCH',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({imageUrl:dataUrl,uploadedAt:Date.now()})
+      });
+      showToast('Gift image uploaded! 🎁','ok');
+      _renderLoyaltyGiftPreview(dataUrl);
+    }catch(err){showToast('Upload failed','err');}
+  };
+  img.onerror=function(){showToast('Could not read image','err');};
+  img.src=URL.createObjectURL(file);
+}
+
+async function _loadLoyaltyGiftPreview(){
+  try{
+    const res=await fetch(FB_URL+'/loyalty_gift.json');
+    if(res.ok){
+      const d=await res.json();
+      if(d&&d.imageUrl)_renderLoyaltyGiftPreview(d.imageUrl);
+      if(d&&d.options)_renderGiftOptions(d.options);
+    }
+  }catch(e){}
+}
+
+function _renderLoyaltyGiftPreview(url){
+  const el=document.getElementById('loyalty-gift-preview');
+  if(el)el.innerHTML='<img src="'+url+'" style="max-width:100%;max-height:150px;border-radius:10px;border:1px solid var(--border);margin-top:4px;" alt="Gift">';
+}
+
+function _renderGiftOptions(options){
+  const el=document.getElementById('gift-options-list');
+  if(!el)return;
+  if(!options||!options.length){el.innerHTML='<div style="font-size:11px;color:var(--text3);text-align:center;padding:8px;">No gift options yet — add some below</div>';return;}
+  el.innerHTML=options.map((opt,i)=>
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
+      <span style="font-size:13px;color:var(--text);font-family:var(--sans);">🎁 ${opt}</span>
+      <button onclick="removeGiftOption(${i})" style="background:rgba(226,75,74,0.12);border:1px solid rgba(226,75,74,0.3);border-radius:6px;padding:2px 8px;color:var(--red);font-size:11px;cursor:pointer;">✕</button>
+    </div>`
+  ).join('');
+}
+
+async function addGiftOption(){
+  const inp=document.getElementById('gift-option-inp');
+  const name=inp.value.trim();
+  if(!name){showToast('Enter a gift option name','err');return;}
+  try{
+    const res=await fetch(FB_URL+'/loyalty_gift.json');
+    const data=res.ok?await res.json():{};
+    const options=Array.isArray(data?.options)?data.options:[];
+    options.push(name);
+    await fetch(FB_URL+'/loyalty_gift.json',{
+      method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({options})
+    });
+    inp.value='';
+    _renderGiftOptions(options);
+    showToast('Gift option added','ok');
+  }catch(e){showToast('Failed to add option','err');}
+}
+
+async function removeGiftOption(idx){
+  try{
+    const res=await fetch(FB_URL+'/loyalty_gift.json');
+    const data=res.ok?await res.json():{};
+    const options=Array.isArray(data?.options)?data.options:[];
+    options.splice(idx,1);
+    await fetch(FB_URL+'/loyalty_gift.json',{
+      method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({options})
+    });
+    _renderGiftOptions(options);
+    showToast('Gift option removed','ok');
+  }catch(e){showToast('Failed to remove option','err');}
 }
 
 restoreEncrypted().then(()=>{
