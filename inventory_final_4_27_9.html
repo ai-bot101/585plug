@@ -1463,9 +1463,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v54';
-const _BUILD_TS=1777605885664; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v54]';},1000);
+const _APP_VERSION='deploy-v56';
+const _BUILD_TS=1777645209541; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v56]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2394,7 +2394,7 @@ function calcComm(){
   const extra=parseFloat(document.getElementById('ord-extra').value)||0;
   const vFee=orderPayMethod&&(isV(orderPayMethod)||orderPayMethod==='split');
   const creditApplied=Math.min(credit,total);
-  const objs=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:o.qty}));
+  const objs=orderItems.map(o=>({item:(inv[o.cat]||[])[o.ri],qty:Math.max(o.qty||1,labelToQty(o.label||''))}));
   // profit based on (total - extra - credit) since extra is just saved for next order
   const effectiveOrderAmt=total-extra-creditApplied;
   const profit=calcProfit(objs,effectiveOrderAmt,vFee);
