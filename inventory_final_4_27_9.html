@@ -1463,9 +1463,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v53';
-const _BUILD_TS=1777604713004; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v53]';},1000);
+const _APP_VERSION='deploy-v54';
+const _BUILD_TS=1777605885664; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v54]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -7129,11 +7129,15 @@ async function saveEODLog(){
   _debugOverlayLog('[EOD-SAVE] Stored cutoff for '+dl+': '+saveTime+' | orders captured: '+record.txCount);
 
   // Clear ALL confirmed orders for this day from view (stock deductions stay in log)
+  // Also delete from Firebase pending_orders so they don't come back on reload
   let cleared=0;
   log.forEach(e=>{
     if((e.type==='sell'||e.type==='order'||e.type==='selfbuy')&&e.date===dl&&!e._cleared){
       e._cleared=true;
       cleared++;
+      if(e.webOrderKey){
+        fetch(FB_URL+'/pending_orders/'+e.webOrderKey+'.json',{method:'DELETE'}).catch(()=>{});
+      }
     }
   });
 
