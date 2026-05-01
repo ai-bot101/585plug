@@ -554,7 +554,9 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
     <div class="order-handle"></div>
     <div class="order-title">+ Add Customer Order</div>
     <div class="o-field"><label>Customer Name</label>
-      <input type="text" id="ord-customer" placeholder="e.g. John" oninput="checkCustomerCredit(this.value)">
+      <input type="text" id="ord-customer" placeholder="e.g. John" oninput="checkCustomerCredit(this.value);_searchCustAccounts(this.value)" autocomplete="off">
+      <div id="cust-acct-suggestions" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin-top:4px;max-height:150px;overflow-y:auto;"></div>
+      <div id="cust-acct-linked" style="display:none;margin-top:6px;padding:8px 12px;background:rgba(62,207,142,0.08);border:1px solid rgba(62,207,142,0.25);border-radius:8px;font-size:11px;color:var(--green);font-weight:600;">✅ Linked to account — order will count toward loyalty</div>
     </div>
     <!-- credit alert shown when customer has a balance -->
     <div id="credit-alert" style="display:none;background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;">
@@ -1463,9 +1465,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v61';
-const _BUILD_TS=1777652625676; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v61]';},1000);
+const _APP_VERSION='deploy-v62';
+const _BUILD_TS=1777652940530; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v62]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2080,7 +2082,7 @@ async function saveItemCost(){
   persist();closeOv('editcost-modal');openCostModal();showToast('Cost saved for '+item.name,'ok');
 }
 function openOrderSheet(){orderItems=[];orderPayMethod=null;document.getElementById('ord-customer').value='';document.getElementById('ord-total').value='';document.getElementById('ord-extra').value='';document.getElementById('ord-short').value='';document.getElementById('ord-note').value='';document.getElementById('item-search-inp').value='';document.getElementById('isr').classList.remove('open');document.querySelectorAll('.opm-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('comm-prev').classList.remove('show');document.getElementById('credit-alert').style.display='none';document.getElementById('deal-alert').style.display='none';document.getElementById('ord-confirm-btn').disabled=true;renderOrdItems();document.getElementById('order-overlay').classList.add('open');setTimeout(()=>document.getElementById('ord-customer').focus(),300);}
-function closeOrder(){document.getElementById('order-overlay').classList.remove('open');}
+function closeOrder(){document.getElementById('order-overlay').classList.remove('open');_orderCustUsername=null;const lk=document.getElementById('cust-acct-linked');if(lk)lk.style.display='none';const sg=document.getElementById('cust-acct-suggestions');if(sg)sg.style.display='none';}
 function isAddOnOnly(item){return Array.isArray(item.prices)&&item.prices.length>0&&item.prices.every(p=>p.addOnOnly);}
 
 // Strain weight mapping: label → units to deduct from stock
@@ -2478,7 +2480,8 @@ function confirmOrder(){
       note:note||'',
       extraCredit:extra||0,
       shortPaid:short||0,
-      confirmed:false
+      confirmed:false,
+      custUsername:_orderCustUsername||null
     };
     if(orderPayMethod==='split'){pendingData.splitCash=splitCash;pendingData.splitVirtual=splitVirtual;}
     // Deduct inventory immediately (restored if cancelled) — wrapped in try/catch so order still saves even if deduction fails
@@ -5132,6 +5135,11 @@ function finalizeConfirmOrder(fbKey, assignedTo){
     // PATCH failed — try DELETE anyway
     fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
   });
+
+  // Track loyalty for customer accounts (both website and manual linked orders)
+  if(order.custUsername){
+    _incrementCustOrder(order.custUsername,{date:tday(),time:tstr(),total,orderItems:order.orderItems||[]});
+  }
 
   persist();
   renderPendingOrders();
@@ -8697,6 +8705,81 @@ function confirmSelfBuy(){
 }
 
 // CUSTOMER LOYALTY FUNCTIONS
+let _orderCustUsername=null; // linked customer account for manual orders
+let _custAccountsCache=null; // cached registered customers
+let _custAccountsCacheTime=0;
+
+async function _loadCustAccountsCache(){
+  // Cache for 30 seconds
+  if(_custAccountsCache&&Date.now()-_custAccountsCacheTime<30000)return _custAccountsCache;
+  try{
+    const res=await fetch(FB_URL+'/customers.json');
+    if(!res.ok)return{};
+    const data=await res.json();
+    _custAccountsCache=data||{};
+    _custAccountsCacheTime=Date.now();
+    return _custAccountsCache;
+  }catch(e){return{};}
+}
+
+function _searchCustAccounts(query){
+  const sg=document.getElementById('cust-acct-suggestions');
+  const linked=document.getElementById('cust-acct-linked');
+  if(!sg)return;
+  if(!query||query.length<1){sg.style.display='none';_orderCustUsername=null;if(linked)linked.style.display='none';return;}
+  _loadCustAccountsCache().then(accounts=>{
+    const q=query.trim().toLowerCase();
+    const matches=Object.entries(accounts).filter(([user,d])=>{
+      const name=(d.name||'').toLowerCase();
+      const uname=user.toLowerCase();
+      return name.includes(q)||uname.includes(q);
+    }).slice(0,5);
+    if(!matches.length){sg.style.display='none';return;}
+    sg.innerHTML=matches.map(([user,d])=>{
+      const oc=d.orderCount||0;
+      return`<div onclick="_pickCustAccount('${user.replace(/'/g,"\\'")}','${(d.name||user).replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background='transparent'">
+        <div><div style="font-size:13px;font-weight:600;color:var(--text);">${d.name||user}</div><div style="font-size:10px;color:var(--text3);">@${user} · ${oc} order${oc!==1?'s':''}</div></div>
+        <div style="font-size:10px;color:var(--accent);font-weight:600;">Link ✓</div>
+      </div>`;
+    }).join('');
+    sg.style.display='block';
+  });
+}
+
+function _pickCustAccount(username,name){
+  _orderCustUsername=username;
+  document.getElementById('ord-customer').value=name;
+  document.getElementById('cust-acct-suggestions').style.display='none';
+  const linked=document.getElementById('cust-acct-linked');
+  if(linked)linked.style.display='block';
+  checkCustomerCredit(name);
+}
+
+async function _incrementCustOrder(username,orderData){
+  try{
+    const res=await fetch(FB_URL+'/customers/'+username+'.json');
+    if(!res.ok)return;
+    const data=await res.json();
+    if(!data)return;
+    const newCount=(data.orderCount||0)+1;
+    const orders=Array.isArray(data.orders)?data.orders:[];
+    const orderEntry={
+      date:orderData.date||tday(),
+      time:orderData.time||tstr(),
+      total:orderData.total||0,
+      items:(orderData.orderItems||[]).map(i=>i.itemName||'').join(', '),
+      timestamp:Date.now()
+    };
+    orders.unshift(orderEntry);
+    if(orders.length>50)orders.splice(50);
+    await fetch(FB_URL+'/customers/'+username+'.json',{
+      method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({orderCount:newCount,orders})
+    });
+    console.log('[LOYALTY] Incremented @'+username+' order count to '+newCount);
+  }catch(e){console.error('[LOYALTY] Failed to increment customer order:',e);}
+}
+
 async function _decrementCustOrder(username){
   try{
     const res=await fetch(FB_URL+'/customers/'+username+'.json');
