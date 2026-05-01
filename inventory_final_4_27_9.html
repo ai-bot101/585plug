@@ -1463,9 +1463,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v59';
-const _BUILD_TS=1777648173024; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v59]';},1000);
+const _APP_VERSION='deploy-v60';
+const _BUILD_TS=1777649010130; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v60]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2343,24 +2343,39 @@ function pickFlavor(cat,ri,flavorName,fi){
 function renderOrdItems(){const list=document.getElementById('order-items-list');if(!orderItems.length){list.innerHTML='<div style="font-size:12px;color:var(--text3);padding:8px 0 12px;">No items added yet — search above</div>';return;}list.innerHTML=orderItems.map((o,i)=>{const it=(inv[o.cat]||[])[o.ri];const ao=it&&isAddOnOnly(it);const flav=o.flavorText?`<span style="font-size:10px;color:var(--accent);margin-left:6px;">🍬 ${o.flavorText}</span>`:'';const tierTag=o.label?`<span style="font-size:10px;color:var(--green);margin-left:6px;text-transform:capitalize;">${o.label}${o.price?' · $'+o.price:''}</span>`:'';return`<div class="order-item-row"><div class="oir-name">${o.itemName}${tierTag}${flav}${ao?'<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>':''}</div><div class="oir-qty"><input type="number" value="${o.qty}" min="0.1" step="0.1" onchange="updOQ(${i},this.value)"></div><button class="oir-remove" onclick="remOI(${i})">x</button></div>`;}).join('');}
 function updOQ(i,v){
   const newQty=parseFloat(v)||0;
-  orderItems[i].qty=newQty;
+  const o=orderItems[i];
+  const item=(inv[o.cat]||[])[o.ri];
+  // If item has flavors and qty is increasing, show multi-flavor picker to reassign
+  if(item&&newQty>1&&o.flavorText){
+    const flavorsAvail=(item.flavors||[]).filter(f=>f.name&&f.stock>0);
+    if(flavorsAvail.length>0){
+      // Remove this order item — multi-flavor picker will re-add it
+      const savedLabel=o.label||'';
+      const savedPrice=o.price||0;
+      orderItems.splice(i,1);
+      _pendingPriceTier={label:savedLabel,qty:newQty,price:savedPrice*(newQty/(o.qty||1))};
+      showFlavorPicker(o.cat,o.ri,item,flavorsAvail);
+      renderOrdItems();calcComm();
+      return;
+    }
+  }
+  o.qty=newQty;
   // Keep flavors object in sync for single-flavor items
-  if(orderItems[i].flavors&&typeof orderItems[i].flavors==='object'){
-    const fkeys=Object.keys(orderItems[i].flavors);
-    if(fkeys.length===1)orderItems[i].flavors[fkeys[0]]=newQty;
+  if(o.flavors&&typeof o.flavors==='object'){
+    const fkeys=Object.keys(o.flavors);
+    if(fkeys.length===1)o.flavors[fkeys[0]]=newQty;
   }
   // Update label to match the new qty so EOD log shows the right amount
-  const item=(inv[orderItems[i].cat]||[])[orderItems[i].ri];
   if(item){
     // Check if new qty matches any price tier
     const tiers=(item.prices||[]).filter(p=>p.label&&p.price>0);
     const matchTier=tiers.find(t=>Math.abs(labelToQty(t.label)-newQty)<0.01);
     if(matchTier){
-      orderItems[i].label=matchTier.label;
-      orderItems[i].price=parseFloat(matchTier.price)||0;
+      o.label=matchTier.label;
+      o.price=parseFloat(matchTier.price)||0;
     } else {
       // Custom amount — label shows grams
-      orderItems[i].label=fmt(newQty)+'g';
+      o.label=fmt(newQty)+'g';
     }
     renderOrdItems();
   }
