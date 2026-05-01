@@ -1463,9 +1463,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v60';
-const _BUILD_TS=1777649010130; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v60]';},1000);
+const _APP_VERSION='deploy-v61';
+const _BUILD_TS=1777652625676; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v61]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -5182,6 +5182,9 @@ function cancelWebOrder(fbKey) {
     _debugPending('CANCELLED',fbKey,'user cancelled — stock was never deducted, nothing to restore');
     showToast('Order cancelled (stock was not deducted for this order)','err');
   }
+  // Decrement loyalty count if customer had an account
+  if(order.custUsername)_decrementCustOrder(order.custUsername);
+
   delete pendingWebOrders[fbKey];
   processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
 
