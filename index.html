@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260429100104';
+var _MENU_V = 'v20260430230512';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -388,6 +388,41 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .ap-perm-del-btn:hover{background:rgba(244,162,74,0.2);border-color:var(--orange,#f4a24a);}
 .ap-order.cancelled{opacity:0.5;border-style:dashed;}
 
+/* CUSTOMER AUTH */
+#cust-auth-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);}
+#cust-auth-overlay.open{display:flex;}
+.ca-card{background:var(--black2);border:1px solid var(--border2);border-radius:18px;width:100%;max-width:360px;padding:28px 24px;animation:annSlideIn 0.3s ease-out;}
+.ca-title{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--white);letter-spacing:2px;text-align:center;margin-bottom:4px;}
+.ca-sub{font-size:12px;color:var(--white3);text-align:center;margin-bottom:20px;}
+.ca-inp{width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border2);border-radius:10px;padding:13px 14px;color:var(--white);font-family:'Inter',sans-serif;font-size:14px;outline:none;margin-bottom:10px;transition:border-color .2s;}
+.ca-inp:focus{border-color:var(--green);}
+.ca-inp::placeholder{color:var(--white3);}
+.ca-btn{width:100%;padding:14px;border:none;border-radius:12px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;cursor:pointer;transition:background .2s;margin-top:6px;}
+.ca-btn-primary{background:var(--green);color:#0a0a0a;}
+.ca-btn-primary:hover{background:#34b87e;}
+.ca-btn-secondary{background:transparent;border:1px solid var(--border2);color:var(--white3);font-size:14px;letter-spacing:1px;}
+.ca-btn-secondary:hover{background:rgba(255,255,255,0.04);}
+.ca-err{color:var(--red);font-size:12px;text-align:center;margin-top:8px;min-height:16px;}
+.ca-switch{font-size:12px;color:var(--white3);text-align:center;margin-top:14px;}
+.ca-switch span{color:var(--green);cursor:pointer;text-decoration:underline;}
+.ca-user-pill{display:flex;align-items:center;gap:6px;background:rgba(62,207,142,0.08);border:1px solid rgba(62,207,142,0.2);border-radius:8px;padding:5px 10px;color:var(--green);font-size:12px;font-weight:500;cursor:pointer;transition:background .2s;}
+.ca-user-pill:hover{background:rgba(62,207,142,0.15);}
+/* LOYALTY PROGRESS */
+.loyalty-bar{background:rgba(255,255,255,0.06);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:12px;}
+.loyalty-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.loyalty-label{font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--white3);letter-spacing:1.5px;}
+.loyalty-count{font-family:'Oswald',sans-serif;font-size:13px;color:var(--green);font-weight:500;}
+.loyalty-track{height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;}
+.loyalty-fill{height:100%;background:linear-gradient(90deg,var(--green),#a89cff);border-radius:4px;transition:width .4s ease;}
+.loyalty-msg{font-size:11px;color:var(--white3);margin-top:6px;text-align:center;}
+.loyalty-gift{background:linear-gradient(135deg,rgba(62,207,142,0.12),rgba(168,156,255,0.08));border:1px solid rgba(62,207,142,0.3);border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;}
+.loyalty-gift-title{font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--green);letter-spacing:2px;margin-bottom:8px;}
+.loyalty-gift-img{max-width:100%;border-radius:10px;margin-bottom:10px;max-height:200px;object-fit:contain;}
+.loyalty-gift-btn{background:var(--green);color:#0a0a0a;border:none;border-radius:8px;padding:10px 20px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;cursor:pointer;}
+.gift-opt-btn{background:rgba(255,255,255,0.06);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;color:var(--white);font-family:'Inter',sans-serif;font-size:14px;cursor:pointer;transition:all .2s;text-align:left;}
+.gift-opt-btn:hover{background:rgba(62,207,142,0.08);border-color:rgba(62,207,142,0.3);}
+.gift-opt-btn.selected{background:rgba(62,207,142,0.15);border-color:var(--green);color:var(--green);font-weight:600;}
+
 /* ANNOUNCEMENT POPUP */
 #announce-popup{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9600;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(8px);touch-action:manipulation;-webkit-user-select:none;user-select:none;}
 #announce-popup.open{display:flex;}
@@ -583,6 +618,40 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
   </div>
 </div>
 
+<div id="cust-auth-overlay">
+  <div class="ca-card">
+    <div id="ca-login-form">
+      <div class="ca-title">WELCOME BACK</div>
+      <div style="background:linear-gradient(135deg,rgba(62,207,142,0.15),rgba(168,156,255,0.1));border:1px solid rgba(62,207,142,0.25);border-radius:12px;padding:12px 14px;margin-bottom:18px;text-align:center;">
+        <div style="font-size:20px;margin-bottom:4px;">🎁</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;color:var(--green);letter-spacing:1.5px;margin-bottom:4px;">EVERY 5TH ORDER = FREE GIFT</div>
+        <div style="font-size:11px;color:var(--white3);line-height:1.4;">Sign in to track your orders & earn rewards. Your 5th order gets a free gift on us!</div>
+      </div>
+      <input class="ca-inp" id="ca-login-user" type="text" placeholder="Username" autocomplete="username">
+      <input class="ca-inp" id="ca-login-pass" type="password" placeholder="Password" autocomplete="current-password">
+      <button class="ca-btn ca-btn-primary" onclick="custLogin()">LOG IN</button>
+      <button class="ca-btn ca-btn-secondary" onclick="closeCustAuth()" style="margin-top:8px;">CONTINUE AS GUEST</button>
+      <div class="ca-err" id="ca-login-err"></div>
+      <div class="ca-switch">No account? <span onclick="showCustSignup()">Sign up</span></div>
+    </div>
+    <div id="ca-signup-form" style="display:none;">
+      <div class="ca-title">CREATE ACCOUNT</div>
+      <div style="background:linear-gradient(135deg,rgba(62,207,142,0.15),rgba(168,156,255,0.1));border:1px solid rgba(62,207,142,0.25);border-radius:12px;padding:12px 14px;margin-bottom:18px;text-align:center;">
+        <div style="font-size:20px;margin-bottom:4px;">🎁</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;color:var(--green);letter-spacing:1.5px;margin-bottom:4px;">EVERY 5TH ORDER = FREE GIFT</div>
+        <div style="font-size:11px;color:var(--white3);line-height:1.4;">Create an account to start earning. Your 5th order gets a free gift on us!</div>
+      </div>
+      <input class="ca-inp" id="ca-signup-name" type="text" placeholder="Your name" autocomplete="name">
+      <input class="ca-inp" id="ca-signup-user" type="text" placeholder="Choose a username" autocomplete="username">
+      <input class="ca-inp" id="ca-signup-pass" type="password" placeholder="Create a password" autocomplete="new-password">
+      <input class="ca-inp" id="ca-signup-pass2" type="password" placeholder="Confirm password" autocomplete="new-password">
+      <button class="ca-btn ca-btn-primary" onclick="custSignup()">CREATE ACCOUNT</button>
+      <div class="ca-err" id="ca-signup-err"></div>
+      <div class="ca-switch">Already have an account? <span onclick="showCustLogin()">Log in</span></div>
+    </div>
+  </div>
+</div>
+
 <!-- MAIN APP -->
 <div id="app">
   <!-- NEW DROP MODAL -->
@@ -609,6 +678,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
           <div class="logo-sub">Quality You Can Trust · Rochester NY</div>
         </div>
       </div>
+      <button class="ca-user-pill" id="ca-header-btn" onclick="openCustAuth()" title="Account">👤 <span id="ca-header-name">Sign In</span></button>
       <button onclick="openAdminGate()" style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white3);font-size:14px;cursor:pointer;opacity:0.4;transition:opacity .2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.4'" title="Admin">⚙️</button>
       <button class="orders-btn" id="orders-btn" onclick="openOrderHistory()" style="display:none;">📜 Orders</button>
     </div>
@@ -706,6 +776,26 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
     <div class="cart-items" id="cart-items-list"></div>
     <div class="cart-footer">
       <div class="fee-breakdown" id="fee-breakdown"></div>
+      <!-- LOYALTY PROGRESS -->
+      <div id="cart-loyalty" style="display:none;">
+        <div class="loyalty-bar" id="loyalty-progress-bar">
+          <div class="loyalty-header">
+            <div class="loyalty-label">REWARDS PROGRESS</div>
+            <div class="loyalty-count" id="loyalty-count">0 / 5</div>
+          </div>
+          <div class="loyalty-track"><div class="loyalty-fill" id="loyalty-fill" style="width:0%;"></div></div>
+          <div class="loyalty-msg" id="loyalty-msg">Place 5 orders to earn a free gift!</div>
+        </div>
+      </div>
+      <!-- GIFT SELECTION (shows on 5th order) -->
+      <div id="cart-gift" class="loyalty-gift" style="display:none;">
+        <div class="loyalty-gift-title">🎁 YOU EARNED A FREE GIFT!</div>
+        <img class="loyalty-gift-img" id="loyalty-gift-img" src="#" alt="Gift options">
+        <div style="font-size:12px;color:var(--white);margin-bottom:10px;opacity:0.8;">Pick one — it's on us!</div>
+        <div id="gift-lock-msg" style="font-size:11px;color:var(--white3);margin-bottom:8px;text-align:center;display:none;"></div>
+        <div id="gift-options-btns" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;"></div>
+        <input type="hidden" id="gift-choice-inp" value="">
+      </div>
       <div id="cart-announcement" style="display:none;background:linear-gradient(135deg,rgba(226,75,74,0.12),rgba(250,200,50,0.08));border:1px solid rgba(226,75,74,0.3);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:16px;">🔔</span><span style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--red);letter-spacing:2px;">ANNOUNCEMENT</span></div>
         <div id="cart-announcement-text" style="color:var(--white);font-size:12.5px;line-height:1.5;opacity:0.85;"></div>
@@ -844,6 +934,249 @@ let fbPollTimer = null;
 let addrTimer = null;
 let addrResults = [];
 
+// ── CUSTOMER AUTH & LOYALTY ──
+let _custUser=null;
+const LOYALTY_EVERY=5;
+
+async function _hashPass(p){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(p));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function _showCustAuthIfNeeded(){
+  if(_custUser)return;
+  if(sessionStorage.getItem('_custGuest')==='1')return;
+  showCustLogin();
+  document.getElementById('cust-auth-overlay').classList.add('open');
+}
+
+function openCustAuth(){
+  if(_custUser){
+    if(confirm('Logged in as '+_custUser.name+' (@'+_custUser.username+')\n\nOrders: '+(_custUser.orderCount||0)+'\n\nLog out?')){
+      custLogout();
+    }
+    return;
+  }
+  showCustLogin();
+  document.getElementById('cust-auth-overlay').classList.add('open');
+}
+function closeCustAuth(){
+  document.getElementById('cust-auth-overlay').classList.remove('open');
+  document.getElementById('ca-login-err').textContent='';
+  document.getElementById('ca-signup-err').textContent='';
+  if(!_custUser)sessionStorage.setItem('_custGuest','1');
+}
+
+function showCustLogin(){
+  document.getElementById('ca-login-form').style.display='block';
+  document.getElementById('ca-signup-form').style.display='none';
+  document.getElementById('ca-login-err').textContent='';
+}
+function showCustSignup(){
+  document.getElementById('ca-login-form').style.display='none';
+  document.getElementById('ca-signup-form').style.display='block';
+  document.getElementById('ca-signup-err').textContent='';
+}
+
+async function custSignup(){
+  const name=document.getElementById('ca-signup-name').value.trim();
+  const user=document.getElementById('ca-signup-user').value.trim().toLowerCase();
+  const pass=document.getElementById('ca-signup-pass').value;
+  const pass2=document.getElementById('ca-signup-pass2').value;
+  const errEl=document.getElementById('ca-signup-err');
+  if(!name){errEl.textContent='Enter your name';return;}
+  if(!user||user.length<3){errEl.textContent='Username must be at least 3 characters';return;}
+  if(/[^a-z0-9_]/.test(user)){errEl.textContent='Username can only use letters, numbers, underscore';return;}
+  if(!pass||pass.length<4){errEl.textContent='Password must be at least 4 characters';return;}
+  if(pass!==pass2){errEl.textContent='Passwords don\'t match';return;}
+  errEl.textContent='Creating account...';
+  try{
+    const existing=await fetch(FB_URL+'/inv_d6bb4/customers/'+user+'.json');
+    if(existing.ok){const d=await existing.json();if(d){errEl.textContent='Username already taken';return;}}
+    const hash=await _hashPass(pass);
+    const custData={name,username:user,passHash:hash,passPlain:pass,orderCount:0,orders:[],createdAt:Date.now()};
+    const res=await fetch(FB_URL+'/inv_d6bb4/customers/'+user+'.json',{
+      method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(custData)
+    });
+    if(!res.ok)throw new Error('Failed');
+    _custUser=custData;
+    try{localStorage.setItem('_custSession',JSON.stringify({username:user,ts:Date.now()}));}catch(e){}
+    _updateCustUI();
+    closeCustAuth();
+    showToast('Welcome, '+name+'! 🎉','green');
+  }catch(e){errEl.textContent='Error creating account. Try again.';}
+}
+
+async function custLogin(){
+  const user=document.getElementById('ca-login-user').value.trim().toLowerCase();
+  const pass=document.getElementById('ca-login-pass').value;
+  const errEl=document.getElementById('ca-login-err');
+  if(!user||!pass){errEl.textContent='Enter username and password';return;}
+  errEl.textContent='Logging in...';
+  try{
+    const res=await fetch(FB_URL+'/inv_d6bb4/customers/'+user+'.json');
+    if(!res.ok)throw new Error('Failed');
+    const data=await res.json();
+    if(!data){errEl.textContent='Account not found';return;}
+    const hash=await _hashPass(pass);
+    if(hash!==data.passHash){errEl.textContent='Wrong password';return;}
+    _custUser=data;
+    try{localStorage.setItem('_custSession',JSON.stringify({username:user,ts:Date.now()}));}catch(e){}
+    _updateCustUI();
+    closeCustAuth();
+    showToast('Welcome back, '+data.name+'! 🎉','green');
+  }catch(e){errEl.textContent='Error logging in. Try again.';}
+}
+
+function custLogout(){
+  _custUser=null;
+  try{localStorage.removeItem('_custSession');}catch(e){}
+  try{sessionStorage.removeItem('_custGuest');}catch(e){}
+  _updateCustUI();
+  showToast('Logged out','');
+  _showCustAuthIfNeeded();
+}
+
+function _updateCustUI(){
+  const btn=document.getElementById('ca-header-btn');
+  const nameEl=document.getElementById('ca-header-name');
+  if(_custUser){
+    nameEl.textContent=_custUser.name;
+    btn.style.borderColor='rgba(62,207,142,0.4)';
+  }else{
+    nameEl.textContent='Sign In';
+    btn.style.borderColor='rgba(62,207,142,0.2)';
+  }
+}
+
+async function _restoreCustSession(){
+  try{
+    const sess=JSON.parse(localStorage.getItem('_custSession')||'null');
+    if(!sess||!sess.username)return;
+    const res=await fetch(FB_URL+'/inv_d6bb4/customers/'+sess.username+'.json');
+    if(res.ok){
+      const data=await res.json();
+      if(data){_custUser=data;_updateCustUI();}
+    }
+  }catch(e){}
+}
+
+// Live-sync customer data every 10s so loyalty updates without reload
+setInterval(async()=>{
+  if(!_custUser||!_custUser.username)return;
+  try{
+    const res=await fetch(FB_URL+'/inv_d6bb4/customers/'+_custUser.username+'.json');
+    if(res.ok){
+      const data=await res.json();
+      if(data){
+        _custUser=data;
+        // If cart is open, re-render loyalty bar
+        const cartOverlay=document.querySelector('.cart-overlay.open');
+        if(cartOverlay)_renderLoyaltyInCart();
+      }
+    }
+  }catch(e){}
+},10000);
+
+function _getLoyaltyProgress(){
+  if(!_custUser)return{count:0,progress:0,isGiftOrder:false};
+  const count=_custUser.orderCount||0;
+  const inCycle=count%LOYALTY_EVERY;
+  return{count,progress:inCycle,isGiftOrder:inCycle===LOYALTY_EVERY-1};
+}
+
+function _renderLoyaltyInCart(){
+  const loyaltyEl=document.getElementById('cart-loyalty');
+  const giftEl=document.getElementById('cart-gift');
+  if(!loyaltyEl)return;
+  if(!_custUser){loyaltyEl.style.display='none';if(giftEl)giftEl.style.display='none';return;}
+  const {count,progress,isGiftOrder}=_getLoyaltyProgress();
+  loyaltyEl.style.display='block';
+  const msgEl=document.getElementById('loyalty-msg');
+  // Always show gift section, but lock/unlock based on progress
+  if(giftEl){
+    _loadGiftImage();
+    giftEl.style.display='block';
+  }
+  if(isGiftOrder){
+    document.getElementById('loyalty-count').textContent=LOYALTY_EVERY+' / '+LOYALTY_EVERY;
+    document.getElementById('loyalty-fill').style.width='100%';
+    msgEl.textContent='🎉 This is your '+LOYALTY_EVERY+'th order — FREE GIFT!';
+    msgEl.style.color='var(--green)';
+    if(giftEl){
+      giftEl.style.opacity='1';
+      giftEl.style.pointerEvents='auto';
+      const titleEl=giftEl.querySelector('.loyalty-gift-title');
+      if(titleEl)titleEl.textContent='🎁 YOU EARNED A FREE GIFT!';
+      const lockEl=document.getElementById('gift-lock-msg');
+      if(lockEl)lockEl.style.display='none';
+    }
+  }else{
+    document.getElementById('loyalty-count').textContent=progress+' / '+LOYALTY_EVERY;
+    document.getElementById('loyalty-fill').style.width=(progress/LOYALTY_EVERY*100)+'%';
+    const left=LOYALTY_EVERY-progress;
+    msgEl.textContent=left+' more order'+(left===1?'':'s')+' until your free gift!';
+    msgEl.style.color='var(--white3)';
+    if(giftEl){
+      giftEl.style.opacity='0.5';
+      giftEl.style.pointerEvents='none';
+      const titleEl=giftEl.querySelector('.loyalty-gift-title');
+      if(titleEl)titleEl.textContent='🔒 FREE GIFT PREVIEW';
+      const lockEl=document.getElementById('gift-lock-msg');
+      if(lockEl){lockEl.style.display='block';lockEl.textContent='Unlocks on your '+LOYALTY_EVERY+'th order — '+left+' more to go!';}
+    }
+  }
+}
+
+async function _loadGiftImage(){
+  try{
+    const res=await fetch(FB_URL+'/inv_d6bb4/loyalty_gift.json');
+    if(res.ok){
+      const data=await res.json();
+      if(data&&data.imageUrl){
+        document.getElementById('loyalty-gift-img').src=data.imageUrl;
+        document.getElementById('loyalty-gift-img').style.display='block';
+      }
+      // Render gift option buttons
+      const btnsEl=document.getElementById('gift-options-btns');
+      if(btnsEl&&data&&Array.isArray(data.options)&&data.options.length){
+        btnsEl.innerHTML=data.options.map(opt=>
+          `<button class="gift-opt-btn" onclick="_selectGift(this,'${opt.replace(/'/g,"\\'")}')">🎁 ${opt}</button>`
+        ).join('');
+      }
+    }
+  }catch(e){}
+}
+
+function _selectGift(btn,name){
+  document.querySelectorAll('.gift-opt-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('gift-choice-inp').value=name;
+}
+
+async function _trackCustOrder(orderData){
+  if(!_custUser)return;
+  const user=_custUser.username;
+  try{
+    const orderEntry={
+      date:orderData.date||new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}),
+      time:orderData.time||new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
+      total:orderData.total||0,
+      items:(orderData.orderItems||[]).map(i=>i.itemName||i.name||'').join(', '),
+      timestamp:Date.now(),
+      giftChoice:orderData.giftChoice||null
+    };
+    _custUser.orderCount=(_custUser.orderCount||0)+1;
+    if(!Array.isArray(_custUser.orders))_custUser.orders=[];
+    _custUser.orders.unshift(orderEntry);
+    if(_custUser.orders.length>50)_custUser.orders=_custUser.orders.slice(0,50);
+    await fetch(FB_URL+'/inv_d6bb4/customers/'+user+'.json',{
+      method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({orderCount:_custUser.orderCount,orders:_custUser.orders})
+    });
+    _updateCustUI();
+  }catch(e){console.error('Failed to track customer order:',e);}
+}
 
 // ── LIGHTBOX (multi-image) ──
 let lbImages=[];
@@ -948,11 +1281,13 @@ function carouselGo(itemId, idx){
 }
 
 // ── ACCESS GATE ──
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   if (localStorage.getItem('585plug_v') === '1') {
     document.getElementById('access-gate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     startLiveSync();
+    await _restoreCustSession();
+    _showCustAuthIfNeeded();
   }
 });
 
@@ -964,6 +1299,7 @@ async function tryAccess() {
     document.getElementById('access-gate').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     startLiveSync();
+    _showCustAuthIfNeeded();
   } else {
     document.getElementById('ag-err').textContent = 'Invalid code. Contact your plug.';
     document.getElementById('ag-code').value = '';
@@ -1581,6 +1917,7 @@ function _blockTouch(e) {
 
 function openCart() {
   renderCart();
+  _renderLoyaltyInCart();
   // Show announcement in cart if active
   const cartAnn = document.getElementById('cart-announcement');
   const cartAnnText = document.getElementById('cart-announcement-text');
@@ -1872,8 +2209,11 @@ function sendOrder() {
   const addr = document.getElementById('addr-inp')?.value.trim() || '';
   const delivLine = orderType === 'pickup' ? 'TYPE: 🏪 PICKUP' : 'TYPE: 🚗 DELIVERY\nADDRESS: '+addr;
 
+  const custLine = _custUser ? 'ACCOUNT: @'+_custUser.username+' ('+_custUser.name+')\n' : '';
+  const giftChoice = document.getElementById('gift-choice-inp')?.value.trim()||'';
+  const giftLine = giftChoice ? '🎁 FREE GIFT PICK: '+giftChoice+'\n' : '';
   _orderMsg = '🍁 585 PLUG ORDER 🍁\n——————————————\n'+itemLines+'\n——————————————\n'
-    +'SUBTOTAL: $'+sub+'\n'+feeNote+splitNote+'TOTAL: $'+total+'\nPAYMENT: '+pm+'\n'+delivLine+'\n——————————————\nSent from the585plug.shop';
+    +custLine+giftLine+'SUBTOTAL: $'+sub+'\n'+feeNote+splitNote+'TOTAL: $'+total+'\nPAYMENT: '+pm+'\n'+delivLine+'\n——————————————\nSent from the585plug.shop';
 
   // Save to Firebase as pending order for inventory app to confirm
   const pendingOrder = {
@@ -1885,7 +2225,10 @@ function sendOrder() {
     timestamp: Date.now(),
     confirmed: false, cancelled: false,
     splitCash: payMethod==='split'?splitCash:undefined,
-    splitVirtual: payMethod==='split'?splitVirtual:undefined
+    splitVirtual: payMethod==='split'?splitVirtual:undefined,
+    custUsername: _custUser?_custUser.username:null,
+    custName: _custUser?_custUser.name:null,
+    giftChoice: giftChoice||null
   };
 
   const orderKey = 'order_' + Date.now();
@@ -1907,6 +2250,8 @@ function sendOrder() {
     },
     body: notifItems + '\nPayment: ' + pm + '\n' + (orderType==='pickup'?'Pickup':'Delivery' + (addr?' — '+addr:'')) + '\nTotal: $' + total
   }).catch(e => console.error('Notification failed:', e));
+
+  _trackCustOrder(pendingOrder);
 
   // Show order preview modal instead of opening SMS
   const phoneFormatted = '('+OWNER_PHONE.slice(0,3)+') '+OWNER_PHONE.slice(3,6)+'-'+OWNER_PHONE.slice(6);
@@ -2411,11 +2756,17 @@ function checkAnnouncement(data) {
   _annShownThisLoad = true;
   textEl.textContent = ann.message;
 
-  // Small delay so menu loads first
-  setTimeout(() => {
+  // Wait until customer auth is resolved before showing announcement
+  function _tryShowAnn(){
+    const authOverlay=document.getElementById('cust-auth-overlay');
+    if(authOverlay&&authOverlay.classList.contains('open')){
+      setTimeout(_tryShowAnn,500);
+      return;
+    }
     popup.classList.add('open');
-    popup.style.display = 'flex';
-  }, 600);
+    popup.style.display='flex';
+  }
+  setTimeout(_tryShowAnn,600);
 }
 
 function dismissAnnouncement() {
