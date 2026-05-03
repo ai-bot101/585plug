@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v67';
-const _BUILD_TS=1777787007185; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v67]';},1000);
+const _APP_VERSION='deploy-v68';
+const _BUILD_TS=1777787361405; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v68]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -5314,10 +5314,9 @@ function finalizeConfirmOrder(fbKey, assignedTo){
     fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
   });
 
-  // Loyalty tracking: NEVER increment here for pending web orders — the customer menu
-  // already counted it via _trackCustOrder when the order was placed.
-  // Only increment for manual orders linked to a customer account (source==='manual').
-  if(order.custUsername && order.source==='manual'){
+  // Loyalty tracking: increment on confirm (this is the ONLY place orders get counted)
+  // The customer menu no longer counts on submit to prevent double-counts and false counts
+  if(order.custUsername){
     _incrementCustOrder(order.custUsername,{date:tday(),time:tstr(),total,orderItems:order.orderItems||[]});
   }
 
@@ -5370,8 +5369,8 @@ function cancelWebOrder(fbKey) {
     _debugPending('CANCELLED',fbKey,'user cancelled — stock was never deducted, nothing to restore');
     showToast('Order cancelled (stock was not deducted for this order)','err');
   }
-  // Decrement loyalty count if customer had an account
-  if(order.custUsername)_decrementCustOrder(order.custUsername);
+  // No loyalty decrement needed here — orders are only counted when confirmed,
+  // so cancelling a pending order doesn't need to undo anything.
 
   delete pendingWebOrders[fbKey];
   processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
