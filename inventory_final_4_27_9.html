@@ -1465,9 +1465,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v62';
-const _BUILD_TS=1777652940530; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v62]';},1000);
+const _APP_VERSION='deploy-v63';
+const _BUILD_TS=1777783899573; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v63]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -3291,7 +3291,50 @@ function toggleStaffCommDay(d){
   renderStaffCommHistory();
 }
 function setSD(d){staffSelDay=d;renderStaffLog();}
-function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today'?today:selDay;document.getElementById('dtabs').innerHTML=`<div class="dtab ${selDay==='alltime'?'active':''}" onclick="setDay('alltime')" style="${selDay==='alltime'?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`+days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setDay('${d}')">${it?'Today':d}</div>`;}).join('');const isAllTime=selDay==='alltime';const dayLog=isAllTime?log:log.filter(e=>e.date===dl);const _eodAllForDay=(!isAllTime)?eodLogs.filter(r=>r.date===dl):[];const _eodOrders=_eodAllForDay.reduce((arr,eod)=>{if(eod.orders&&eod.orders.length>0)arr.push(...eod.orders.map(o=>({...o,amtReceived:o.total||0,type:o.type||'order',name:o.customer||''})));return arr;},[]);const sells=_eodOrders.length>0?_eodOrders:dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');document.getElementById('owner-totals').innerHTML=isAllTime?totBanner(sells,'All Time',false,true):totBanner(sells,dl,dl===today,true);const bd={};PM.forEach(m=>{bd[m.id]={total:0,count:0,label:m.label,icon:m.icon};});sells.forEach(e=>{const mid=e.payMethod||'cash';if(!bd[mid])bd[mid]={total:0,count:0,label:e.payMethodLabel||mid,icon:'💰'};bd[mid].total+=(e.amtReceived||0);bd[mid].count++;});document.getElementById('pay-breakdown').innerHTML=Object.entries(bd).map(([id,d])=>`<div class="pb-card"><div class="pb-icon">${d.icon}</div><div class="pb-method">${d.label}</div><div class="pb-total">${fmtP(d.total)}</div><div class="pb-count">${d.count} sale${d.count!==1?'s':''}</div></div>`).join('');document.getElementById('dact').innerHTML=isAllTime ? buildLog(log.slice(0,100),false,true) : buildLog(dayLog,false,true);
+function renderDash(){const today=tday();
+  // Build tabs: All Time | Today (live) | Log #N, Log #N-1, ...
+  const totalLogs=eodLogs.length;
+  let tabs=`<div class="dtab ${selDay==='alltime'?'active':''}" onclick="setDay('alltime')" style="${selDay==='alltime'?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`;
+  tabs+=`<div class="dtab ${selDay==='today'?'today active':''}" onclick="setDay('today')">Today</div>`;
+  eodLogs.forEach((l,i)=>{
+    const logNum=totalLogs-i;
+    const act=selDay==='log_'+i;
+    tabs+=`<div class="dtab ${act?'active':''}" onclick="setDay('log_${i}')" title="${l.date} · ${l.savedAt||''}">#${logNum} · ${l.date}</div>`;
+  });
+  document.getElementById('dtabs').innerHTML=tabs;
+
+  const isAllTime=selDay==='alltime';
+  const isToday=selDay==='today';
+  const isLog=selDay.startsWith('log_');
+  let sells=[];
+  let dayLog=[];
+  let dl=today;
+
+  if(isAllTime){
+    // All Time: combine all EOD logs + today's unsaved
+    const allEodOrders=eodLogs.reduce((arr,eod)=>{if(eod.orders&&eod.orders.length>0)arr.push(...eod.orders.map(o=>({...o,amtReceived:o.total||0,type:o.type||'order',name:o.customer||''})));return arr;},[]);
+    const todayUnsaved=log.filter(e=>e.date===today&&(e.type==='sell'||e.type==='order'||e.type==='selfbuy')&&!e._cleared);
+    sells=[...allEodOrders,...todayUnsaved];
+    dayLog=log;
+  }else if(isToday){
+    // Today: only unsaved (not yet in any EOD log) activity
+    dl=today;
+    dayLog=log.filter(e=>e.date===today);
+    sells=dayLog.filter(e=>(e.type==='sell'||e.type==='order'||e.type==='selfbuy')&&!e._cleared);
+  }else if(isLog){
+    // Specific EOD log
+    const logIdx=parseInt(selDay.split('_')[1]);
+    const eod=eodLogs[logIdx];
+    if(eod){
+      dl=eod.date;
+      sells=(eod.orders||[]).map(o=>({...o,amtReceived:o.total||0,type:o.type||'order',name:o.customer||''}));
+      dayLog=sells; // use EOD orders as the day log for display
+    }
+  }
+
+  const label=isAllTime?'All Time':isToday?'Today (Live)':(isLog?'Log #'+(totalLogs-parseInt(selDay.split('_')[1]))+' — '+dl:dl);
+  document.getElementById('owner-totals').innerHTML=totBanner(sells,label,isToday,true);
+  const bd={};PM.forEach(m=>{bd[m.id]={total:0,count:0,label:m.label,icon:m.icon};});sells.forEach(e=>{const mid=e.payMethod||'cash';if(!bd[mid])bd[mid]={total:0,count:0,label:e.payMethodLabel||mid,icon:'💰'};bd[mid].total+=(e.amtReceived||0);bd[mid].count++;});document.getElementById('pay-breakdown').innerHTML=Object.entries(bd).map(([id,d])=>`<div class="pb-card"><div class="pb-icon">${d.icon}</div><div class="pb-method">${d.label}</div><div class="pb-total">${fmtP(d.total)}</div><div class="pb-count">${d.count} sale${d.count!==1?'s':''}</div></div>`).join('');document.getElementById('dact').innerHTML=isAllTime ? buildLog(log.slice(0,100),false,true) : buildLog(isLog?sells:dayLog,false,true);
   renderCredits();
   renderStaffBuys();
   loadDayNote(dl);
@@ -3346,15 +3389,15 @@ function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;width:100%;">
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;">
-          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">${isAllTime?'Total':'Today'} Sales</div>
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">${isAllTime?'Total':isLog?'Log':'Today'} Sales</div>
           <div style="font-size:16px;font-weight:700;font-family:var(--mono);color:${col}">${d.c}</div>
         </div>
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;">
-          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">${isAllTime?'Total':'Today'} Rev</div>
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">${isAllTime?'Total':isLog?'Log':'Today'} Rev</div>
           <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:var(--green)">${fmtP(d.t)}</div>
         </div>
         <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;">
-          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">${isAllTime?'Total':'Today'} Comm</div>
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">${isAllTime?'Total':isLog?'Log':'Today'} Comm</div>
           <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:var(--orange)">${fmtP(d.comm)}</div>
         </div>
         <div style="background:rgba(108,99,255,0.06);border:1px solid rgba(108,99,255,0.2);border-radius:8px;padding:8px;text-align:center;">
@@ -3363,7 +3406,7 @@ function renderDash(){const days=getDays(),today=tday();const dl=selDay==='today
         </div>
       </div>
       <div class="person-sales-detail" style="display:none;width:100%;background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:4px;">
-        <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">${u.name}'s ${isAllTime?'ALL':'DAILY'} SALES (${mySales.length})</div>
+        <div style="font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">${u.name}'s ${isAllTime?'ALL':isLog?'LOG':'TODAY\'S'} SALES (${mySales.length})</div>
         ${salesHtml}
       </div>
     </div>`;
@@ -3374,12 +3417,22 @@ function renderStaffBuys(){
   const sec=document.getElementById('staff-buys-section');
   if(!el||!sec)return;
   const isAllTime=selDay==='alltime';
+  const isToday=selDay==='today';
+  const isLog=selDay.startsWith('log_');
   const today=tday();
-  const dl=selDay==='today'?today:selDay;
   const staffNames=cfg.users.filter(u=>u.role==='staff').map(u=>u.name);
-  const buys=isAllTime
-    ?log.filter(e=>e.type==='selfbuy'&&staffNames.includes(e.who))
-    :log.filter(e=>e.type==='selfbuy'&&e.date===dl&&staffNames.includes(e.who));
+  let buys=[];
+  if(isAllTime){
+    buys=log.filter(e=>e.type==='selfbuy'&&staffNames.includes(e.who));
+  }else if(isToday){
+    buys=log.filter(e=>e.type==='selfbuy'&&e.date===today&&!e._cleared&&staffNames.includes(e.who));
+  }else if(isLog){
+    const logIdx=parseInt(selDay.split('_')[1]);
+    const eod=eodLogs[logIdx];
+    if(eod&&eod.orders){
+      buys=eod.orders.filter(o=>o.type==='selfbuy'&&staffNames.includes(o.who));
+    }
+  }
   if(!buys.length){
     el.innerHTML='<div class="empty" style="padding:12px 0;">No staff purchases '+(isAllTime?'recorded':'this day')+'</div>';
     if(cnt)cnt.textContent='';
@@ -6485,9 +6538,16 @@ async function clearLoginLog(){
 
 // ── DAY NOTES ────────────────────────────────────
 function saveDayNote(){
-  const today=selDay==='today'?tday():selDay;
+  let noteKey=tday();
+  if(selDay==='today')noteKey=tday();
+  else if(selDay==='alltime')noteKey='alltime';
+  else if(selDay.startsWith('log_')){
+    const logIdx=parseInt(selDay.split('_')[1]);
+    const eod=eodLogs[logIdx];
+    noteKey=eod?eod.date:tday();
+  }
   const val=document.getElementById('day-note-input')?.value||'';
-  dayNotes[today]=val;
+  dayNotes[noteKey]=val;
   persist();
 }
 
@@ -6501,26 +6561,18 @@ function loadDayNote(dateStr){
 
 function buildEODRecord(dateStr){
   const dl=dateStr||tday();
-  // ── SIMPLE CUTOFF DEDUP ──
-  // When an EOD log is saved, we store the save-timestamp in localStorage per date.
-  // Next EOD only captures orders created AFTER that cutoff.
-  // localStorage is NEVER touched by Firebase sync, so this is bulletproof.
-  const lsCutoff=parseInt(localStorage.getItem('_eodCutoff_'+dl)||'0');
-  // Also check eodLogs snapshotId as backup
-  const eodCutoff=eodLogs.filter(l=>l.date===dl).reduce((max,l)=>Math.max(max,l.snapshotId||0),0);
-  const cutoff=Math.max(lsCutoff,eodCutoff);
-
-  _debugOverlayLog('[EOD-BUILD] date='+dl+' lsCutoff='+lsCutoff+' eodCutoff='+eodCutoff+' cutoff='+cutoff);
+  // ── NO MORE CUTOFF — use _cleared flag only ──
+  // Orders flagged _cleared were already captured in a previous EOD log.
+  // Only grab orders that haven't been captured yet.
 
   const dayLog=log.filter(e=>{
     if(e.date!==dl)return false;
     if(!(e.type==='sell'||e.type==='order'||e.type==='selfbuy'))return false;
-    // If there was a previous EOD save for this date, only include orders created AFTER it
-    if(cutoff>0&&(e.timestamp||0)<=cutoff)return false;
+    if(e._cleared)return false;
     return true;
   });
 
-  _debugOverlayLog('[EOD-BUILD] total log entries for date: '+log.filter(e=>e.date===dl&&(e.type==='sell'||e.type==='order'||e.type==='selfbuy')).length+' | after cutoff filter: '+dayLog.length);
+  _debugOverlayLog('[EOD-BUILD] date='+dl+' uncaptured orders: '+dayLog.length+' | total for date: '+log.filter(e=>e.date===dl&&(e.type==='sell'||e.type==='order'||e.type==='selfbuy')).length);
 
   const sells=dayLog;
   const grandTotal=sells.reduce((s,e)=>s+(e.amtReceived||0),0);
@@ -7164,21 +7216,25 @@ function saveAddEODOrder(){
 
 async function saveEODLog(){
   if(!await _ownerGuard())return false;
-  const dl=selDay==='today'?tday():selDay;
+  // Always save for today — EOD is always "end of today"
+  const dl=tday();
+
   const record=buildEODRecord(dl);
+
+  if(record.txCount===0){
+    showToast('No uncaptured orders to log','err');
+    return false;
+  }
+
   // unique snapshot ID so each save creates its own log
   record.snapshotId=Date.now();
   record.savedAt=new Date().toLocaleString();
   record.logNumber=eodLogs.length+1;
   eodLogs.unshift(record);
 
-  // ── Store cutoff timestamp in localStorage (Firebase can NEVER touch this) ──
-  const saveTime=Date.now();
-  try{localStorage.setItem('_eodCutoff_'+dl,String(saveTime));}catch(e){}
-  _debugOverlayLog('[EOD-SAVE] Stored cutoff for '+dl+': '+saveTime+' | orders captured: '+record.txCount);
+  _debugOverlayLog('[EOD-SAVE] Log #'+record.logNumber+' | orders captured: '+record.txCount);
 
-  // Clear ALL confirmed orders for this day from view (stock deductions stay in log)
-  // Also delete from Firebase pending_orders so they don't come back on reload
+  // Mark all captured orders as _cleared so they won't be captured again
   let cleared=0;
   log.forEach(e=>{
     if((e.type==='sell'||e.type==='order'||e.type==='selfbuy')&&e.date===dl&&!e._cleared){
@@ -7834,7 +7890,7 @@ function doReset(type){
 
 // ── END OF DAY ───────────────────────────────────
 function openEOD(){
-  const today=selDay==='today'?tday():selDay;
+  const today=tday();
   document.getElementById('eod-date').textContent=today;
   const dayLog=log.filter(e=>e.date===today);
   const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');
