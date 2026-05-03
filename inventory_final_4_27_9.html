@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v66';
-const _BUILD_TS=1777785787204; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v66]';},1000);
+const _APP_VERSION='deploy-v67';
+const _BUILD_TS=1777787007185; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v67]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -5314,9 +5314,10 @@ function finalizeConfirmOrder(fbKey, assignedTo){
     fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
   });
 
-  // Track loyalty for customer accounts (manual linked orders ONLY)
-  // Website orders are already counted by the customer menu's _trackCustOrder on submit
-  if(order.custUsername && order.source!=='website'){
+  // Loyalty tracking: NEVER increment here for pending web orders — the customer menu
+  // already counted it via _trackCustOrder when the order was placed.
+  // Only increment for manual orders linked to a customer account (source==='manual').
+  if(order.custUsername && order.source==='manual'){
     _incrementCustOrder(order.custUsername,{date:tday(),time:tstr(),total,orderItems:order.orderItems||[]});
   }
 
