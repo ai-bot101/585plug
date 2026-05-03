@@ -480,7 +480,7 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
       </div>
 
       <div class="dgrid">
-        <div class="dcard"><h3>Activity Log</h3><div class="act-log-scroll" id="dact"></div></div>
+        <div class="dcard"><h3>Activity Log</h3><input type="text" id="actlog-search" placeholder="Search activity log..." oninput="filterActLog()" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);color:var(--text);font-size:13px;margin-bottom:10px;outline:none;font-family:var(--sans);"><div class="act-log-scroll" id="dact"></div></div>
         <div class="dcard"><h3>Sales by Person</h3><div id="dusers"></div></div>
       </div>
       <div class="dcard" style="margin-bottom:14px"><h3>Top Selling Items</h3><div id="dtop"></div></div>
@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v68';
-const _BUILD_TS=1777787361405; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v68]';},1000);
+const _APP_VERSION='deploy-v70';
+const _BUILD_TS=1777788863486; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v70]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2796,6 +2796,9 @@ function syncStockToEOD(e){
   // 3. Pending web orders
   const soldMap={}; // { itemNameLower: totalQtySold }
   const flavorSoldMap={}; // { itemNameLower: { flavorNameLower: qtySold } }
+  // Per-item source breakdown for debugging
+  const srcMap={}; // { itemNameLower: { eod:0, orphan:0, adj:0, pending:0 } }
+  function ensureSrc(key){if(!srcMap[key])srcMap[key]={eod:0,orphan:0,adj:0,pending:0};}
 
   function addToSold(key,qty){if(key&&qty)soldMap[key]=(soldMap[key]||0)+qty;}
   function addFlavorSold(key,it,qty){
@@ -2818,7 +2821,7 @@ function syncStockToEOD(e){
       (o.items||[]).forEach(it=>{
         const key=(it.itemName||'').toLowerCase();
         const qty=Math.max(it.qty||1,labelToQty(it.label));
-        addToSold(key,qty);
+        addToSold(key,qty);ensureSrc(key);srcMap[key].eod+=qty;
         addFlavorSold(key,it,qty);
       });
     });
@@ -2851,19 +2854,19 @@ function syncStockToEOD(e){
   orphanSales.forEach(entry=>{
     if(entry.type==='sell'){
       const key=(entry.name||'').toLowerCase();
-      addToSold(key,entry.amount||0);
+      addToSold(key,entry.amount||0);ensureSrc(key);srcMap[key].orphan+=(entry.amount||0);
     } else if(entry.type==='order'&&entry.orderItems){
       entry.orderItems.forEach(oi=>{
         const key=(oi.itemName||'').toLowerCase();
         const qty=Math.max(oi.qty||1,labelToQty(oi.label));
-        addToSold(key,qty);
+        addToSold(key,qty);ensureSrc(key);srcMap[key].orphan+=qty;
         addFlavorSold(key,oi,qty);
       });
     } else if(entry.type==='selfbuy'&&entry.items){
       entry.items.forEach(it=>{
         const key=(it.itemName||it.name||'').toLowerCase();
         const qty=it.qty||0;
-        addToSold(key,qty);
+        addToSold(key,qty);ensureSrc(key);srcMap[key].orphan+=qty;
         addFlavorSold(key,it,qty);
       });
     }
@@ -2872,8 +2875,10 @@ function syncStockToEOD(e){
   // 3. Count adjustment entries (stock corrections — not sales but affect left count)
   log.filter(entry=>entry.type==='adjustment').forEach(entry=>{
     const key=(entry.name||'').toLowerCase();
+    ensureSrc(key);
     if(entry.direction==='remove'){
       addToSold(key,entry.amount||0);
+      srcMap[key].adj+=(entry.amount||0);
       // Flavor adjustments
       if(entry.flavorName){
         if(!flavorSoldMap[key])flavorSoldMap[key]={};
@@ -2882,6 +2887,7 @@ function syncStockToEOD(e){
     }else if(entry.direction==='add'){
       // Negative sold (stock was added back)
       soldMap[key]=(soldMap[key]||0)-(entry.amount||0);
+      srcMap[key].adj-=(entry.amount||0);
       if(entry.flavorName){
         if(!flavorSoldMap[key])flavorSoldMap[key]={};
         flavorSoldMap[key][entry.flavorName]=(flavorSoldMap[key][entry.flavorName]||0)-(entry.amount||0);
@@ -2894,7 +2900,7 @@ function syncStockToEOD(e){
     (order.orderItems||[]).forEach(oi=>{
       const key=(oi.itemName||oi.name||'').toLowerCase().trim();
       const qty=Math.max(oi.qty||1,labelToQty(oi.label));
-      addToSold(key,qty);
+      addToSold(key,qty);ensureSrc(key);srcMap[key].pending+=qty;
       addFlavorSold(key,oi,qty);
     });
   });
@@ -2912,7 +2918,13 @@ function syncStockToEOD(e){
       const correctLeft=Math.round(Math.max(0,item.bought-totalSold)*10)/10;
       const currentLeft=gl(item);
       if(Math.abs(currentLeft-correctLeft)>0.05){
-        changes.push(item.name+': '+fmt(currentLeft)+' → '+fmt(correctLeft)+' (sold: '+fmt(totalSold)+')');
+        const src=srcMap[key]||{eod:0,orphan:0,adj:0,pending:0};
+        const parts=[];
+        if(src.eod)parts.push('eod:'+fmt(src.eod));
+        if(src.orphan)parts.push('uncovered:'+fmt(src.orphan));
+        if(src.adj)parts.push('adj:'+fmt(src.adj));
+        if(src.pending)parts.push('pending:'+fmt(src.pending));
+        changes.push(item.name+': '+fmt(currentLeft)+' → '+fmt(correctLeft)+' (sold: '+fmt(totalSold)+(parts.length?' ['+parts.join(', ')+']':'')+')');
         fixCount++;
       }
       // Preview flavor changes
@@ -2938,7 +2950,9 @@ function syncStockToEOD(e){
   let confirmMsg='Sync stock to match EOD logs + activity log?\n\n';
   if(fixCount)confirmMsg+=changes.join('\n')+'\n\n'+fixCount+' items will be updated.\n';
   if(flavorFixCount)confirmMsg+=(fixCount?'\n':'')+'Flavor changes:\n'+flavorChanges.join('\n')+'\n\n'+flavorFixCount+' flavors will be updated.\n';
-  confirmMsg+='\nSources: '+eodLogs.length+' EOD logs + '+orphanSales.length+' uncovered sales';
+  const adjCount=log.filter(e=>e.type==='adjustment').length;
+  const pendCount=Object.keys(pendingWebOrders||{}).length;
+  confirmMsg+='\nSources: '+eodLogs.length+' EOD logs + '+orphanSales.length+' uncovered sales'+(adjCount?' + '+adjCount+' adjustments':'')+(pendCount?' + '+pendCount+' pending orders':'');
   if(!confirm(confirmMsg))return;
 
   // ── APPLY CHANGES ──
@@ -3155,6 +3169,16 @@ const sellExpand=`<div class="ae-expand">
 </div>`;
 return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot sell"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name}</span><span class="ae-qbadge">x ${fmt(e.amount)}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${sellExpand}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.amtReceived||0)}</span></div>${showC&&e.commission!=null?`<div class="ae-comm">you: ${fmtP(e.commission)}</div>`:''}${sDelBtn}</div></div>`;}else{if(e.type==='restock'){const w=wcls(e.who);return`<div class="ae"><div class="adot" style="background:var(--green)"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name}</span><span class="ae-qbadge">+${fmt(e.amount)}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div></div><div class="ae-right"><span class="ae-badge add">📦 Restock</span></div></div>`;}
 const tm={add:'add',del:'del',edit:'edit'};const lm={add:'+ Added',del:'Deleted',edit:'Edited'};return`<div class="ae"><div class="adot ${e.type}"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.name||''}</span></div><div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div></div><div class="ae-right"><span class="ae-badge ${tm[e.type]||'edit'}">${lm[e.type]||e.type}</span></div></div>`;}}
+function filterActLog(){
+  const q=(document.getElementById('actlog-search')?.value||'').toLowerCase().trim();
+  const el=document.getElementById('dact');if(!el)return;
+  const rows=el.querySelectorAll('.ae');
+  rows.forEach(row=>{
+    if(!q){row.style.display='';return;}
+    const text=row.textContent.toLowerCase();
+    row.style.display=text.includes(q)?'':'none';
+  });
+}
 function buildLog(entries,staffOnly,showC){if(!entries.length)return'<div class="empty">No activity this day</div>';const f=staffOnly?entries.filter(e=>e.type==='sell'||e.type==='order'||(e.type==='selfbuy'&&e.who===cu?.name)):entries;if(!f.length)return'<div class="empty">No sales this day</div>';return f.map(e=>logEntry(e,showC)).join('');}
 function renderStaffLog(){renderPendingOrders();renderConfirmedWebOrders();const days=getDays(),today=tday();const isAllTime=staffSelDay==='alltime';const dl=isAllTime?'alltime':staffSelDay==='today'?today:staffSelDay;document.getElementById('staff-dtabs').innerHTML=`<div class="dtab ${isAllTime?'active':''}" onclick="setSD('alltime')" style="${isAllTime?'background:rgba(108,99,255,0.2);border-color:var(--accent);color:var(--accent);':''}">📊 All Time</div>`+days.map(d=>{const it=d===today,act=d===dl;return`<div class="dtab ${it?'today':''} ${act?'active':''}" onclick="setSD('${d}')">${it?'Today':d}</div>`;}).join('');const dayLog=isAllTime?log:log.filter(e=>e.date===dl);const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');const ec=document.getElementById('staff-earn');const mn=cu?.name;const myDebt=getStaffDebt(mn);const isPaused=!!commissionPaused[mn];const myDailyDebtCfg=null;if(cfg.showEarnings){const ms=isAllTime?log.filter(e=>(e.type==='sell'||e.type==='order')&&e.who===mn):sells.filter(e=>e.who===mn&&e.type!=='selfbuy');
 /* Live recalculate commission from current inventory costs (IDENTICAL to EOD logic) */
@@ -3382,6 +3406,7 @@ function renderDash(){const today=tday();
   const label=isAllTime?'All Time':isToday?'Today (Live)':(isLog?'Log #'+(totalLogs-parseInt(selDay.split('_')[1]))+' — '+dl:dl);
   document.getElementById('owner-totals').innerHTML=totBanner(sells,label,isToday,true);
   const bd={};PM.forEach(m=>{bd[m.id]={total:0,count:0,label:m.label,icon:m.icon};});sells.forEach(e=>{const mid=e.payMethod||'cash';if(!bd[mid])bd[mid]={total:0,count:0,label:e.payMethodLabel||mid,icon:'💰'};bd[mid].total+=(e.amtReceived||0);bd[mid].count++;});document.getElementById('pay-breakdown').innerHTML=Object.entries(bd).map(([id,d])=>`<div class="pb-card"><div class="pb-icon">${d.icon}</div><div class="pb-method">${d.label}</div><div class="pb-total">${fmtP(d.total)}</div><div class="pb-count">${d.count} sale${d.count!==1?'s':''}</div></div>`).join('');document.getElementById('dact').innerHTML=isAllTime ? buildLog(log.slice(0,100),false,true) : buildLog(isLog?sells:dayLog,false,true);
+  filterActLog();
   renderCredits();
   renderStaffBuys();
   loadDayNote(dl);
