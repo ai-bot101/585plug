@@ -1465,9 +1465,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v63';
-const _BUILD_TS=1777783899573; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v63]';},1000);
+const _APP_VERSION='deploy-v64';
+const _BUILD_TS=1777784215274; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v64]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -3091,7 +3091,7 @@ const expandRows=`<div class="ae-expand">
   <div class="ex-items"><div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Items:</div>${(e.orderItems||[]).map(o=>`<div class="ex-item">${fmt(o.qty)}x ${o.itemName}${o.flavorText?' <span style="color:var(--accent);font-size:11px;">🍬 '+o.flavorText+'</span>':''}${o.label?' <span style="color:var(--accent);font-size:11px;">('+o.label+')</span>':''}</div>`).join('')}</div>
   ${isOwnerView?`<button onclick="event.stopPropagation();openEditLog(${logIdx})" style="width:100%;margin-top:10px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.3);border-radius:8px;padding:10px;color:var(--accent);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">✏️ Edit This Entry</button>`:''}
 </div>`;
-return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot order"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.customer||'Customer'}</span><span class="ae-qbadge">${(e.orderItems||[]).length} items</span>${creditBadge}${saveBadge}${debtBadge}</div><div class="ae-oi">${ois}</div>${e.note?`<div style="margin-top:4px;font-size:11px;color:var(--orange);">📝 ${e.note}</div>`:''}<div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${expandRows}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.amtReceived||0)}</span></div>${showC&&e.commission!=null?`<div class="ae-comm">you: ${fmtP(e.commission)}</div>`:''}${delBtn}</div></div>`;}else if(e.type==='sell'){const pc=(isV(e.payMethod)||e.payMethod==='split')?'virt':'cash';const si=log.indexOf(e);const sDelBtn=cu?.role==='owner'?`<button onclick="event.stopPropagation();deleteLogEntry(${si})" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:6px;padding:3px 8px;color:var(--red);font-size:10px;cursor:pointer;font-family:var(--sans);margin-top:4px;">🗑️ Delete</button>`:'';
+return`<div class="ae" onclick="toggleLogExpand(this)"><div class="adot order"></div><div class="ae-mid"><div class="ae-top-row"><span class="ae-iname">${e.customer||'Customer'}</span>${e.custUsername?'<span style="font-size:10px;color:var(--accent);font-family:var(--mono);font-weight:600;margin-left:4px;">@'+e.custUsername+'</span>':''}<span class="ae-qbadge">${(e.orderItems||[]).length} items</span>${creditBadge}${saveBadge}${debtBadge}</div><div class="ae-oi">${ois}</div>${e.note?`<div style="margin-top:4px;font-size:11px;color:var(--orange);">📝 ${e.note}</div>`:''}<div class="ae-bot"><span class="ae-dt">${e.date} · ${e.time||''}</span><span class="ae-sep">·</span><span class="ae-who ${w}">${e.who}</span></div>${expandRows}</div><div class="ae-right"><div class="ae-pill ${pc}"><span>${e.payMethodLabel||'Cash'}</span><span class="ae-psep">—</span><span>${fmtP(e.amtReceived||0)}</span></div>${showC&&e.commission!=null?`<div class="ae-comm">you: ${fmtP(e.commission)}</div>`:''}${delBtn}</div></div>`;}else if(e.type==='sell'){const pc=(isV(e.payMethod)||e.payMethod==='split')?'virt':'cash';const si=log.indexOf(e);const sDelBtn=cu?.role==='owner'?`<button onclick="event.stopPropagation();deleteLogEntry(${si})" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:6px;padding:3px 8px;color:var(--red);font-size:10px;cursor:pointer;font-family:var(--sans);margin-top:4px;">🗑️ Delete</button>`:'';
 const sellExpand=`<div class="ae-expand">
   <div class="ex-row"><span class="ex-label">Item</span><span class="ex-val">${e.name}</span></div>
   <div class="ex-row"><span class="ex-label">Quantity</span><span class="ex-val">${fmt(e.amount)}</span></div>
@@ -4872,6 +4872,7 @@ function renderPendingOrders() {
           <div style="flex:1;">
             <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;">${items||'No items'}</div>
             <div style="font-size:11px;color:var(--text3);line-height:1.8;">
+              ${o.custUsername?`<span style="color:var(--accent);font-weight:600;">👤 @${o.custUsername}</span>${o.custName?' · '+o.custName:''}<br>`:''}
               ${phone ? `<span>${phone}</span><br>` : ''}
               <span>${delivType}</span><br>
               <div style="display:inline-block;margin-top:4px;padding:6px 12px;background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.3);border-radius:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;" onclick="togglePendingPayPicker('${o.fbKey}')"><span style="font-size:12px;font-weight:600;color:var(--accent);">💳 ${payLabel} <span style="font-size:10px;">✎</span></span></div>
@@ -5139,7 +5140,9 @@ function finalizeConfirmOrder(fbKey, assignedTo){
     note: order.address ? 'Address: '+order.address : '',
     who: assignedTo,
     timestamp: Date.now(), date: tday(), time: tstr(),
-    webOrderKey: fbKey
+    webOrderKey: fbKey,
+    custUsername: order.custUsername||null,
+    custName: order.custName||null
   };
 
   // Stock should have been deducted on arrival (pending hold), but verify and deduct if missed
@@ -5189,8 +5192,9 @@ function finalizeConfirmOrder(fbKey, assignedTo){
     fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
   });
 
-  // Track loyalty for customer accounts (both website and manual linked orders)
-  if(order.custUsername){
+  // Track loyalty for customer accounts (manual linked orders ONLY)
+  // Website orders are already counted by the customer menu's _trackCustOrder on submit
+  if(order.custUsername && order.source!=='website'){
     _incrementCustOrder(order.custUsername,{date:tday(),time:tstr(),total,orderItems:order.orderItems||[]});
   }
 
@@ -5555,7 +5559,8 @@ function renderConfirmedWebOrders() {
           <div style="flex:1;">
             <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;">${items||'No items'}</div>
             <div style="font-size:11px;color:var(--text3);line-height:1.8;">
-              ${o.customer?'📱 '+o.customer+'<br>':''}
+              ${o.custUsername?'<span style="color:var(--accent);font-weight:600;">👤 @'+o.custUsername+'</span>'+(o.custName?' · '+o.custName:'')+'<br>':''}
+              ${o.customer&&!o.custUsername?'📱 '+o.customer+'<br>':''}
               💳 ${o.payMethodLabel||o.payMethod||'Cash'}
               ${o.who?'<br>👤 Confirmed by <span style="color:'+(cfg.users.find(u=>u.name===o.who)?.role==='owner'?'var(--green)':'#c084fc')+';">'+o.who+'</span>':''}
               ${o.note?'<br>📍 '+o.note:''}
@@ -6669,7 +6674,9 @@ function buildEODRecord(dateStr){
       note:e.note||'',
       who:e.who,
       time:e.time||'',
-      timestamp:e.timestamp||0
+      timestamp:e.timestamp||0,
+      custUsername:e.custUsername||null,
+      custName:e.custName||null
     })),
     inventorySnapshot,
     note:dayNotes[dl]||'',
@@ -7668,6 +7675,7 @@ function viewEODLog(i,filterPerson){
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <span style="font-size:16px;font-weight:700;color:var(--text);text-transform:capitalize;">${o.customer||'Quick Sell'}</span>
+              ${o.custUsername?'<span style="font-size:11px;color:var(--accent);font-family:var(--mono);font-weight:600;">@'+o.custUsername+'</span>':''}
               <span style="font-size:12px;color:var(--text2);font-family:var(--mono);background:var(--bg4);border-radius:6px;padding:2px 8px;">${o.who||''}</span>
               <span style="font-size:10px;font-weight:600;font-family:var(--mono);border-radius:5px;padding:2px 7px;${o.source==='website'?'background:rgba(79,195,247,0.12);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;':'background:rgba(244,162,74,0.12);border:1px solid rgba(244,162,74,0.3);color:var(--orange);'}">${o.source==='website'?'🌐 Website':'📝 Manual'}</span>
             </div>
@@ -8869,12 +8877,13 @@ async function loadRegisteredCustomers(){
       const progress=oc%5;
       const nextGift=5-progress;
       const pct=Math.round((progress/5)*100);
-      const ordersHtml=(c.orders||[]).slice(0,5).map(o=>
-        `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
-          <span style="color:var(--text2);">${o.date||''} ${o.time||''}</span>
-          <span style="color:var(--text);">${o.items||''}</span>
-          <span style="color:var(--green);font-family:var(--mono);">$${o.total||0}</span>
+      const ordersHtml=(c.orders||[]).slice(0,10).map((o,oi)=>
+        `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;gap:6px;">
+          <span style="color:var(--text2);white-space:nowrap;">${o.date||''} ${o.time||''}</span>
+          <span style="color:var(--text);flex:1;text-align:center;">${o.items||''}</span>
+          <span style="color:var(--green);font-family:var(--mono);white-space:nowrap;">$${o.total||0}</span>
           ${o.giftChoice?'<span style="color:var(--accent);">🎁 '+o.giftChoice+'</span>':''}
+          <button onclick="event.stopPropagation();event.preventDefault();deleteCustOrder('${c.username}',${oi})" style="background:rgba(226,75,74,0.1);border:1px solid rgba(226,75,74,0.25);border-radius:4px;padding:1px 6px;color:var(--red);font-size:9px;cursor:pointer;flex-shrink:0;">✕</button>
         </div>`
       ).join('');
       return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;">
@@ -8911,6 +8920,26 @@ async function deleteCustomerAccount(username){
     showToast('Account @'+username+' deleted','ok');
     loadRegisteredCustomers();
   }catch(e){showToast('Failed to delete account','err');console.error(e);}
+}
+
+async function deleteCustOrder(username,orderIdx){
+  if(!confirm('Delete this order from @'+username+"'s history? Their order count will decrease by 1."))return;
+  try{
+    const res=await fetch(FB_URL+'/customers/'+username+'.json');
+    if(!res.ok)throw new Error('Failed to load customer');
+    const data=await res.json();
+    if(!data)throw new Error('Customer not found');
+    const orders=Array.isArray(data.orders)?data.orders:[];
+    if(orderIdx<0||orderIdx>=orders.length){showToast('Order not found','err');return;}
+    orders.splice(orderIdx,1);
+    const newCount=Math.max(0,(data.orderCount||0)-1);
+    await fetch(FB_URL+'/customers/'+username+'.json',{
+      method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({orderCount:newCount,orders})
+    });
+    showToast('Order removed from @'+username+' ('+newCount+' orders remaining)','ok');
+    loadRegisteredCustomers();
+  }catch(e){showToast('Failed to delete order','err');console.error(e);}
 }
 
 function uploadLoyaltyGift(){document.getElementById('loyalty-gift-file').click();}
