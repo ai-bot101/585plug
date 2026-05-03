@@ -1263,6 +1263,33 @@ function doGet(e){var ss=SpreadsheetApp.getActiveSpreadsheet();var out={};ss.get
   </div>
 </div>
 
+<!-- ADJUST STOCK MODAL -->
+<div class="ov" id="adjust-modal">
+  <div class="modal">
+    <h3>📏 Adjust Stock</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">Set the real amount left. The difference will be logged as a stock adjustment (not a sale) so Sync to EOD stays accurate.</p>
+    <input type="hidden" id="adj-cat">
+    <input type="hidden" id="adj-idx">
+    <div id="adj-item-name" style="font-size:16px;font-weight:700;color:var(--text);text-transform:capitalize;margin-bottom:12px;"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+      <div>
+        <label style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;">Current Left</label>
+        <div id="adj-current" style="font-size:22px;font-weight:700;font-family:var(--mono);color:var(--text);margin-top:4px;"></div>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;">Real Amount Left</label>
+        <input type="number" id="adj-real" step="0.1" min="0" style="width:100%;font-size:20px;font-weight:700;font-family:var(--mono);background:var(--bg3);border:2px solid var(--accent);border-radius:8px;padding:8px 12px;color:var(--accent);outline:none;margin-top:4px;" onfocus="this.select()">
+      </div>
+    </div>
+    <div id="adj-diff" style="font-size:13px;color:var(--text3);margin-bottom:14px;font-family:var(--mono);"></div>
+    <div id="adj-flavors" style="margin-bottom:14px;"></div>
+    <div class="mbtns">
+      <button class="mp" onclick="closeOv('adjust-modal')">Cancel</button>
+      <button class="mp" style="background:var(--accent);color:#0c0c0f;" onclick="saveAdjust()">💾 Save Adjustment</button>
+    </div>
+  </div>
+</div>
+
 <!-- RESTOCK MODAL -->
 <div class="ov" id="restock-modal">
   <div class="modal">
@@ -1465,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v65';
-const _BUILD_TS=1777784886852; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v65]';},1000);
+const _APP_VERSION='deploy-v66';
+const _BUILD_TS=1777785787204; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v66]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2842,7 +2869,27 @@ function syncStockToEOD(e){
     }
   });
 
-  // 3. Count pending (held) web orders
+  // 3. Count adjustment entries (stock corrections — not sales but affect left count)
+  log.filter(entry=>entry.type==='adjustment').forEach(entry=>{
+    const key=(entry.name||'').toLowerCase();
+    if(entry.direction==='remove'){
+      addToSold(key,entry.amount||0);
+      // Flavor adjustments
+      if(entry.flavorName){
+        if(!flavorSoldMap[key])flavorSoldMap[key]={};
+        flavorSoldMap[key][entry.flavorName]=(flavorSoldMap[key][entry.flavorName]||0)+(entry.amount||0);
+      }
+    }else if(entry.direction==='add'){
+      // Negative sold (stock was added back)
+      soldMap[key]=(soldMap[key]||0)-(entry.amount||0);
+      if(entry.flavorName){
+        if(!flavorSoldMap[key])flavorSoldMap[key]={};
+        flavorSoldMap[key][entry.flavorName]=(flavorSoldMap[key][entry.flavorName]||0)-(entry.amount||0);
+      }
+    }
+  });
+
+  // 4. Count pending (held) web orders
   Object.values(pendingWebOrders||{}).forEach(order=>{
     (order.orderItems||[]).forEach(oi=>{
       const key=(oi.itemName||oi.name||'').toLowerCase().trim();
@@ -2988,7 +3035,7 @@ const isSoldOut=!!item.soldOutAt;
 const soldOutClass=isSoldOut?'sold-out-card':'';
 const soldOutOverlay=isSoldOut?'<div class="sold-out-overlay">SOLD OUT</div>':'';
 const soldOutBtn=own?`<button class="${isSoldOut?'ebtn sold-out-active':'ebtn sold-out-btn'}" onclick="toggleSoldOut('${cat}',${ri})" style="${isSoldOut?'background:rgba(244,107,107,0.15);border-color:rgba(244,107,107,0.4);color:var(--red);':'background:rgba(244,107,107,0.06);border-color:rgba(244,107,107,0.15);color:rgba(244,107,107,0.5);'}">${isSoldOut?'✅ Restock':'🚫 Sold Out'}</button>`:'';
-html+=`<div class="icard ${so2?'gone':''} ${soldOutClass}" style="position:relative;${isSoldOut?'opacity:0.5;':''}">${soldOutOverlay}${pa}<div class="card-status">${so2?'<span class="tag sold">SOLD OUT</span>':isLow?'<span class="tag low">LOW</span>':''}</div><div class="iname">${item.name}${aoTag}${staffPriceTag}</div>${costDisplay}<div class="nums"><div class="nb"><div class="nl">Left</div><div class="nv hi">${fmt(left)}</div></div><div class="nb"><div class="nl">Bought</div><div class="nv">${fmt(bought)||'--'}</div></div>${bought?`<div class="nb"><div class="nl">Sold</div><div class="nv">${fmt(Math.max(0,bought-left))}</div></div>`:''}</div>${bought?`<div class="pbar"><div class="pfill ${fc}" style="width:${pct}%"></div></div>`:''}${own?`<div class="sell-row"><input class="qi" type="number" placeholder="Quick qty" min="0.1" step="0.1" id="qi-${cat}-${ri}" onkeydown="if(event.key==='Enter')sell('${cat}',${ri})"><button class="sbtn2" onclick="sell('${cat}',${ri})" ${so2||isSoldOut?'disabled':''}>Sell</button></div>`:''}${own?`<div class="oc"><button class="ebtn" onclick="openEdit('${cat}',${ri})">Edit</button><button class="ebtn" onclick="openRestock('${cat}',${ri})" style="background:rgba(62,207,142,0.08);border-color:rgba(62,207,142,0.2);color:var(--green);">Restock</button>${soldOutBtn}<button class="dbtn" onclick="delItem('${cat}',${ri})">Delete</button></div>`:''}</div>`;});if(own)html+=`<div class="addcard" onclick="openAdd('${cat}')">+ Add item to ${cat}</div>`;html+='</div>';}area.innerHTML=html||'<div class="empty">No items yet</div>';}
+html+=`<div class="icard ${so2?'gone':''} ${soldOutClass}" style="position:relative;${isSoldOut?'opacity:0.5;':''}">${soldOutOverlay}${pa}<div class="card-status">${so2?'<span class="tag sold">SOLD OUT</span>':isLow?'<span class="tag low">LOW</span>':''}</div><div class="iname">${item.name}${aoTag}${staffPriceTag}</div>${costDisplay}<div class="nums"><div class="nb"><div class="nl">Left</div><div class="nv hi">${fmt(left)}</div></div><div class="nb"><div class="nl">Bought</div><div class="nv">${fmt(bought)||'--'}</div></div>${bought?`<div class="nb"><div class="nl">Sold</div><div class="nv">${fmt(Math.max(0,bought-left))}</div></div>`:''}</div>${bought?`<div class="pbar"><div class="pfill ${fc}" style="width:${pct}%"></div></div>`:''}${own?`<div class="sell-row"><input class="qi" type="number" placeholder="Quick qty" min="0.1" step="0.1" id="qi-${cat}-${ri}" onkeydown="if(event.key==='Enter')sell('${cat}',${ri})"><button class="sbtn2" onclick="sell('${cat}',${ri})" ${so2||isSoldOut?'disabled':''}>Sell</button></div>`:''}${own?`<div class="oc"><button class="ebtn" onclick="openEdit('${cat}',${ri})">Edit</button><button class="ebtn" onclick="openRestock('${cat}',${ri})" style="background:rgba(62,207,142,0.08);border-color:rgba(62,207,142,0.2);color:var(--green);">Restock</button><button class="ebtn" onclick="openAdjust('${cat}',${ri})" style="background:rgba(108,99,255,0.08);border-color:rgba(108,99,255,0.2);color:var(--accent);">📏 Adjust</button>${soldOutBtn}<button class="dbtn" onclick="delItem('${cat}',${ri})">Delete</button></div>`:''}</div>`;});if(own)html+=`<div class="addcard" onclick="openAdd('${cat}')">+ Add item to ${cat}</div>`;html+='</div>';}area.innerHTML=html||'<div class="empty">No items yet</div>';}
 function totBanner(sells,dl,isT,showProfit){
   const g=sells.reduce((s,e)=>s+(e.amtReceived||0),0);
   const cv=calcCashVirt(sells);
@@ -4554,6 +4601,81 @@ async function saveEdit(){
   }
   persist();closeOv('edit-modal');renderStats();renderItems();pushInventory();
 }
+function openAdjust(cat,idx){
+  const item=(inv[cat]||[])[idx];
+  if(!item)return;
+  document.getElementById('adj-cat').value=cat;
+  document.getElementById('adj-idx').value=idx;
+  document.getElementById('adj-item-name').textContent=item.name;
+  const currentLeft=gl(item);
+  document.getElementById('adj-current').textContent=fmt(currentLeft);
+  document.getElementById('adj-real').value=currentLeft;
+  document.getElementById('adj-diff').textContent='';
+  // Flavor inputs
+  const flavEl=document.getElementById('adj-flavors');
+  if(Array.isArray(item.flavors)&&item.flavors.length>0){
+    flavEl.innerHTML='<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Flavor / Variant Stock</div>'+
+      item.flavors.map((f,fi)=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="flex:1;font-size:13px;color:var(--text);text-transform:capitalize;">${f.name}</span>
+        <span style="font-size:11px;color:var(--text3);font-family:var(--mono);">now: ${f.stock||0}</span>
+        <input type="number" id="adj-flav-${fi}" value="${f.stock||0}" min="0" step="1" style="width:70px;background:var(--bg3);border:1px solid var(--accent);border-radius:6px;padding:6px 8px;color:var(--accent);font-family:var(--mono);font-size:14px;font-weight:700;text-align:center;outline:none;" onfocus="this.select()">
+      </div>`).join('');
+  }else{
+    flavEl.innerHTML='';
+  }
+  // Live diff preview
+  const realInput=document.getElementById('adj-real');
+  realInput.oninput=function(){
+    const realVal=parseFloat(this.value)||0;
+    const diff=Math.round((currentLeft-realVal)*10)/10;
+    const diffEl=document.getElementById('adj-diff');
+    if(diff>0)diffEl.innerHTML='<span style="color:var(--red);">▼ '+fmt(diff)+' less than recorded</span>';
+    else if(diff<0)diffEl.innerHTML='<span style="color:var(--green);">▲ '+fmt(Math.abs(diff))+' more than recorded</span>';
+    else diffEl.textContent='No change';
+  };
+  document.getElementById('adjust-modal').classList.add('open');
+}
+
+async function saveAdjust(){
+  if(!await _ownerGuard())return;
+  const cat=document.getElementById('adj-cat').value;
+  const idx=parseInt(document.getElementById('adj-idx').value);
+  const item=(inv[cat]||[])[idx];
+  if(!item)return;
+  const oldLeft=gl(item);
+  const newLeft=parseFloat(document.getElementById('adj-real').value);
+  if(isNaN(newLeft)||newLeft<0){showToast('Enter a valid amount','err');return;}
+  const delta=Math.round((newLeft-oldLeft)*10)/10;
+
+  // Update main stock
+  if(delta!==0){
+    item.left=newLeft;
+    log.unshift({type:'adjustment',name:item.name.toLowerCase(),amount:Math.abs(delta),direction:delta>0?'add':'remove',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'Stock adjustment: '+fmt(oldLeft)+' → '+fmt(newLeft)});
+  }
+
+  // Update flavor stock
+  if(Array.isArray(item.flavors)&&item.flavors.length>0){
+    item.flavors.forEach((f,fi)=>{
+      const inp=document.getElementById('adj-flav-'+fi);
+      if(!inp)return;
+      const newFlav=parseInt(inp.value)||0;
+      const oldFlav=f.stock||0;
+      const fDelta=newFlav-oldFlav;
+      if(fDelta!==0){
+        f.stock=newFlav;
+        log.unshift({type:'adjustment',name:item.name.toLowerCase(),amount:Math.abs(fDelta),direction:fDelta>0?'add':'remove',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'Flavor adjust "'+f.name+'": '+oldFlav+' → '+newFlav,flavorName:f.name.toLowerCase()});
+      }
+    });
+  }
+
+  persist();closeOv('adjust-modal');renderStats();renderItems();
+  if(delta!==0){
+    showToast('Stock adjusted: '+item.name+' '+fmt(oldLeft)+' → '+fmt(newLeft),'ok');
+  }else{
+    showToast('Flavors updated','ok');
+  }
+}
+
 async function toggleSoldOut(cat,idx){
   if(!await _ownerGuard())return;
   const item=(inv[cat]||[])[idx];
