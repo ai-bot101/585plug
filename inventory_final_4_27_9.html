@@ -1465,9 +1465,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v64';
-const _BUILD_TS=1777784215274; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v64]';},1000);
+const _APP_VERSION='deploy-v65';
+const _BUILD_TS=1777784886852; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v65]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -7900,7 +7900,7 @@ function doReset(type){
 function openEOD(){
   const today=tday();
   document.getElementById('eod-date').textContent=today;
-  const dayLog=log.filter(e=>e.date===today);
+  const dayLog=log.filter(e=>e.date===today&&!e._cleared);
   const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');
   const grandTotal=sells.reduce((s,e)=>s+(e.amtReceived||0),0);
   const eodPCV=calcCashVirt(sells);
