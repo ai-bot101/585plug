@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v70';
-const _BUILD_TS=1777788863486; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v70]';},1000);
+const _APP_VERSION='deploy-v71';
+const _BUILD_TS=1777789280567; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v71]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2687,10 +2687,18 @@ function _autoRepairStock(){
       });
     }
     if(entry.type==='sell'){
-      const name=(entry.item||entry.itemName||'').toLowerCase().trim();
+      const name=(entry.name||entry.item||entry.itemName||'').toLowerCase().trim();
       if(name){
-        const qty=Math.max(parseFloat(entry.qty)||1,labelToQty(entry.label));
+        const qty=Math.max(parseFloat(entry.qty||entry.amount)||1,labelToQty(entry.label));
         soldMap[name]=(soldMap[name]||0)+qty;
+      }
+    }
+    // Count adjustments (stock corrections from Edit/Adjust buttons)
+    if(entry.type==='adjustment'){
+      const name=(entry.name||'').toLowerCase().trim();
+      if(name&&entry.amount){
+        if(entry.direction==='remove') soldMap[name]=(soldMap[name]||0)+(entry.amount||0);
+        else if(entry.direction==='add') soldMap[name]=(soldMap[name]||0)-(entry.amount||0);
       }
     }
   });
