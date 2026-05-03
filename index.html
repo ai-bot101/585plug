@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260503014326';
+var _MENU_V = 'v20260503014921';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -2251,7 +2251,9 @@ function sendOrder() {
     body: notifItems + '\nPayment: ' + pm + '\n' + (orderType==='pickup'?'Pickup':'Delivery' + (addr?' — '+addr:'')) + '\nTotal: $' + total
   }).catch(e => console.error('Notification failed:', e));
 
-  _trackCustOrder(pendingOrder);
+  // NOTE: Do NOT track order here — counting happens when owner confirms the order
+  // in the inventory app. This prevents double-counting and false counts from
+  // cancelled/changed orders.
 
   // Show order preview modal instead of opening SMS
   const phoneFormatted = '('+OWNER_PHONE.slice(0,3)+') '+OWNER_PHONE.slice(3,6)+'-'+OWNER_PHONE.slice(6);
