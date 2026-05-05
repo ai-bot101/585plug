@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v73';
-const _BUILD_TS=1777948754311; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v73]';},1000);
+const _APP_VERSION='deploy-v74';
+const _BUILD_TS=1777953997576; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v74]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -5705,12 +5705,16 @@ function clearConfirmedOrders(){
 function renderConfirmedWebOrders() {
   const el = document.getElementById('confirmed-orders-section');
   const globalEl = document.getElementById('confirmed-orders-global');
-  // Build set of webOrderKeys already captured in EOD logs — these should NEVER show as confirmed
+  // Build set of keys/timestamps already captured in EOD logs — these should NEVER show as confirmed
   const eodWebKeys=new Set();
-  eodLogs.forEach(eod=>(eod.orders||[]).forEach(o=>{if(o.webOrderKey)eodWebKeys.add(o.webOrderKey);}));
+  const eodTimestamps=new Set();
+  eodLogs.forEach(eod=>(eod.orders||[]).forEach(o=>{
+    if(o.webOrderKey)eodWebKeys.add(o.webOrderKey);
+    if(o.timestamp)eodTimestamps.add(o.timestamp);
+  }));
   // Find all confirmed website orders that haven't been cleared (by EOD save or manual clear)
   // Also filter out any order already in an EOD log (safety net if _cleared flag was lost)
-  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && !e._cleared && !eodWebKeys.has(e.webOrderKey));
+  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && !e._cleared && !eodWebKeys.has(e.webOrderKey) && !(e.timestamp && eodTimestamps.has(e.timestamp)));
   if (!webOrders.length) {
     if(el){ el.style.display = 'none'; el.innerHTML = ''; }
     if(globalEl){ globalEl.style.display = 'none'; globalEl.innerHTML = ''; }
@@ -6860,6 +6864,7 @@ function buildEODRecord(dateStr){
       who:e.who,
       time:e.time||'',
       timestamp:e.timestamp||0,
+      webOrderKey:e.webOrderKey||null,
       custUsername:e.custUsername||null,
       custName:e.custName||null
     })),
