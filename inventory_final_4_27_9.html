@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v72';
-const _BUILD_TS=1777907512480; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v72]';},1000);
+const _APP_VERSION='deploy-v73';
+const _BUILD_TS=1777948754311; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v73]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -5705,8 +5705,12 @@ function clearConfirmedOrders(){
 function renderConfirmedWebOrders() {
   const el = document.getElementById('confirmed-orders-section');
   const globalEl = document.getElementById('confirmed-orders-global');
+  // Build set of webOrderKeys already captured in EOD logs — these should NEVER show as confirmed
+  const eodWebKeys=new Set();
+  eodLogs.forEach(eod=>(eod.orders||[]).forEach(o=>{if(o.webOrderKey)eodWebKeys.add(o.webOrderKey);}));
   // Find all confirmed website orders that haven't been cleared (by EOD save or manual clear)
-  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && !e._cleared);
+  // Also filter out any order already in an EOD log (safety net if _cleared flag was lost)
+  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && !e._cleared && !eodWebKeys.has(e.webOrderKey));
   if (!webOrders.length) {
     if(el){ el.style.display = 'none'; el.innerHTML = ''; }
     if(globalEl){ globalEl.style.display = 'none'; globalEl.innerHTML = ''; }
@@ -6741,10 +6745,20 @@ function buildEODRecord(dateStr){
   // Orders flagged _cleared were already captured in a previous EOD log.
   // Only grab orders that haven't been captured yet.
 
+  // Build set of webOrderKeys and timestamps already in EOD logs (safety net if _cleared was lost)
+  const _eodCapturedKeys=new Set();
+  const _eodCapturedTs=new Set();
+  eodLogs.forEach(eod=>(eod.orders||[]).forEach(o=>{
+    if(o.webOrderKey)_eodCapturedKeys.add(o.webOrderKey);
+    if(o.timestamp)_eodCapturedTs.add(o.timestamp);
+  }));
   const dayLog=log.filter(e=>{
     if(e.date!==dl)return false;
     if(!(e.type==='sell'||e.type==='order'||e.type==='selfbuy'))return false;
     if(e._cleared)return false;
+    // Safety net: skip if already captured in a previous EOD log
+    if(e.webOrderKey&&_eodCapturedKeys.has(e.webOrderKey))return false;
+    if(e.timestamp&&_eodCapturedTs.has(e.timestamp))return false;
     return true;
   });
 
@@ -8071,7 +8085,20 @@ function doReset(type){
 function openEOD(){
   const today=tday();
   document.getElementById('eod-date').textContent=today;
-  const dayLog=log.filter(e=>e.date===today&&!e._cleared);
+  // Build set of already-captured keys for safety net (if _cleared flag was lost)
+  const _eodPrevKeys=new Set();
+  const _eodPrevTs=new Set();
+  eodLogs.forEach(eod=>(eod.orders||[]).forEach(o=>{
+    if(o.webOrderKey)_eodPrevKeys.add(o.webOrderKey);
+    if(o.timestamp)_eodPrevTs.add(o.timestamp);
+  }));
+  const dayLog=log.filter(e=>{
+    if(e.date!==today)return false;
+    if(e._cleared)return false;
+    if(e.webOrderKey&&_eodPrevKeys.has(e.webOrderKey))return false;
+    if((e.type==='sell'||e.type==='order'||e.type==='selfbuy')&&e.timestamp&&_eodPrevTs.has(e.timestamp))return false;
+    return true;
+  });
   const sells=dayLog.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy');
   const grandTotal=sells.reduce((s,e)=>s+(e.amtReceived||0),0);
   const eodPCV=calcCashVirt(sells);
