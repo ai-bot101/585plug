@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v78';
-const _BUILD_TS=1779291248942; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v78]';},1000);
+const _APP_VERSION='deploy-v79';
+const _BUILD_TS=1779292569236; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v79]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2713,7 +2713,8 @@ function _autoRepairStock(){
       }
     }
     // Count adjustments (stock corrections from Edit/Adjust buttons)
-    if(entry.type==='adjustment'){
+    // Skip flavor-only adjustments (they have flavorName) — those don't affect main stock
+    if(entry.type==='adjustment'&&!entry.flavorName){
       const name=(entry.name||'').toLowerCase().trim();
       if(name&&entry.amount){
         if(entry.direction==='remove') soldMap[name]=(soldMap[name]||0)+(entry.amount||0);
@@ -2903,21 +2904,23 @@ function syncStockToEOD(e){
   log.filter(entry=>entry.type==='adjustment').forEach(entry=>{
     const key=(entry.name||'').toLowerCase();
     ensureSrc(key);
-    if(entry.direction==='remove'){
-      addToSold(key,entry.amount||0);
-      srcMap[key].adj+=(entry.amount||0);
-      // Flavor adjustments
-      if(entry.flavorName){
+    // Flavor-only adjustments (have flavorName) — only affect flavor stock, NOT main stock
+    if(entry.flavorName){
+      if(entry.direction==='remove'){
         if(!flavorSoldMap[key])flavorSoldMap[key]={};
         flavorSoldMap[key][entry.flavorName]=(flavorSoldMap[key][entry.flavorName]||0)+(entry.amount||0);
-      }
-    }else if(entry.direction==='add'){
-      // Negative sold (stock was added back)
-      soldMap[key]=(soldMap[key]||0)-(entry.amount||0);
-      srcMap[key].adj-=(entry.amount||0);
-      if(entry.flavorName){
+      }else if(entry.direction==='add'){
         if(!flavorSoldMap[key])flavorSoldMap[key]={};
         flavorSoldMap[key][entry.flavorName]=(flavorSoldMap[key][entry.flavorName]||0)-(entry.amount||0);
+      }
+    }else{
+      // Main stock adjustment
+      if(entry.direction==='remove'){
+        addToSold(key,entry.amount||0);
+        srcMap[key].adj+=(entry.amount||0);
+      }else if(entry.direction==='add'){
+        soldMap[key]=(soldMap[key]||0)-(entry.amount||0);
+        srcMap[key].adj-=(entry.amount||0);
       }
     }
   });
