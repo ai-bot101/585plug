@@ -1492,15 +1492,22 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v80';
-const _BUILD_TS=1779293249148; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v80]';},1000);
+const _APP_VERSION='deploy-v81';
+const _BUILD_TS=1779296055013; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v81]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
 // Show "just updated" banner if we reloaded due to auto-update
+// Keep the flag for 5 minutes to prevent reload loops (CDN cache may serve old file)
 if(sessionStorage.getItem('_autoUpdated')){
-  sessionStorage.removeItem('_autoUpdated');
+  const updatedAt=parseInt(sessionStorage.getItem('_autoUpdated'))||0;
+  const elapsed=Date.now()-updatedAt;
+  if(elapsed>300000){
+    // Cooldown expired — allow future updates
+    sessionStorage.removeItem('_autoUpdated');
+  }
+  // Show banner regardless
   setTimeout(()=>{
     const b=document.createElement('div');
     b.style.cssText='position:fixed;top:12px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,rgba(62,207,142,0.95),rgba(46,160,110,0.95));color:#fff;padding:10px 24px;border-radius:12px;font-family:var(--sans);font-size:14px;font-weight:700;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,0.3);letter-spacing:0.5px;';
@@ -1515,6 +1522,9 @@ if(sessionStorage.getItem('_autoUpdated')){
 let _updateDetected=false; // prevent multiple reload triggers
 const _autoUpdateInterval=setInterval(async()=>{
   if(_updateDetected)return; // already reloading, stop checking
+    // Skip if we recently auto-updated (prevents reload loop when CDN cache is stale)
+    const _lastUpdate=parseInt(sessionStorage.getItem('_autoUpdated'))||0;
+    if(_lastUpdate&&Date.now()-_lastUpdate<300000)return;
   try{
     const r=await fetch(FB_URL+'/invVersion.json?t='+Date.now());
     if(!r.ok){_debugOverlayLog('[UPDATE] Firebase check failed: HTTP '+r.status);return;}
@@ -1528,7 +1538,7 @@ const _autoUpdateInterval=setInterval(async()=>{
       b.style.cssText='position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,rgba(108,99,255,0.95),rgba(80,70,200,0.95));color:#fff;padding:14px;text-align:center;font-family:var(--sans);font-size:15px;font-weight:700;z-index:99999;letter-spacing:1px;';
       b.textContent='🔄 New update detected — refreshing...';
       document.body.appendChild(b);
-      sessionStorage.setItem('_autoUpdated','1');
+      sessionStorage.setItem('_autoUpdated',Date.now().toString());
       // Force bypass cache on reload
       setTimeout(()=>{window.location.href=location.pathname+'?_v='+Date.now();},1500);
     }
