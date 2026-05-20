@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v77';
-const _BUILD_TS=1779290662582; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v77]';},1000);
+const _APP_VERSION='deploy-v78';
+const _BUILD_TS=1779291248942; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v78]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2238,9 +2238,10 @@ function pickCustomAmount(cat,ri){
 let _pendingPriceTier=null;
 function showFlavorPicker(cat,ri,item,flavors){
   const pt=_pendingPriceTier||{};
-  const qty=pt.qty||1;
+  // Use real qty from label (e.g. "3" → 3g) since qty is stored as 1 for deduction purposes
+  const realQty=pt.label?Math.max(pt.qty||1,labelToQty(pt.label)):(pt.qty||1);
   // If qty > 1, show multi-flavor picker instead
-  if(qty>1){return showMultiFlavorPicker(cat,ri,item,flavors,qty);}
+  if(realQty>1){return showMultiFlavorPicker(cat,ri,item,flavors,realQty);}
   const existing=document.getElementById('flavor-pick-modal');if(existing)existing.remove();
   const d=document.createElement('div');d.id='flavor-pick-modal';
   d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;';
