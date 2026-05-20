@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v75';
-const _BUILD_TS=1778251704451; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v75]';},1000);
+const _APP_VERSION='deploy-v76';
+const _BUILD_TS=1779290426988; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v76]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -1535,6 +1535,7 @@ const _autoUpdateInterval=setInterval(async()=>{
   }catch(e){_debugOverlayLog('[UPDATE] Error: '+e.message);}
 },15000);
 let cancelledOrders=[]; // log of all cancelled/rejected orders — owner only
+let clearedWebKeys=[]; // persistent list of webOrderKeys that were captured by EOD or manually cleared — survives Firebase sync
 let staffDebts={}; // {staffName: dollarAmount} — money staff owes owner, deducted from commissions
 let commissionPaused={}; // {staffName: true} — commission disabled for this staff member
 // Auto daily debts: DISABLED — cleared out per owner request
@@ -1623,7 +1624,7 @@ function _emergencyPush(){
     const payload={
       inv,log,cfg,
       customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,
-      failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,
+      failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,
       commissionPaused,autoDailyDebts,
       updatedAt:Date.now()
     };
@@ -1934,6 +1935,7 @@ async function forceRefresh(){
     eodLogs=Array.isArray(data.eodLogs)?data.eodLogs:[];
     cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
     cancelledOrders=Array.isArray(data.cancelledOrders)?data.cancelledOrders:[];
+    clearedWebKeys=Array.isArray(data.clearedWebKeys)?data.clearedWebKeys:[];
     staffDebts=data.staffDebts||{};
     commissionPaused=data.commissionPaused||{};
     autoDailyDebts=Array.isArray(data.autoDailyDebts)?data.autoDailyDebts:[];
@@ -3950,7 +3952,7 @@ async function deleteLogEntry(idx) {
   // Direct immediate push to Firebase (skip debounce)
   const _delPayload={
     inv,log,cfg,
-    customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
+    customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts,
     updatedAt:Date.now()
   };
   fbLastTimestamp=_delPayload.updatedAt;
@@ -5704,6 +5706,7 @@ function clearConfirmedOrders(){
         _restoreFlavorStock(foundItem,oi,qty);
       });
       e._cleared=true;
+      if(!clearedWebKeys.includes(e.webOrderKey))clearedWebKeys.push(e.webOrderKey);
       cleared.push(e.webOrderKey);
       fetch(FB_URL+'/pending_orders/'+e.webOrderKey+'.json',{method:'DELETE'}).catch(()=>{});
     }
@@ -5725,7 +5728,8 @@ function renderConfirmedWebOrders() {
   }));
   // Find all confirmed website orders that haven't been cleared (by EOD save or manual clear)
   // Also filter out any order already in an EOD log (safety net if _cleared flag was lost)
-  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && !e._cleared && !eodWebKeys.has(e.webOrderKey) && !(e.timestamp && eodTimestamps.has(e.timestamp)));
+  const clearedSet=new Set(clearedWebKeys||[]);
+  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && !e._cleared && !clearedSet.has(e.webOrderKey) && !eodWebKeys.has(e.webOrderKey) && !(e.timestamp && eodTimestamps.has(e.timestamp)));
   if (!webOrders.length) {
     if(el){ el.style.display = 'none'; el.innerHTML = ''; }
     if(globalEl){ globalEl.style.display = 'none'; globalEl.innerHTML = ''; }
@@ -6367,6 +6371,10 @@ async function fbPullNow(){
       failedAttempts=Array.isArray(data.failedAttempts)?data.failedAttempts:[];
       loginLog=Array.isArray(data.loginLog)?data.loginLog:[];
       cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
+      // Merge clearedWebKeys — never lose keys, only add
+      const incomingCleared=Array.isArray(data.clearedWebKeys)?data.clearedWebKeys:[];
+      const mergedSet=new Set([...clearedWebKeys,...incomingCleared]);
+      clearedWebKeys=[...mergedSet];
       staffDebts=data.staffDebts||{};
       commissionPaused=data.commissionPaused||{};
       /* autoDailyDebts removed — no longer loading */
@@ -6457,7 +6465,7 @@ function fbPush(){
       // double stock deduction on page reload.
       const payload={
         inv,log,cfg,
-        customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts,
+        customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts,
         updatedAt:Date.now(),
         ..._pendingFbPatches
       };
@@ -6549,7 +6557,7 @@ async function persistEncrypted(){
   try{
     const data={
       inv,log,cfg,
-      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,staffDebts,commissionPaused,autoDailyDebts
+      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts
     };
     const encrypted=await encryptData(data);
     localStorage.setItem('ig_enc',encrypted);
@@ -6574,6 +6582,7 @@ async function restoreEncrypted(){
         if(data.failedAttempts)failedAttempts=data.failedAttempts;
         if(data.loginLog)loginLog=data.loginLog;
         if(data.cancelledOrders)cancelledOrders=data.cancelledOrders;
+        if(Array.isArray(data.clearedWebKeys))clearedWebKeys=data.clearedWebKeys;
         if(data.staffDebts)staffDebts=data.staffDebts;
         if(data.commissionPaused)commissionPaused=data.commissionPaused;
         /* autoDailyDebts removed — no longer loading */
@@ -6777,12 +6786,14 @@ function buildEODRecord(dateStr){
     if(o.webOrderKey)_eodCapturedKeys.add(o.webOrderKey);
     if(o.timestamp)_eodCapturedTs.add(o.timestamp);
   }));
+  // Also check persistent clearedWebKeys list
+  const _clearedKeySet=new Set(clearedWebKeys||[]);
   const dayLog=log.filter(e=>{
     if(e.date!==dl)return false;
     if(!(e.type==='sell'||e.type==='order'||e.type==='selfbuy'))return false;
     if(e._cleared)return false;
-    // Safety net: skip if already captured in a previous EOD log
-    if(e.webOrderKey&&_eodCapturedKeys.has(e.webOrderKey))return false;
+    // Safety net: skip if already captured in a previous EOD log or manually cleared
+    if(e.webOrderKey&&(_eodCapturedKeys.has(e.webOrderKey)||_clearedKeySet.has(e.webOrderKey)))return false;
     if(e.timestamp&&_eodCapturedTs.has(e.timestamp))return false;
     return true;
   });
@@ -7453,12 +7464,14 @@ async function saveEODLog(){
   _debugOverlayLog('[EOD-SAVE] Log #'+record.logNumber+' | orders captured: '+record.txCount);
 
   // Mark all captured orders as _cleared so they won't be captured again
+  // Also add webOrderKeys to persistent clearedWebKeys list (survives Firebase sync)
   let cleared=0;
   log.forEach(e=>{
     if((e.type==='sell'||e.type==='order'||e.type==='selfbuy')&&e.date===dl&&!e._cleared){
       e._cleared=true;
       cleared++;
       if(e.webOrderKey){
+        if(!clearedWebKeys.includes(e.webOrderKey))clearedWebKeys.push(e.webOrderKey);
         fetch(FB_URL+'/pending_orders/'+e.webOrderKey+'.json',{method:'DELETE'}).catch(()=>{});
       }
     }
@@ -8060,6 +8073,7 @@ function doReset(type){
     eodLogs=[];
     staffBuyLogs=[];
     cancelledOrders=[];
+    clearedWebKeys=[];
     customerCredits={};
     vipCustomers={};
     customerDeals={};
@@ -8085,7 +8099,7 @@ function doReset(type){
       inv,log:[],cfg,
       customerCredits:{},vipCustomers:{},customerDeals:{},dayNotes:{},
       eodLogs:[],staffBuyLogs:[],failedAttempts,loginLog,cashRecons,
-      cancelledOrders:[],staffDebts,commissionPaused,autoDailyDebts:{},
+      cancelledOrders:[],clearedWebKeys:[],staffDebts,commissionPaused,autoDailyDebts:{},
       updatedAt:_nukeTs,
       _nukeAt:_nukeTs // signal to other devices: this was a wipe
     };
