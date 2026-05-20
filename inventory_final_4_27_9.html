@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v79';
-const _BUILD_TS=1779292569236; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v79]';},1000);
+const _APP_VERSION='deploy-v80';
+const _BUILD_TS=1779293249148; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v80]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -5715,7 +5715,14 @@ function clearConfirmedOrders(){
       fetch(FB_URL+'/pending_orders/'+e.webOrderKey+'.json',{method:'DELETE'}).catch(()=>{});
     }
   });
-  persist();renderConfirmedWebOrders();renderStats();renderItems();
+  // IMMEDIATE push — no debounce, prevents data loss on reload
+  persistEncrypted().catch(()=>{});
+  if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+  fbPushInFlight=true;
+  const _clrPayload={inv,log,cfg,customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts,updatedAt:Date.now()};
+  fbLastTimestamp=_clrPayload.updatedAt;
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(_clrPayload)}).then(()=>{fbPushInFlight=false;}).catch(()=>{fbPushInFlight=false;});
+  renderConfirmedWebOrders();renderStats();renderItems();
   if(cu?.role==='owner')renderDash();
   showToast(cleared.length+' orders cleared — stock restored 🔄','ok');
 }
@@ -7482,13 +7489,33 @@ async function saveEODLog(){
     }
   });
 
-  persist();
+  // Save locally first
+  persistEncrypted().catch(()=>{});
+  // IMMEDIATE push to Firebase — no debounce. Critical: prevents data loss on reload.
+  if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+  fbPushInFlight=true;
+  const _eodPayload={
+    inv,log,cfg,
+    customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts,
+    updatedAt:Date.now()
+  };
+  fbLastTimestamp=_eodPayload.updatedAt;
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(_eodPayload)}).then(()=>{
+    fbPushInFlight=false;
+    document.getElementById('sdot').className='sdot ok';
+    document.getElementById('slabel').textContent='Saved — '+tstr();
+    console.log('[EOD-PUSH] Immediate push complete');
+  }).catch(e=>{
+    fbPushInFlight=false;
+    console.error('[EOD-PUSH] Failed:',e);
+    showToast('EOD saved locally but Firebase sync failed — do NOT reload yet','err');
+  });
   renderEODLogsList();
   renderConfirmedWebOrders();
   renderDash();
   renderLoginLog();
   renderCancelledOrders();
-  const _totalForDay=log.filter(e=>e.date===dl&&(e.type==='sell'||e.type==='order'||e.type==='selfbuy')).length;
+  const _totalForDay=log.filter(e=>(e.type==='sell'||e.type==='order'||e.type==='selfbuy')).length;
   showToast('['+_APP_VERSION+'] Log #'+record.logNumber+' saved ✅ ('+record.txCount+' of '+_totalForDay+' orders, '+fmtP(record.grandTotal)+')','ok');
 }
 
