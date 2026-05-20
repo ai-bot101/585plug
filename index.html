@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260520112422';
+var _MENU_V = 'v20260520113408';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -2232,11 +2232,20 @@ function sendOrder() {
   };
 
   const orderKey = 'order_' + Date.now();
-  fetch(FB_URL + '/inv_d6bb4/pending_orders/' + orderKey + '.json', {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(pendingOrder)
-  }).catch(e => console.error('Failed to save order:', e));
+  // Submit order with retry — mobile networks can drop requests
+  (async function submitOrder(retries){
+    try{
+      const r=await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + orderKey + '.json', {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(pendingOrder)
+      });
+      if(!r.ok&&retries>0){console.warn('Order submit failed ('+r.status+'), retrying...');setTimeout(()=>submitOrder(retries-1),2000);}
+    }catch(e){
+      console.error('Order submit error:', e);
+      if(retries>0){setTimeout(()=>submitOrder(retries-1),2000);}
+    }
+  })(3);
 
   // Send push notification to owner via ntfy
   const notifItems = cart.map(c => c.name + ' (' + c.label + ')').join(', ');
