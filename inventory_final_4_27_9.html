@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v86';
-const _BUILD_TS=1779550804710; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v86]';},1000);
+const _APP_VERSION='deploy-v87';
+const _BUILD_TS=1779551354426; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v87]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2812,6 +2812,17 @@ function _autoRepairStock(){
       soldMap[name]=(soldMap[name]||0)+Math.max(parseFloat(oi.qty)||1,labelToQty(oi.label));
     });
   });
+  // 4. Track net adjustments — corrections to supply, not sales
+  const _repairAdjMap={};
+  log.forEach(entry=>{
+    if(entry.type==='adjustment'&&!entry.flavorName){
+      const name=(entry.name||'').toLowerCase().trim();
+      if(name&&entry.amount){
+        if(entry.direction==='remove') _repairAdjMap[name]=(_repairAdjMap[name]||0)-(entry.amount||0);
+        else if(entry.direction==='add') _repairAdjMap[name]=(_repairAdjMap[name]||0)+(entry.amount||0);
+      }
+    }
+  });
   // Compare and fix
   const fixes=[];
   C().forEach(cat=>{
@@ -2819,11 +2830,14 @@ function _autoRepairStock(){
       if(!item||!item.name)return;
       const bought=parseFloat(item.bought)||0;
       if(!bought)return;
-      const left=item.left!==undefined&&item.left!==null?parseFloat(item.left):bought;
-      const invSold=Math.round((bought-left)*10)/10;
-      const logSold=Math.round((soldMap[item.name.toLowerCase().trim()]||0)*10)/10;
+      const key=item.name.toLowerCase().trim();
+      const netAdj=_repairAdjMap[key]||0;
+      const effectiveBought=bought+netAdj; // adjustments correct supply
+      const left=item.left!==undefined&&item.left!==null?parseFloat(item.left):effectiveBought;
+      const invSold=Math.round((effectiveBought-left)*10)/10;
+      const logSold=Math.round((soldMap[key]||0)*10)/10;
       if(invSold>logSold+0.05){
-        const correctLeft=Math.min(bought,Math.round((bought-logSold)*10)/10);
+        const correctLeft=Math.min(effectiveBought,Math.round((effectiveBought-logSold)*10)/10);
         fixes.push({item,invSold,logSold,currentLeft:left,correctLeft,diff:Math.round((invSold-logSold)*10)/10});
       }
     });
@@ -2972,10 +2986,24 @@ function syncStockToEOD(e){
     }
   });
 
-  // 3. Adjustments are NOT counted as sales — they already modified item.left directly
-  // when the Adjust button was pressed. Re-counting them here would double-count,
-  // causing the sync to think you sold items you didn't.
-  // Flavor adjustments also already modified flavor.stock directly — skip those too.
+  // 3. Adjustments are corrections to supply (bought), NOT sales.
+  // They modify the effective "bought" amount so the sync doesn't try to override them.
+  const adjMap={}; // { itemNameLower: netAdjustment } — positive = added, negative = removed
+  const flavorAdjMap={}; // { itemNameLower: { flavorNameLower: netAdj } }
+  log.filter(entry=>entry.type==='adjustment').forEach(entry=>{
+    const key=(entry.name||'').toLowerCase();
+    if(entry.flavorName){
+      // Flavor adjustment — track separately
+      if(!flavorAdjMap[key])flavorAdjMap[key]={};
+      const fkey=entry.flavorName.toLowerCase();
+      if(entry.direction==='remove') flavorAdjMap[key][fkey]=(flavorAdjMap[key][fkey]||0)-(entry.amount||0);
+      else if(entry.direction==='add') flavorAdjMap[key][fkey]=(flavorAdjMap[key][fkey]||0)+(entry.amount||0);
+    }else{
+      // Main stock adjustment
+      if(entry.direction==='remove') adjMap[key]=(adjMap[key]||0)-(entry.amount||0);
+      else if(entry.direction==='add') adjMap[key]=(adjMap[key]||0)+(entry.amount||0);
+    }
+  });
 
   // 4. Count pending (held) web orders
   Object.values(pendingWebOrders||{}).forEach(order=>{
@@ -2997,7 +3025,9 @@ function syncStockToEOD(e){
       if(!item.name||!item.bought)return;
       const key=item.name.toLowerCase();
       const totalSold=soldMap[key]||0;
-      const correctLeft=Math.round(Math.max(0,item.bought-totalSold)*10)/10;
+      const netAdj=adjMap[key]||0; // positive = stock added, negative = stock removed via adjustments
+      const effectiveBought=item.bought+netAdj; // adjustments correct the supply, not sales
+      const correctLeft=Math.round(Math.max(0,effectiveBought-totalSold)*10)/10;
       const currentLeft=gl(item);
       if(Math.abs(currentLeft-correctLeft)>0.05){
         const src=srcMap[key]||{eod:0,orphan:0,pending:0};
@@ -3011,13 +3041,15 @@ function syncStockToEOD(e){
       // Preview flavor changes
       if(Array.isArray(item.flavors)){
         const fSoldData=flavorSoldMap[key]||{};
+        const fAdjData2=flavorAdjMap[key]||{};
         const allHaveBought=item.flavors.every(f=>!f.name||f.bought||f.bought===0);
         if(allHaveBought){
           item.flavors.forEach(f=>{
             if(!f.name)return;
             const fkey=f.name.toLowerCase();
             const sold=fSoldData[fkey]||0;
-            const correctFlav=Math.max(0,Math.round((f.bought||0)-sold));
+            const fAdj2=fAdjData2[fkey]||0;
+            const correctFlav=Math.max(0,Math.round((f.bought||0)+fAdj2-sold));
             if(Math.abs((f.stock||0)-correctFlav)>0){
               flavorChanges.push('  🍬 '+item.name+' → '+f.name+': '+(f.stock||0)+' → '+correctFlav+' (sold: '+sold+')');
               flavorFixCount++;
@@ -3031,9 +3063,8 @@ function syncStockToEOD(e){
   let confirmMsg='Sync stock to match EOD logs + activity log?\n\n';
   if(fixCount)confirmMsg+=changes.join('\n')+'\n\n'+fixCount+' items will be updated.\n';
   if(flavorFixCount)confirmMsg+=(fixCount?'\n':'')+'Flavor changes:\n'+flavorChanges.join('\n')+'\n\n'+flavorFixCount+' flavors will be updated.\n';
-  const adjCount=log.filter(e=>e.type==='adjustment').length;
   const pendCount=Object.keys(pendingWebOrders||{}).length;
-  confirmMsg+='\nSources: '+eodLogs.length+' EOD logs + '+orphanSales.length+' uncovered sales'+(adjCount?' + '+adjCount+' adjustments':'')+(pendCount?' + '+pendCount+' pending orders':'');
+  confirmMsg+='\nSources: '+eodLogs.length+' EOD logs + '+orphanSales.length+' uncovered sales'+(pendCount?' + '+pendCount+' pending orders':'');
   if(!confirm(confirmMsg))return;
 
   // ── APPLY CHANGES ──
@@ -3042,7 +3073,9 @@ function syncStockToEOD(e){
       if(!item.name||!item.bought)return;
       const key=item.name.toLowerCase();
       const totalSold=soldMap[key]||0;
-      const correctLeft=Math.round(Math.max(0,item.bought-totalSold)*10)/10;
+      const netAdj2=adjMap[key]||0;
+      const effectiveBought2=item.bought+netAdj2;
+      const correctLeft=Math.round(Math.max(0,effectiveBought2-totalSold)*10)/10;
       const currentLeft=gl(item);
       item.left=correctLeft;
       // Sync flavor stock — uses f.bought baseline minus sales from logs
@@ -3050,11 +3083,13 @@ function syncStockToEOD(e){
         const fSoldData=flavorSoldMap[key]||{};
         const allHaveBought=item.flavors.every(f=>!f.name||f.bought||f.bought===0);
         if(allHaveBought){
+          const fAdjData=flavorAdjMap[key]||{};
           item.flavors.forEach(f=>{
             if(!f.name)return;
             const fkey=f.name.toLowerCase();
             const sold=fSoldData[fkey]||0;
-            f.stock=Math.max(0,Math.round((f.bought||0)-sold));
+            const fAdj=fAdjData[fkey]||0; // net flavor adjustment (positive=added, negative=removed)
+            f.stock=Math.max(0,Math.round((f.bought||0)+fAdj-sold));
           });
         }
         // If total flavor stock is zero but item has stock, distribute evenly as fallback
