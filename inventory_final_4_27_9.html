@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v85';
-const _BUILD_TS=1779550554877; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v85]';},1000);
+const _APP_VERSION='deploy-v86';
+const _BUILD_TS=1779550804710; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v86]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2791,15 +2791,8 @@ function _autoRepairStock(){
         soldMap[name]=(soldMap[name]||0)+qty;
       }
     }
-    // Count adjustments (stock corrections from Edit/Adjust buttons)
-    // Skip flavor-only adjustments (they have flavorName) — those don't affect main stock
-    if(entry.type==='adjustment'&&!entry.flavorName){
-      const name=(entry.name||'').toLowerCase().trim();
-      if(name&&entry.amount){
-        if(entry.direction==='remove') soldMap[name]=(soldMap[name]||0)+(entry.amount||0);
-        else if(entry.direction==='add') soldMap[name]=(soldMap[name]||0)-(entry.amount||0);
-      }
-    }
+    // Adjustments are NOT counted — they already modified item.left directly.
+    // Re-counting them would double-count and cause phantom over-deduction repairs.
   });
   // 2. Staff buys
   (Array.isArray(staffBuyLogs)?staffBuyLogs:[]).forEach(sb=>{
@@ -2904,8 +2897,8 @@ function syncStockToEOD(e){
   const soldMap={}; // { itemNameLower: totalQtySold }
   const flavorSoldMap={}; // { itemNameLower: { flavorNameLower: qtySold } }
   // Per-item source breakdown for debugging
-  const srcMap={}; // { itemNameLower: { eod:0, orphan:0, adj:0, pending:0 } }
-  function ensureSrc(key){if(!srcMap[key])srcMap[key]={eod:0,orphan:0,adj:0,pending:0};}
+  const srcMap={}; // { itemNameLower: { eod:0, orphan:0, pending:0 } }
+  function ensureSrc(key){if(!srcMap[key])srcMap[key]={eod:0,orphan:0,pending:0};}
 
   function addToSold(key,qty){if(key&&qty)soldMap[key]=(soldMap[key]||0)+qty;}
   function addFlavorSold(key,it,qty){
@@ -2979,30 +2972,10 @@ function syncStockToEOD(e){
     }
   });
 
-  // 3. Count adjustment entries (stock corrections — not sales but affect left count)
-  log.filter(entry=>entry.type==='adjustment').forEach(entry=>{
-    const key=(entry.name||'').toLowerCase();
-    ensureSrc(key);
-    // Flavor-only adjustments (have flavorName) — only affect flavor stock, NOT main stock
-    if(entry.flavorName){
-      if(entry.direction==='remove'){
-        if(!flavorSoldMap[key])flavorSoldMap[key]={};
-        flavorSoldMap[key][entry.flavorName]=(flavorSoldMap[key][entry.flavorName]||0)+(entry.amount||0);
-      }else if(entry.direction==='add'){
-        if(!flavorSoldMap[key])flavorSoldMap[key]={};
-        flavorSoldMap[key][entry.flavorName]=(flavorSoldMap[key][entry.flavorName]||0)-(entry.amount||0);
-      }
-    }else{
-      // Main stock adjustment
-      if(entry.direction==='remove'){
-        addToSold(key,entry.amount||0);
-        srcMap[key].adj+=(entry.amount||0);
-      }else if(entry.direction==='add'){
-        soldMap[key]=(soldMap[key]||0)-(entry.amount||0);
-        srcMap[key].adj-=(entry.amount||0);
-      }
-    }
-  });
+  // 3. Adjustments are NOT counted as sales — they already modified item.left directly
+  // when the Adjust button was pressed. Re-counting them here would double-count,
+  // causing the sync to think you sold items you didn't.
+  // Flavor adjustments also already modified flavor.stock directly — skip those too.
 
   // 4. Count pending (held) web orders
   Object.values(pendingWebOrders||{}).forEach(order=>{
@@ -3027,11 +3000,10 @@ function syncStockToEOD(e){
       const correctLeft=Math.round(Math.max(0,item.bought-totalSold)*10)/10;
       const currentLeft=gl(item);
       if(Math.abs(currentLeft-correctLeft)>0.05){
-        const src=srcMap[key]||{eod:0,orphan:0,adj:0,pending:0};
+        const src=srcMap[key]||{eod:0,orphan:0,pending:0};
         const parts=[];
         if(src.eod)parts.push('eod:'+fmt(src.eod));
         if(src.orphan)parts.push('uncovered:'+fmt(src.orphan));
-        if(src.adj)parts.push('adj:'+fmt(src.adj));
         if(src.pending)parts.push('pending:'+fmt(src.pending));
         changes.push(item.name+': '+fmt(currentLeft)+' → '+fmt(correctLeft)+' (sold: '+fmt(totalSold)+(parts.length?' ['+parts.join(', ')+']':'')+')');
         fixCount++;
