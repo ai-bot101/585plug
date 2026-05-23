@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260520125413';
+var _MENU_V = 'v20260523110717';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -2231,8 +2231,12 @@ function sendOrder() {
     giftChoice: giftChoice||null
   };
 
-  const orderKey = 'order_' + Date.now();
-  // Submit order with retry — mobile networks can drop requests
+  // Unique key: timestamp + 6 random chars to prevent collisions when multiple customers order at the same time
+  const _rnd = ()=>Math.random().toString(36).substring(2,8);
+  const orderKey = 'order_' + Date.now() + '_' + _rnd();
+
+  // Submit order with retry — wait for success before showing confirmation
+  let _orderSubmitted = false;
   (async function submitOrder(retries){
     try{
       const r=await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + orderKey + '.json', {
@@ -2240,12 +2244,43 @@ function sendOrder() {
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify(pendingOrder)
       });
-      if(!r.ok&&retries>0){console.warn('Order submit failed ('+r.status+'), retrying...');setTimeout(()=>submitOrder(retries-1),2000);}
+      if(r.ok){
+        _orderSubmitted=true;
+        // Verify the order actually landed in Firebase
+        try{
+          const vr=await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + orderKey + '/timestamp.json');
+          if(vr.ok){const vd=await vr.json();if(!vd){console.warn('Order verify failed — re-submitting');if(retries>0){return submitOrder(retries-1);}}}
+        }catch(ve){console.warn('Order verify error:',ve);}
+      } else if(retries>0){
+        console.warn('Order submit failed ('+r.status+'), retrying...');
+        await new Promise(res=>setTimeout(res,2000));
+        return submitOrder(retries-1);
+      } else {
+        // All retries exhausted — show error to customer
+        showToast('Order may not have gone through — please try again or text us directly','red-t');
+      }
     }catch(e){
       console.error('Order submit error:', e);
-      if(retries>0){setTimeout(()=>submitOrder(retries-1),2000);}
+      if(retries>0){
+        await new Promise(res=>setTimeout(res,2000));
+        return submitOrder(retries-1);
+      } else {
+        showToast('Order may not have gone through — please try again or text us directly','red-t');
+      }
     }
   })(3);
+
+  // Also try sendBeacon as backup — fires even if the page closes before fetch finishes
+  try{
+    const beaconUrl = FB_URL + '/inv_d6bb4/pending_orders/' + orderKey + '.json';
+    // sendBeacon can't do PUT, so we use fetch with keepalive as backup
+    fetch(beaconUrl, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(pendingOrder),
+      keepalive: true
+    }).catch(()=>{});
+  }catch(e){}
 
   // Send push notification to owner via ntfy
   const notifItems = cart.map(c => c.name + ' (' + c.label + ')').join(', ');
