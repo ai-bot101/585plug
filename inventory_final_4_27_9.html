@@ -109,6 +109,9 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
 .igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;}
 .icard{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;position:relative;}
 .icard:hover{border-color:var(--border2);}.icard.gone{opacity:.38;}
+.icard.drag-active{opacity:0.5;border:2px dashed var(--accent);transform:scale(0.96);transition:transform 0.15s,opacity 0.15s;}
+.icard.drag-over{border:2px solid var(--accent);box-shadow:0 0 12px rgba(108,99,255,0.35);transition:box-shadow 0.15s,border 0.15s;}
+.drag-ghost{position:fixed;pointer-events:none;z-index:99999;opacity:0.85;transform:rotate(2deg) scale(1.04);box-shadow:0 12px 40px rgba(0,0,0,0.4);border-radius:14px;transition:none;}
 .sold-out-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;color:rgba(244,107,107,0.6);letter-spacing:4px;text-transform:uppercase;transform:rotate(-18deg);pointer-events:none;z-index:2;font-family:var(--mono);}
 /* card-price-area removed */
 /* price-pill removed */
@@ -1492,9 +1495,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v93';
-const _BUILD_TS=1780154761675; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v93]';},1000);
+const _APP_VERSION='deploy-v94';
+const _BUILD_TS=1780165174228; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v94]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -3071,7 +3074,121 @@ const isSoldOut=!!item.soldOutAt;
 const soldOutClass=isSoldOut?'sold-out-card':'';
 const soldOutOverlay=isSoldOut?'<div class="sold-out-overlay">SOLD OUT</div>':'';
 const soldOutBtn=own?`<button class="${isSoldOut?'ebtn sold-out-active':'ebtn sold-out-btn'}" onclick="toggleSoldOut('${cat}',${ri})" style="${isSoldOut?'background:rgba(244,107,107,0.15);border-color:rgba(244,107,107,0.4);color:var(--red);':'background:rgba(244,107,107,0.06);border-color:rgba(244,107,107,0.15);color:rgba(244,107,107,0.5);'}">${isSoldOut?'✅ Restock':'🚫 Sold Out'}</button>`:'';
-html+=`<div class="icard ${so2?'gone':''} ${soldOutClass}" style="position:relative;${isSoldOut?'opacity:0.5;':''}">${soldOutOverlay}${pa}<div class="card-status">${so2?'<span class="tag sold">SOLD OUT</span>':isLow?'<span class="tag low">LOW</span>':''}</div><div class="iname">${item.name}${aoTag}${staffPriceTag}</div>${costDisplay}<div class="nums"><div class="nb"><div class="nl">Left</div><div class="nv hi">${fmt(left)}</div></div><div class="nb"><div class="nl">Bought</div><div class="nv">${fmt(bought)||'--'}</div></div>${bought?`<div class="nb"><div class="nl">Sold</div><div class="nv">${fmt(Math.max(0,bought-left))}</div></div>`:''}</div>${bought?`<div class="pbar"><div class="pfill ${fc}" style="width:${pct}%"></div></div>`:''}${own?`<div class="sell-row"><input class="qi" type="number" placeholder="Quick qty" min="0.1" step="0.1" id="qi-${cat}-${ri}" onkeydown="if(event.key==='Enter')sell('${cat}',${ri})"><button class="sbtn2" onclick="sell('${cat}',${ri})" ${so2||isSoldOut?'disabled':''}>Sell</button></div>`:''}${own?`<div class="oc"><button class="ebtn" onclick="openEdit('${cat}',${ri})">Edit</button><button class="ebtn" onclick="openRestock('${cat}',${ri})" style="background:rgba(62,207,142,0.08);border-color:rgba(62,207,142,0.2);color:var(--green);">Restock</button><button class="ebtn" onclick="openAdjust('${cat}',${ri})" style="background:rgba(108,99,255,0.08);border-color:rgba(108,99,255,0.2);color:var(--accent);">📏 Adjust</button>${soldOutBtn}<button class="dbtn" onclick="delItem('${cat}',${ri})">Delete</button></div>`:''}</div>`;});if(own)html+=`<div class="addcard" onclick="openAdd('${cat}')">+ Add item to ${cat}</div>`;html+='</div>';}area.innerHTML=html||'<div class="empty">No items yet</div>';}
+html+=`<div class="icard ${so2?'gone':''} ${soldOutClass}" data-cat="${cat}" data-ri="${ri}" style="position:relative;${isSoldOut?'opacity:0.5;':''}">${soldOutOverlay}${pa}<div class="card-status">${so2?'<span class="tag sold">SOLD OUT</span>':isLow?'<span class="tag low">LOW</span>':''}</div><div class="iname">${item.name}${aoTag}${staffPriceTag}</div>${costDisplay}<div class="nums"><div class="nb"><div class="nl">Left</div><div class="nv hi">${fmt(left)}</div></div><div class="nb"><div class="nl">Bought</div><div class="nv">${fmt(bought)||'--'}</div></div>${bought?`<div class="nb"><div class="nl">Sold</div><div class="nv">${fmt(Math.max(0,bought-left))}</div></div>`:''}</div>${bought?`<div class="pbar"><div class="pfill ${fc}" style="width:${pct}%"></div></div>`:''}${own?`<div class="sell-row"><input class="qi" type="number" placeholder="Quick qty" min="0.1" step="0.1" id="qi-${cat}-${ri}" onkeydown="if(event.key==='Enter')sell('${cat}',${ri})"><button class="sbtn2" onclick="sell('${cat}',${ri})" ${so2||isSoldOut?'disabled':''}>Sell</button></div>`:''}${own?`<div class="oc"><button class="ebtn" onclick="openEdit('${cat}',${ri})">Edit</button><button class="ebtn" onclick="openRestock('${cat}',${ri})" style="background:rgba(62,207,142,0.08);border-color:rgba(62,207,142,0.2);color:var(--green);">Restock</button><button class="ebtn" onclick="openAdjust('${cat}',${ri})" style="background:rgba(108,99,255,0.08);border-color:rgba(108,99,255,0.2);color:var(--accent);">📏 Adjust</button>${soldOutBtn}<button class="dbtn" onclick="delItem('${cat}',${ri})">Delete</button></div>`:''}</div>`;});if(own)html+=`<div class="addcard" onclick="openAdd('${cat}')">+ Add item to ${cat}</div>`;html+='</div>';}area.innerHTML=html||'<div class="empty">No items yet</div>';}
+// ── DRAG-AND-DROP REORDER (long-press) ──
+(function(){
+let _dragSrc=null,_dragGhost=null,_dragTimer=null,_dragStartX=0,_dragStartY=0,_dragActive=false,_dragOverCard=null;
+const HOLD_MS=500,MOVE_THRESH=10;
+function getCard(el){while(el&&!el.classList?.contains('icard'))el=el.parentElement;return el;}
+function findDropTarget(x,y){
+  const els=document.elementsFromPoint(x,y);
+  for(const el of els){const c=getCard(el);if(c&&c!==_dragSrc&&c.dataset.cat===_dragSrc.dataset.cat)return c;}
+  return null;
+}
+function startDrag(card,x,y){
+  if(!cu||cu.role!=='owner')return;
+  _dragActive=true;
+  _dragSrc=card;
+  card.classList.add('drag-active');
+  // Create ghost
+  _dragGhost=card.cloneNode(true);
+  _dragGhost.className='icard drag-ghost';
+  _dragGhost.style.width=card.offsetWidth+'px';
+  _dragGhost.style.left=(x-card.offsetWidth/2)+'px';
+  _dragGhost.style.top=(y-60)+'px';
+  document.body.appendChild(_dragGhost);
+  // Haptic-like visual feedback
+  if(navigator.vibrate)navigator.vibrate(30);
+}
+function moveGhost(x,y){
+  if(!_dragGhost)return;
+  _dragGhost.style.left=(x-_dragGhost.offsetWidth/2)+'px';
+  _dragGhost.style.top=(y-60)+'px';
+  const target=findDropTarget(x,y);
+  if(_dragOverCard&&_dragOverCard!==target)_dragOverCard.classList.remove('drag-over');
+  if(target){target.classList.add('drag-over');_dragOverCard=target;}
+  else _dragOverCard=null;
+}
+function endDrag(){
+  clearTimeout(_dragTimer);_dragTimer=null;
+  if(!_dragActive){return;}
+  _dragActive=false;
+  if(_dragGhost){_dragGhost.remove();_dragGhost=null;}
+  if(_dragSrc)_dragSrc.classList.remove('drag-active');
+  if(_dragOverCard){
+    _dragOverCard.classList.remove('drag-over');
+    // Perform the swap
+    const cat=_dragSrc.dataset.cat;
+    const fromIdx=parseInt(_dragSrc.dataset.ri);
+    const toIdx=parseInt(_dragOverCard.dataset.ri);
+    if(!isNaN(fromIdx)&&!isNaN(toIdx)&&fromIdx!==toIdx&&inv[cat]){
+      const arr=inv[cat];
+      const item=arr.splice(fromIdx,1)[0];
+      arr.splice(toIdx,0,item);
+      persist();
+      renderItems();
+      renderCatTabs();
+      showToast('Moved '+item.name,'ok');
+    }
+  }
+  _dragSrc=null;_dragOverCard=null;
+}
+// Skip drag if the touch/click is on interactive elements
+function isInteractive(el){
+  const tag=el.tagName;
+  if(tag==='BUTTON'||tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA')return true;
+  if(el.closest('button,input,select,.sell-row,.oc,.dbtn'))return true;
+  return false;
+}
+// Touch events
+document.addEventListener('touchstart',function(e){
+  if(!cu||cu.role!=='owner')return;
+  const card=getCard(e.target);
+  if(!card||!card.dataset.cat||isInteractive(e.target))return;
+  const t=e.touches[0];
+  _dragStartX=t.clientX;_dragStartY=t.clientY;
+  _dragTimer=setTimeout(()=>{
+    startDrag(card,t.clientX,t.clientY);
+  },HOLD_MS);
+},{passive:true});
+document.addEventListener('touchmove',function(e){
+  if(_dragTimer&&!_dragActive){
+    const t=e.touches[0];
+    if(Math.abs(t.clientX-_dragStartX)>MOVE_THRESH||Math.abs(t.clientY-_dragStartY)>MOVE_THRESH){
+      clearTimeout(_dragTimer);_dragTimer=null;
+    }
+  }
+  if(_dragActive){
+    e.preventDefault();
+    moveGhost(e.touches[0].clientX,e.touches[0].clientY);
+  }
+},{passive:false});
+document.addEventListener('touchend',endDrag);
+document.addEventListener('touchcancel',endDrag);
+// Mouse events
+document.addEventListener('mousedown',function(e){
+  if(!cu||cu.role!=='owner'||e.button!==0)return;
+  const card=getCard(e.target);
+  if(!card||!card.dataset.cat||isInteractive(e.target))return;
+  _dragStartX=e.clientX;_dragStartY=e.clientY;
+  _dragTimer=setTimeout(()=>{
+    startDrag(card,e.clientX,e.clientY);
+  },HOLD_MS);
+});
+document.addEventListener('mousemove',function(e){
+  if(_dragTimer&&!_dragActive){
+    if(Math.abs(e.clientX-_dragStartX)>MOVE_THRESH||Math.abs(e.clientY-_dragStartY)>MOVE_THRESH){
+      clearTimeout(_dragTimer);_dragTimer=null;
+    }
+  }
+  if(_dragActive){
+    e.preventDefault();
+    moveGhost(e.clientX,e.clientY);
+  }
+});
+document.addEventListener('mouseup',endDrag);
+})();
+
 function totBanner(sells,dl,isT,showProfit){
   const g=sells.reduce((s,e)=>s+(e.amtReceived||0),0);
   const cv=calcCashVirt(sells);
