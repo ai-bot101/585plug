@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v92';
-const _BUILD_TS=1780153876743; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v92]';},1000);
+const _APP_VERSION='deploy-v93';
+const _BUILD_TS=1780154761675; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v93]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -1538,20 +1538,26 @@ const _autoUpdateInterval=setInterval(async()=>{
       if(_dataLoaded&&cu){
         _debugOverlayLog('[UPDATE] Saving data before reload...');
         try{
+          if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+          const _updateTs=Date.now();
+          // 1. Save to localStorage FIRST (guaranteed — survives even if Firebase fails)
+          localStorage.setItem('_logoutSaveTs',_updateTs.toString());
+          await persistEncrypted();
+          _debugOverlayLog('[UPDATE] localStorage saved ✅');
+          // 2. Then push to Firebase
           const _updatePayload={
             inv,log,cfg,
             customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,
             failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,
             commissionPaused,autoDailyDebts,
-            updatedAt:Date.now()
+            updatedAt:_updateTs
           };
-          if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
           await fetch(FB_URL+'.json',{
             method:'PATCH',
             headers:{'Content-Type':'application/json'},
             body:JSON.stringify(_updatePayload)
           });
-          _debugOverlayLog('[UPDATE] Data saved ✅');
+          _debugOverlayLog('[UPDATE] Firebase saved ✅');
         }catch(e){_debugOverlayLog('[UPDATE] Save failed: '+e.message);}
       }
       const b=document.createElement('div');
@@ -1651,6 +1657,10 @@ function _emergencyPush(){
   if(!_dataLoaded||!cu)return; // don't push if not logged in or data not loaded
   if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
   try{
+    // 1. Save to localStorage FIRST (sync timestamp + fire-and-forget encrypted save)
+    localStorage.setItem('_logoutSaveTs',Date.now().toString());
+    persistEncrypted().catch(()=>{}); // async — will complete if page stays alive (visibilitychange)
+    // 2. Push to Firebase
     const payload={
       inv,log,cfg,
       customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,
@@ -2777,9 +2787,13 @@ function resetAllSold(e){
   if(!needsReset.length){showToast('All items already at full stock','ok');return;}
   // Count sale-related log entries that would bring sold numbers back
   const saleLogCount=log.filter(e=>e.type==='sell'||e.type==='order'||e.type==='selfbuy'||e.type==='adjustment').length;
-  if(!confirm('Reset '+needsReset.length+' items to full stock?\n\n• Sets Left = Bought (Sold → 0)\n• Restocks all flavor/variant quantities'+(saleLogCount?'\n• Clears '+saleLogCount+' sale log entries so sold stays at 0':'')+'\n\nThis cannot be undone.')){return;}
+  const eodCount=eodLogs.length;
+  if(!confirm('Reset '+needsReset.length+' items to full stock?\n\n• Sets Left = Bought (Sold → 0)\n• Restocks all flavor/variant quantities'+(saleLogCount?'\n• Clears '+saleLogCount+' sale log entries so sold stays at 0':'')+(eodCount?'\n• Clears '+eodCount+' saved EOD logs (so Sync to EOD starts fresh)':'')+'\n\nThis cannot be undone.')){return;}
   // Remove ALL sale-related log entries so repairStock won't recalculate sold numbers
   log=log.filter(e=>e.type!=='sell'&&e.type!=='order'&&e.type!=='selfbuy'&&e.type!=='adjustment');
+  // Clear EOD logs — they would contradict the reset and make Sync to EOD show phantom sales
+  eodLogs=[];
+  clearedWebKeys=[];
   let fixCount=0;
   needsReset.forEach(item=>{
     const deficit=item.bought-gl(item); // how much was sold
