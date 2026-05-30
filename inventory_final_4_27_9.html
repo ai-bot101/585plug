@@ -1492,9 +1492,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v87';
-const _BUILD_TS=1779551354426; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v87]';},1000);
+const _APP_VERSION='deploy-v90';
+const _BUILD_TS=1780151406320; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v90]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -1829,65 +1829,108 @@ async function tryLogin(){
   repairPassHashes();
   // Mark data as fully loaded — allows beforeunload/visibilitychange to safely push
   _dataLoaded=true;
-  // CRITICAL: Pull fresh data from Firebase FIRST, then run repairs.
-  // DO NOT start autoSync until this is done — otherwise the poll overwrites repaired values.
+  // CRITICAL: Pull fresh data from Firebase, BUT compare with localStorage.
+  // If localStorage has newer data (logout push to Firebase failed), use localStorage instead.
   (async function postLoginSync(){
     try{
+      // Step 1: Load localStorage data (saved during logout — always succeeds)
+      await restoreEncrypted();
+      const localLog=[...log];
+      const localEodLogs=[...(Array.isArray(eodLogs)?eodLogs:[])];
+      const localInv=JSON.parse(JSON.stringify(inv));
+      const localClearedWebKeys=[...clearedWebKeys];
+      const _logoutSaveTs=parseInt(localStorage.getItem('_logoutSaveTs'))||0;
+
+      // Step 2: Pull from Firebase
       const res=await fetch(FB_URL+'.json?t='+Date.now());
       if(res.ok){
         const data=await res.json();
         if(data){
-          if(data.inv)inv=data.inv;
-          C().forEach(c=>{if(!inv[c])inv[c]=[];});
-          // PROTECT locally-confirmed orders from being lost during login sync
-          // Same logic as fbPullNow — merge back any confirmed orders that haven't synced yet
-          const incomingLog=Array.isArray(data.log)?data.log:[];
-          const localConfirmed=log.filter(e=>e.webOrderKey&&processedOrderIds.has(e.webOrderKey));
-          const missingFromIncoming=localConfirmed.filter(lc=>!incomingLog.some(il=>il.webOrderKey===lc.webOrderKey));
-          if(missingFromIncoming.length>0){
-            console.log('[LOGIN-PROTECT] Preserved '+missingFromIncoming.length+' locally-confirmed orders from login overwrite');
-            incomingLog.unshift(...missingFromIncoming);
-          }
-          // PROTECT recent local entries (selfbuys, sales) that may not have synced
-          const _loginNow=Date.now();
-          const recentLocal=log.filter(e=>{
-            if(!e.timestamp||_loginNow-e.timestamp>30000)return false;
-            return !incomingLog.some(il=>il.timestamp===e.timestamp&&il.who===e.who&&il.type===e.type);
-          });
-          if(recentLocal.length>0){
-            console.log('[LOGIN-PROTECT] Preserved '+recentLocal.length+' recent local entries');
-            incomingLog.unshift(...recentLocal);
-          }
-          // PROTECT _cleared flags — if local log has entries marked as cleared (from EOD save),
-          // make sure they stay cleared even if Firebase hasn't received the update yet
-          const _loginClearedSet=new Set();
-          log.forEach(e=>{
-            if(e._cleared){
-              const fp=(e.timestamp||'')+'|'+(e.webOrderKey||'')+'|'+(e.who||'')+'|'+(e.type||'');
-              _loginClearedSet.add(fp);
+          const fbUpdatedAt=data.updatedAt||0;
+
+          // Step 3: Compare — if localStorage was saved AFTER Firebase's last update,
+          // localStorage has data that never made it to Firebase. Use localStorage.
+          const localIsNewer=_logoutSaveTs>0&&_logoutSaveTs>fbUpdatedAt;
+          if(localIsNewer){
+            console.log('[LOGIN-RECOVER] localStorage is NEWER than Firebase (local:'+_logoutSaveTs+' fb:'+fbUpdatedAt+'). Using localStorage data.');
+            // Keep local data (already loaded by restoreEncrypted above)
+            // But still grab inv from Firebase if it might have newer item edits
+            // Merge: use local log/eodLogs (they have the unsaved work), firebase inv (may have edits from other devices)
+            if(data.inv)inv=data.inv;
+            C().forEach(c=>{if(!inv[c])inv[c]=[];});
+            log=localLog;
+            eodLogs=localEodLogs;
+            clearedWebKeys=localClearedWebKeys;
+            if(data.cfg){const savedCu=cu;cfg=data.cfg;cu=savedCu;}
+            customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
+            dayNotes=data.dayNotes||{};
+            staffDebts=data.staffDebts||{};
+            commissionPaused=data.commissionPaused||{};
+            failedAttempts=Array.isArray(data.failedAttempts)?data.failedAttempts:[];
+            loginLog=Array.isArray(data.loginLog)?data.loginLog:[];
+            cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
+            fbLastTimestamp=fbUpdatedAt;
+            // Push recovered data to Firebase so it's in sync
+            console.log('[LOGIN-RECOVER] Pushing recovered data to Firebase...');
+            persist();
+            showToast('Recovered unsaved data from last session ✅','ok');
+          } else {
+            // Firebase is newer or same — use Firebase data (normal flow)
+            if(data.inv)inv=data.inv;
+            C().forEach(c=>{if(!inv[c])inv[c]=[];});
+            const incomingLog=Array.isArray(data.log)?data.log:[];
+            // PROTECT locally-confirmed orders from being lost during login sync
+            const localConfirmed=localLog.filter(e=>e.webOrderKey&&processedOrderIds.has(e.webOrderKey));
+            const missingFromIncoming=localConfirmed.filter(lc=>!incomingLog.some(il=>il.webOrderKey===lc.webOrderKey));
+            if(missingFromIncoming.length>0){
+              console.log('[LOGIN-PROTECT] Preserved '+missingFromIncoming.length+' locally-confirmed orders');
+              incomingLog.unshift(...missingFromIncoming);
             }
-          });
-          if(_loginClearedSet.size>0){
-            incomingLog.forEach(e=>{
-              const fp=(e.timestamp||'')+'|'+(e.webOrderKey||'')+'|'+(e.who||'')+'|'+(e.type||'');
-              if(_loginClearedSet.has(fp))e._cleared=true;
+            // PROTECT recent local entries that may not have synced
+            const _loginNow=Date.now();
+            const recentLocal=localLog.filter(e=>{
+              if(!e.timestamp||_loginNow-e.timestamp>30000)return false;
+              return !incomingLog.some(il=>il.timestamp===e.timestamp&&il.who===e.who&&il.type===e.type);
             });
-            console.log('[LOGIN-PROTECT] Preserved '+_loginClearedSet.size+' _cleared flags');
+            if(recentLocal.length>0){
+              console.log('[LOGIN-PROTECT] Preserved '+recentLocal.length+' recent local entries');
+              incomingLog.unshift(...recentLocal);
+            }
+            // PROTECT _cleared flags
+            const _loginClearedSet=new Set();
+            localLog.forEach(e=>{
+              if(e._cleared){
+                const fp=(e.timestamp||'')+'|'+(e.webOrderKey||'')+'|'+(e.who||'')+'|'+(e.type||'');
+                _loginClearedSet.add(fp);
+              }
+            });
+            if(_loginClearedSet.size>0){
+              incomingLog.forEach(e=>{
+                const fp=(e.timestamp||'')+'|'+(e.webOrderKey||'')+'|'+(e.who||'')+'|'+(e.type||'');
+                if(_loginClearedSet.has(fp))e._cleared=true;
+              });
+            }
+            // PROTECT EOD logs — if local has more EOD logs, keep them
+            const fbEodLogs=Array.isArray(data.eodLogs)?data.eodLogs:[];
+            if(localEodLogs.length>fbEodLogs.length){
+              console.log('[LOGIN-PROTECT] localStorage has '+localEodLogs.length+' EOD logs vs Firebase '+fbEodLogs.length+' — using local');
+              eodLogs=localEodLogs;
+            } else {
+              eodLogs=fbEodLogs;
+            }
+            log=incomingLog;
+            if(data.cfg){const savedCu=cu;cfg=data.cfg;cu=savedCu;}
+            customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
+            dayNotes=data.dayNotes||{};
+            staffDebts=data.staffDebts||{};
+            commissionPaused=data.commissionPaused||{};
+            failedAttempts=Array.isArray(data.failedAttempts)?data.failedAttempts:[];
+            loginLog=Array.isArray(data.loginLog)?data.loginLog:[];
+            cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
+            const incomingCleared=Array.isArray(data.clearedWebKeys)?data.clearedWebKeys:[];
+            clearedWebKeys=[...new Set([...localClearedWebKeys,...incomingCleared])];
+            fbLastTimestamp=data.updatedAt||0;
           }
-          log=incomingLog;
-          if(data.cfg){const savedCu=cu;cfg=data.cfg;cu=savedCu;}
-          customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
-          dayNotes=data.dayNotes||{};
-          eodLogs=Array.isArray(data.eodLogs)?data.eodLogs:[];
-          failedAttempts=Array.isArray(data.failedAttempts)?data.failedAttempts:[];
-          loginLog=Array.isArray(data.loginLog)?data.loginLog:[];
-          cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
-          staffDebts=data.staffDebts||{};
-          commissionPaused=data.commissionPaused||{};
-          fbLastTimestamp=data.updatedAt||0;
-          // Auto-cleanup REMOVED — was wiping confirmed orders on other devices
-          // repairStock is already disabled at login so LEFT values won't be overridden
-          // Use RESET SOLD button manually if you need to zero out sold numbers
           if(data.pending_orders&&cu)processWebsiteOrders(data.pending_orders);
         }
       }
@@ -1905,21 +1948,24 @@ async function tryLogin(){
 function logout(){
   _stopAfkTimer();
   // CRITICAL: Do an IMMEDIATE Firebase push BEFORE clearing state.
-  // _emergencyPush with keepalive has a 64KB limit and silently drops large payloads.
-  // The debounced fbPush can get killed by auto-update reload.
-  // This direct push ensures data is saved reliably.
   if(_dataLoaded&&cu){
     if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+    const _logoutTs=Date.now();
     const _logoutPayload={
       inv,log,cfg,
       customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,
       failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,
       commissionPaused,autoDailyDebts,
-      updatedAt:Date.now()
+      updatedAt:_logoutTs
     };
-    fbLastTimestamp=_logoutPayload.updatedAt;
-    // Fire-and-forget but WITHOUT keepalive (no 64KB limit)
-    // Also fire a keepalive backup for small payloads as safety net
+    fbLastTimestamp=_logoutTs;
+    // Save to localStorage FIRST (synchronous, guaranteed) — this is the safety net.
+    // On next login, if Firebase has older data, localStorage wins.
+    try{
+      localStorage.setItem('_logoutSaveTs',_logoutTs.toString());
+      persistEncrypted().catch(()=>{}); // async but completes since page stays open (AFK/manual logout)
+    }catch(e){}
+    // Fire-and-forget Firebase push WITHOUT keepalive (no 64KB limit)
     try{
       fetch(FB_URL+'.json',{
         method:'PATCH',
@@ -1928,15 +1974,17 @@ function logout(){
       }).catch(()=>{});
     }catch(e){}
     // Backup: keepalive version (survives page close, but may fail if >64KB)
-    try{
-      fetch(FB_URL+'.json',{
-        method:'PATCH',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(_logoutPayload),
-        keepalive:true
-      }).catch(()=>{});
-    }catch(e){}
-    persistEncrypted().catch(()=>{});
+    const _bodyStr=JSON.stringify(_logoutPayload);
+    if(_bodyStr.length<60000){
+      try{
+        fetch(FB_URL+'.json',{
+          method:'PATCH',
+          headers:{'Content-Type':'application/json'},
+          body:_bodyStr,
+          keepalive:true
+        }).catch(()=>{});
+      }catch(e){}
+    }
   }
   stopAutoSync();_dataLoaded=false;cu=null;si=null;
   document.getElementById('pass-wrap').style.display='none';document.getElementById('pass-inp').value='';document.getElementById('lerr').textContent='';
