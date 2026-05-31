@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260531112114';
+var _MENU_V = 'v20260531113219';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -2246,17 +2246,15 @@ function sendOrder() {
       });
       if(r.ok){
         _orderSubmitted=true;
-        // Verify the order actually landed in Firebase
-        try{
-          const vr=await fetch(FB_URL + '/inv_d6bb4/pending_orders/' + orderKey + '/timestamp.json');
-          if(vr.ok){const vd=await vr.json();if(!vd){console.warn('Order verify failed — re-submitting');if(retries>0){return submitOrder(retries-1);}}}
-        }catch(ve){console.warn('Order verify error:',ve);}
+        // PUT succeeded — order is saved. Verify is optional, don't retry if verify fails.
+        console.log('[ORDER] Submitted successfully: '+orderKey);
       } else if(retries>0){
         console.warn('Order submit failed ('+r.status+'), retrying...');
         await new Promise(res=>setTimeout(res,2000));
         return submitOrder(retries-1);
       } else {
         // All retries exhausted — show error to customer
+        console.error('Order submit failed after retries. Status:',r.status);
         showToast('Order may not have gone through — please try again or text us directly','red-t');
       }
     }catch(e){
