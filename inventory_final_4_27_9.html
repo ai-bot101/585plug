@@ -1495,9 +1495,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v94';
-const _BUILD_TS=1780165174228; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v94]';},1000);
+const _APP_VERSION='deploy-v95';
+const _BUILD_TS=1780238114140; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v95]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -1957,9 +1957,9 @@ async function tryLogin(){
     startAutoSync();
     _startAfkTimer();
   })();}
-function logout(){
+async function logout(){
   _stopAfkTimer();
-  // CRITICAL: Do an IMMEDIATE Firebase push BEFORE clearing state.
+  // CRITICAL: Save ALL data BEFORE clearing state — AWAIT both saves so nothing is lost.
   if(_dataLoaded&&cu){
     if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
     const _logoutTs=Date.now();
@@ -1971,32 +1971,19 @@ function logout(){
       updatedAt:_logoutTs
     };
     fbLastTimestamp=_logoutTs;
-    // Save to localStorage FIRST (synchronous, guaranteed) — this is the safety net.
-    // On next login, if Firebase has older data, localStorage wins.
+    // 1. Save to localStorage — AWAIT so it's guaranteed before login screen shows
     try{
       localStorage.setItem('_logoutSaveTs',_logoutTs.toString());
-      persistEncrypted().catch(()=>{}); // async but completes since page stays open (AFK/manual logout)
-    }catch(e){}
-    // Fire-and-forget Firebase push WITHOUT keepalive (no 64KB limit)
+      await persistEncrypted();
+    }catch(e){console.error('[LOGOUT] localStorage save failed:',e);}
+    // 2. Push to Firebase — AWAIT so it's there when next login pulls
     try{
-      fetch(FB_URL+'.json',{
+      await fetch(FB_URL+'.json',{
         method:'PATCH',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify(_logoutPayload)
-      }).catch(()=>{});
-    }catch(e){}
-    // Backup: keepalive version (survives page close, but may fail if >64KB)
-    const _bodyStr=JSON.stringify(_logoutPayload);
-    if(_bodyStr.length<60000){
-      try{
-        fetch(FB_URL+'.json',{
-          method:'PATCH',
-          headers:{'Content-Type':'application/json'},
-          body:_bodyStr,
-          keepalive:true
-        }).catch(()=>{});
-      }catch(e){}
-    }
+      });
+    }catch(e){console.error('[LOGOUT] Firebase push failed:',e);}
   }
   stopAutoSync();_dataLoaded=false;cu=null;si=null;
   document.getElementById('pass-wrap').style.display='none';document.getElementById('pass-inp').value='';document.getElementById('lerr').textContent='';
