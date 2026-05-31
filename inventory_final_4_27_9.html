@@ -1495,9 +1495,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v95';
-const _BUILD_TS=1780238114140; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v95]';},1000);
+const _APP_VERSION='deploy-v96';
+const _BUILD_TS=1780240875490; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v96]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -1809,17 +1809,23 @@ async function tryLogin(){
     return;
   }
 
+  // CRITICAL: Snapshot localStorage BEFORE any persist() calls can overwrite it.
+  // persist() saves ALL globals (including eodLogs which is still [] at this point),
+  // which would destroy the saved data before postLoginSync can read it.
+  const _preLoginEnc=localStorage.getItem('ig_enc');
+  const _preLoginTs=localStorage.getItem('_logoutSaveTs');
+
   // If anyone logged in with plain pass, upgrade to hash silently
   if(!u.passHash&&u.pass){
     u.passHash=await sha256(inp);
     u.pass=''; // clear plain text
-    persist();
+    // DO NOT persist() here — it would overwrite eodLogs/inv/log with empty defaults
   }
   // log successful login
   const devInfo=getDeviceInfo();
   loginLog.unshift({timestamp:Date.now(),date:tday(),time:tstr(),name:u.name,role:u.role,device:devInfo.device,browser:devInfo.browser,os:devInfo.os,screen:devInfo.screen,ip:''});
   if(loginLog.length>200)loginLog=loginLog.slice(0,200);
-  persist();
+  // DO NOT persist() here — postLoginSync will persist after restoring data
   // login log available via owner dashboard Download button
   // Mint or clear owner session token
   if(isOwner){await _ownerSec.mint();_ownerValid=true;}else{_ownerSec.clear();_ownerValid=false;}
@@ -1846,13 +1852,35 @@ async function tryLogin(){
   // If localStorage has newer data (logout push to Firebase failed), use localStorage instead.
   (async function postLoginSync(){
     try{
-      // Step 1: Load localStorage data (saved during logout — always succeeds)
-      await restoreEncrypted();
+      // Step 1: Restore from the SNAPSHOT we captured BEFORE login persist() calls.
+      // This is critical — persist() during login would overwrite localStorage with
+      // empty eodLogs/inv/log (initial defaults), destroying saved data.
+      if(_preLoginEnc){
+        const snapData=await decryptData(_preLoginEnc);
+        if(snapData){
+          if(snapData.inv)inv=snapData.inv;
+          if(snapData.log)log=snapData.log;
+          if(snapData.cfg)cfg=snapData.cfg;
+          if(snapData.customerCredits)customerCredits=snapData.customerCredits;
+          if(snapData.vipCustomers)vipCustomers=snapData.vipCustomers;
+          if(snapData.customerDeals)customerDeals=snapData.customerDeals;
+          if(snapData.dayNotes)dayNotes=snapData.dayNotes;
+          if(snapData.eodLogs)eodLogs=snapData.eodLogs;
+          if(snapData.failedAttempts)failedAttempts=snapData.failedAttempts;
+          if(snapData.loginLog)loginLog=snapData.loginLog;
+          if(snapData.cancelledOrders)cancelledOrders=snapData.cancelledOrders;
+          if(Array.isArray(snapData.clearedWebKeys))clearedWebKeys=snapData.clearedWebKeys;
+          if(snapData.staffDebts)staffDebts=snapData.staffDebts;
+          if(snapData.commissionPaused)commissionPaused=snapData.commissionPaused;
+        }
+      } else {
+        await restoreEncrypted();
+      }
       const localLog=[...log];
       const localEodLogs=[...(Array.isArray(eodLogs)?eodLogs:[])];
       const localInv=JSON.parse(JSON.stringify(inv));
       const localClearedWebKeys=[...clearedWebKeys];
-      const _logoutSaveTs=parseInt(localStorage.getItem('_logoutSaveTs'))||0;
+      const _logoutSaveTs=parseInt(_preLoginTs)||0;
 
       // Step 2: Pull from Firebase
       const res=await fetch(FB_URL+'.json?t='+Date.now());
@@ -1952,6 +1980,8 @@ async function tryLogin(){
     repairEODtoLog();
     // Auto-repair any double-deducted stock (compares log totals vs inventory)
     _autoRepairStock();
+    // Data is fully restored — NOW it's safe to persist (saves loginLog + passHash changes)
+    persist();
     renderAll();
     // ONLY start autoSync AFTER repairs are done and persisted
     startAutoSync();
