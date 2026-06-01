@@ -1495,9 +1495,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v99';
-const _BUILD_TS=1780357011161; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v99]';},1000);
+const _APP_VERSION='deploy-v100';
+const _BUILD_TS=1780358132941; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v100]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -1811,7 +1811,10 @@ async function tryLogin(){
       failedAttempts.unshift({timestamp:Date.now(),date:tday(),time:tstr()});
       // keep last 50
       if(failedAttempts.length>50)failedAttempts=failedAttempts.slice(0,50);
-      persist();
+      // DO NOT call persist() here — globals (inv, log, eodLogs) are still empty defaults.
+      // persist() would overwrite localStorage AND Firebase with empty data, destroying everything.
+      // Just push failedAttempts directly to Firebase:
+      fetch(FB_URL+'/failedAttempts.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(failedAttempts)}).catch(()=>{});
     }
     return;
   }
@@ -1854,8 +1857,8 @@ async function tryLogin(){
   // causing them to re-run and wipe data. No code should EVER auto-delete orders, logs, or EOD data.
   // NOTE: repairPassHashes() moved INSIDE postLoginSync (after data restore) to prevent
   // its persist() from pushing empty data to Firebase before postLoginSync restores saved data.
-  // Mark data as fully loaded — allows beforeunload/visibilitychange to safely push
-  _dataLoaded=true;
+  // _dataLoaded is set INSIDE postLoginSync AFTER data is restored — prevents _emergencyPush
+  // or auto-update from saving empty defaults during the restore window.
   // CRITICAL: Pull fresh data from Firebase, BUT compare with localStorage.
   // If localStorage has newer data (logout push to Firebase failed), use localStorage instead.
   (async function postLoginSync(){
@@ -1880,6 +1883,8 @@ async function tryLogin(){
           if(Array.isArray(snapData.clearedWebKeys))clearedWebKeys=snapData.clearedWebKeys;
           if(snapData.staffDebts)staffDebts=snapData.staffDebts;
           if(snapData.commissionPaused)commissionPaused=snapData.commissionPaused;
+          if(snapData.staffBuyLogs)staffBuyLogs=snapData.staffBuyLogs;
+          if(snapData.cashRecons)cashRecons=snapData.cashRecons;
         }
       } else {
         await restoreEncrypted();
@@ -1910,13 +1915,27 @@ async function tryLogin(){
             eodLogs=localEodLogs;
             clearedWebKeys=localClearedWebKeys;
             if(data.cfg){const savedCu=cu;cfg=data.cfg;cu=savedCu;}
-            customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
-            dayNotes=data.dayNotes||{};
-            staffDebts=data.staffDebts||{};
-            commissionPaused=data.commissionPaused||{};
+            // When local is newer, keep ALL local data — Firebase push failed during logout.
+            // Use local snapshot for everything, only fall back to Firebase for fields
+            // not stored in the encrypted snapshot (failedAttempts, loginLog, cashRecons
+            // are also in snapshot but Firebase may have entries from other devices).
+            if(snapData){
+              if(snapData.customerCredits)customerCredits=snapData.customerCredits;
+              if(snapData.vipCustomers)vipCustomers=snapData.vipCustomers;
+              if(snapData.customerDeals)customerDeals=snapData.customerDeals;
+              if(snapData.dayNotes)dayNotes=snapData.dayNotes;
+              if(snapData.staffDebts)staffDebts=snapData.staffDebts;
+              if(snapData.commissionPaused)commissionPaused=snapData.commissionPaused;
+              if(snapData.staffBuyLogs)staffBuyLogs=snapData.staffBuyLogs;
+              if(snapData.cashRecons)cashRecons=snapData.cashRecons;
+            } else {
+              customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
+              dayNotes=data.dayNotes||{};
+              staffDebts=data.staffDebts||{};
+              commissionPaused=data.commissionPaused||{};
+            }
             failedAttempts=Array.isArray(data.failedAttempts)?data.failedAttempts:[];
             loginLog=Array.isArray(data.loginLog)?data.loginLog:[];
-            cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
             fbLastTimestamp=fbUpdatedAt;
             // Push recovered data to Firebase so it's in sync
             console.log('[LOGIN-RECOVER] Pushing recovered data to Firebase...');
@@ -1989,7 +2008,8 @@ async function tryLogin(){
     repairEODtoLog();
     // Auto-repair any double-deducted stock (compares log totals vs inventory)
     _autoRepairStock();
-    // Data is fully restored — NOW it's safe to persist (saves loginLog + passHash changes)
+    // Data is fully restored — NOW it's safe to enable saves and persist
+    _dataLoaded=true; // enables _emergencyPush and auto-update saves
     persist();
     renderAll();
     // ONLY start autoSync AFTER repairs are done and persisted
@@ -2035,10 +2055,10 @@ const AFK_TIMEOUT=5*60*1000; // 5 minutes
 function _resetAfkTimer(){
   if(_afkTimer)clearTimeout(_afkTimer);
   if(!cu)return; // only run when logged in
-  _afkTimer=setTimeout(()=>{
+  _afkTimer=setTimeout(async()=>{
     if(!cu)return;
     showToast('Logged out — inactive for 5 minutes','err');
-    logout();
+    await logout();
   },AFK_TIMEOUT);
 }
 function _startAfkTimer(){
@@ -2097,7 +2117,9 @@ async function forceRefresh(){
     vipCustomers=data.vipCustomers||{};
     customerDeals=data.customerDeals||{};
     dayNotes=data.dayNotes||{};
-    eodLogs=Array.isArray(data.eodLogs)?data.eodLogs:[];
+    // PROTECT eodLogs on refresh: keep local if local has more
+    const _refEod=Array.isArray(data.eodLogs)?data.eodLogs:[];
+    if(_refEod.length>=eodLogs.length){eodLogs=_refEod;}
     cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
     cancelledOrders=Array.isArray(data.cancelledOrders)?data.cancelledOrders:[];
     clearedWebKeys=Array.isArray(data.clearedWebKeys)?data.clearedWebKeys:[];
@@ -6514,7 +6536,9 @@ async function fbPullNow(){
       if(data.cfg){const savedCu=cu;cfg=data.cfg;cu=savedCu;}
       customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
       dayNotes=data.dayNotes||{};
-      eodLogs=Array.isArray(data.eodLogs)?data.eodLogs:[];
+      // PROTECT eodLogs: if local has more, keep local (Firebase push may have failed)
+      const _pullEod=Array.isArray(data.eodLogs)?data.eodLogs:[];
+      if(_pullEod.length>=eodLogs.length){eodLogs=_pullEod;}
       staffBuyLogs=Array.isArray(data.staffBuyLogs)?data.staffBuyLogs:[];
       failedAttempts=Array.isArray(data.failedAttempts)?data.failedAttempts:[];
       loginLog=Array.isArray(data.loginLog)?data.loginLog:[];
