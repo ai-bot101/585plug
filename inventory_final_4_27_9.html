@@ -1495,9 +1495,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v98';
-const _BUILD_TS=1780243200950; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v98]';},1000);
+const _APP_VERSION='deploy-v99';
+const _BUILD_TS=1780357011161; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v99]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -1852,7 +1852,8 @@ async function tryLogin(){
   renderAll();updateSync();
   // ALL one-time migrations REMOVED — they depended on localStorage which can be cleared by the browser,
   // causing them to re-run and wipe data. No code should EVER auto-delete orders, logs, or EOD data.
-  repairPassHashes();
+  // NOTE: repairPassHashes() moved INSIDE postLoginSync (after data restore) to prevent
+  // its persist() from pushing empty data to Firebase before postLoginSync restores saved data.
   // Mark data as fully loaded — allows beforeunload/visibilitychange to safely push
   _dataLoaded=true;
   // CRITICAL: Pull fresh data from Firebase, BUT compare with localStorage.
@@ -1983,6 +1984,7 @@ async function tryLogin(){
       }
     }catch(e){console.error('Post-login sync failed:',e);}
     // NOW run repairs with fresh Firebase data — no poll can interfere
+    repairPassHashes();
     repairAllCommissions();
     repairEODtoLog();
     // Auto-repair any double-deducted stock (compares log totals vs inventory)
