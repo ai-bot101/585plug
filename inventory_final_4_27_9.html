@@ -1497,9 +1497,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v102';
-const _BUILD_TS=1780408994950; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v102]';},1000);
+const _APP_VERSION='deploy-v103';
+const _BUILD_TS=1780410586626; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v103]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2970,9 +2970,9 @@ function _autoRepairStock(){
 function syncStockToEOD(e){
   if(e)e.stopPropagation();
 
-  // ── SIMPLE SYNC: only uses Saved EOD Logs + Pending Orders ──
-  // Formula: correctLeft = bought - eodSold - pendingHeld
-  // No activity log orphans, no adjustment entries — clean and predictable.
+  // ── SIMPLE SYNC: only uses Saved EOD Logs ──
+  // Formula: correctLeft = bought - eodSold
+  // No pending orders, no activity log, no adjustments — clean and predictable.
 
   const soldMap={}; // { itemNameLower: totalQtySold }
   const flavorSoldMap={}; // { itemNameLower: { flavorNameLower: qtySold } }
@@ -3005,19 +3005,8 @@ function syncStockToEOD(e){
     });
   });
 
-  // 2. Count pending (held) web orders
-  const pendCount=Object.keys(pendingWebOrders||{}).length;
-  Object.values(pendingWebOrders||{}).forEach(order=>{
-    (order.orderItems||[]).forEach(oi=>{
-      const key=(oi.itemName||oi.name||'').toLowerCase().trim();
-      const qty=Math.max(oi.qty||1,labelToQty(oi.label));
-      soldMap[key]=(soldMap[key]||0)+qty;
-      addFlavorSold(key,oi,qty);
-    });
-  });
-
-  if(!eodLogs.length&&!pendCount){
-    showToast('No EOD logs or pending orders to sync from','err');
+  if(!eodLogs.length){
+    showToast('No saved EOD logs to sync from','err');
     return;
   }
 
@@ -3057,7 +3046,7 @@ function syncStockToEOD(e){
     });
   });
   if(!fixCount&&!flavorFixCount){showToast('Stock already matches EOD logs ✅','ok');return;}
-  let confirmMsg='Sync stock to match saved EOD logs?\n\nFormula: Left = Bought − Sold − Pending\n\n';
+  let confirmMsg='Sync stock to match saved EOD logs?\n\nFormula: Left = Bought − Sold (from EOD logs only)\n\n';
   if(fixCount)confirmMsg+=changes.join('\n')+'\n\n'+fixCount+' items will be updated.\n';
   if(flavorFixCount)confirmMsg+=(fixCount?'\n':'')+'Flavor changes:\n'+flavorChanges.join('\n')+'\n\n'+flavorFixCount+' flavors will be updated.\n';
   confirmMsg+='\nSources: '+eodLogs.length+' EOD logs ('+eodOrderCount+' orders)'+(pendCount?' + '+pendCount+' pending orders':'');
@@ -5056,6 +5045,12 @@ function processWebsiteOrders(pendingOrders) {
     }
     if (order.confirmed || order.cancelled) {
       console.log('[PENDING-TRACE] SKIPPING', fbKey.substr(0,20), '— confirmed:', order.confirmed, 'cancelled:', order.cancelled, 'inLocal:', !!pendingWebOrders[fbKey]);
+      return;
+    }
+    // SAFETY NET: if this order was already captured by EOD (in clearedWebKeys), skip AND delete
+    if (clearedWebKeys.includes(fbKey)) {
+      console.log('[PENDING-TRACE] SKIP-CLEARED', fbKey.substr(0,20), '— already captured by EOD, deleting from Firebase');
+      fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
       return;
     }
     // CRITICAL: Check if this order was already confirmed (exists in sales log).
@@ -7656,6 +7651,7 @@ async function saveEODLog(){
 
   // Mark all captured orders as _cleared so they won't be captured again
   // Also add webOrderKeys to persistent clearedWebKeys list (survives Firebase sync)
+  // AND delete ALL confirmed pending orders from Firebase (not just ones with webOrderKey in log)
   let cleared=0;
   log.forEach(e=>{
     if((e.type==='sell'||e.type==='order'||e.type==='selfbuy')&&!e._cleared){
@@ -7663,10 +7659,17 @@ async function saveEODLog(){
       cleared++;
       if(e.webOrderKey){
         if(!clearedWebKeys.includes(e.webOrderKey))clearedWebKeys.push(e.webOrderKey);
-        fetch(FB_URL+'/pending_orders/'+e.webOrderKey+'.json',{method:'DELETE'}).catch(()=>{});
       }
     }
   });
+  // Delete ALL pending orders from Firebase that were captured by this EOD
+  // This is more reliable than the per-confirm delete which can silently fail
+  Object.keys(pendingWebOrders).forEach(fbKey=>{
+    if(!clearedWebKeys.includes(fbKey))clearedWebKeys.push(fbKey);
+    fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
+  });
+  // Clear local pending orders
+  pendingWebOrders={};
 
   // Save locally first
   persistEncrypted().catch(()=>{});
