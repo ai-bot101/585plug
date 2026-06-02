@@ -1445,6 +1445,8 @@ let failedAttempts=[]; // {timestamp, date, time, userSlot} — owner login fail
 let loginLog=[]; // {timestamp, date, time, name, role} — all successful logins
 let dayNotes={}; // {date: noteString}
 let eodLogs=[]; // saved end-of-day records
+let _eodHighWater=0; // tracks max eodLogs.length seen this session
+let _eodClearAllowed=false; // set true ONLY by explicit user actions (Reset Sold, Delete Log, Nuke)
 let staffBuyLogs=[]; // saved staff buy snapshots
 let cu=null,activeCat='ALL',srch='',selDay='today',staffSelDay='today',selPw=null;
 let inv={STRAINS:[],DISPOS:[],EDIBLES:[],PREROLLS:[],NICOTINE:[]};
@@ -1495,9 +1497,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v100';
-const _BUILD_TS=1780358132941; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v100]';},1000);
+const _APP_VERSION='deploy-v102';
+const _BUILD_TS=1780408994950; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v102]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2843,6 +2845,7 @@ function resetAllSold(e){
   // Remove ALL sale-related log entries so repairStock won't recalculate sold numbers
   log=log.filter(e=>e.type!=='sell'&&e.type!=='order'&&e.type!=='selfbuy'&&e.type!=='adjustment');
   // Clear EOD logs — they would contradict the reset and make Sync to EOD show phantom sales
+  _eodClearAllowed=true;
   eodLogs=[];
   clearedWebKeys=[];
   let fixCount=0;
@@ -6635,6 +6638,12 @@ function fbPush(){
       // EXCEPTION: _pendingFbPatches includes pending_order flag updates (like
       // _stockDeductedV2) that MUST be atomic with the inv update to prevent
       // double stock deduction on page reload.
+      // FAILSAFE: block Firebase push if eodLogs were silently wiped
+      if(eodLogs.length<_eodHighWater&&!_eodClearAllowed){
+        console.error('[SAFETY] fbPush blocked — eodLogs dropped from '+_eodHighWater+' to '+eodLogs.length);
+        fbPushInFlight=false;return;
+      }
+      _eodHighWater=Math.max(_eodHighWater,eodLogs.length);
       const payload={
         inv,log,cfg,
         customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts,
@@ -6727,6 +6736,14 @@ async function decryptData(b64){
 // Encrypted persist — all data stored as AES-256-GCM ciphertext
 async function persistEncrypted(){
   try{
+    // FAILSAFE: if eodLogs count dropped without explicit user action, something corrupted the data.
+    // Block the save to prevent overwriting good data in localStorage.
+    if(eodLogs.length<_eodHighWater&&!_eodClearAllowed){
+      console.error('[SAFETY] eodLogs dropped from '+_eodHighWater+' to '+eodLogs.length+' without user action — BLOCKING localStorage save to protect data');
+      return;
+    }
+    _eodHighWater=Math.max(_eodHighWater,eodLogs.length);
+    _eodClearAllowed=false; // reset flag after each successful save
     const data={
       inv,log,cfg,
       customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts
@@ -7413,6 +7430,7 @@ function deleteEODOrder(logIdx,orderIdx){
   // if no orders left, optionally remove the whole EOD log
   if(r.orders.length===0){
     if(confirm('No orders left in this log. Delete the whole day log?')){
+      _eodClearAllowed=true;
       eodLogs.splice(logIdx,1);
       persist();renderItems();renderEODLogsList();
       if(cu?.role==='owner')renderDash(); else renderStaffLog();
@@ -7811,6 +7829,7 @@ async function deleteEODLog(i){
   const logNum=eodLogs.length-i;
   const eodDate=eodLogs[i].date;
   if(!confirm('Delete Log #'+logNum+' ('+eodDate+')?\n\nThis will also remove all sales entries for this day.'))return;
+  _eodClearAllowed=true;
   eodLogs.splice(i,1);
   // Also remove all sales log entries for this day so the day disappears from dashboard
   const remaining=eodLogs.filter(l=>l.date===eodDate);
@@ -8238,6 +8257,7 @@ function doReset(type){
 
   }else if(type==='all'){
     // wipe inventory, logs, credits — keep logins/categories/tiers
+    _eodClearAllowed=true;
     C().forEach(cat=>{inv[cat]=[];});
     log=[];
     customerCredits={};
@@ -8259,6 +8279,7 @@ function doReset(type){
 
   }else if(type==='nukelogs'){
     // Wipe ALL data EXCEPT inventory items — keeps names, prices, stock, flavors
+    _eodClearAllowed=true;
     _nukeInProgress=true; // skip merge-before-push so Firebase doesn't re-add old logs
     fbPushInFlight=true; // block fbPull from overwriting during debounce window
     if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;} // cancel any pending push
