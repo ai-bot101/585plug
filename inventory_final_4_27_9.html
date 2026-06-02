@@ -1497,9 +1497,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v103';
-const _BUILD_TS=1780410586626; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v103]';},1000);
+const _APP_VERSION='deploy-v104';
+const _BUILD_TS=1780411690617; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v104]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -7662,14 +7662,15 @@ async function saveEODLog(){
       }
     }
   });
-  // Delete ALL pending orders from Firebase that were captured by this EOD
-  // This is more reliable than the per-confirm delete which can silently fail
-  Object.keys(pendingWebOrders).forEach(fbKey=>{
+  // Delete ONLY the confirmed pending orders that were captured by this EOD
+  // (keep unconfirmed orders that are still waiting)
+  const _capturedKeys=new Set();
+  log.forEach(e=>{if(e._cleared&&e.webOrderKey)_capturedKeys.add(e.webOrderKey);});
+  _capturedKeys.forEach(fbKey=>{
     if(!clearedWebKeys.includes(fbKey))clearedWebKeys.push(fbKey);
     fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
+    delete pendingWebOrders[fbKey];
   });
-  // Clear local pending orders
-  pendingWebOrders={};
 
   // Save locally first
   persistEncrypted().catch(()=>{});
