@@ -514,6 +514,16 @@ body{font-family:var(--sans);background:#1c1c1e;color:var(--text);min-height:100
         </div>
         <div id="eod-search-results" style="display:none;margin-bottom:14px;"></div>
         <div id="eod-logs-list"></div>
+        <!-- Drop zone for importing saved EOD log files -->
+        <div id="eod-dropzone" onclick="document.getElementById('eod-file-inp').click()"
+          style="margin-top:14px;border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;"
+          ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='rgba(108,99,255,0.08)';"
+          ondragleave="this.style.borderColor='var(--border)';this.style.background='transparent';"
+          ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='transparent';importEODFile(event.dataTransfer.files[0]);">
+          <div style="font-size:12px;color:var(--text3);font-family:var(--sans);">📂 Drag & drop a saved EOD log file here to restore it</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px;">or tap to browse</div>
+          <input type="file" id="eod-file-inp" accept=".txt,.json" style="display:none;" onchange="importEODFile(this.files[0]);this.value='';">
+        </div>
       </div>
       <!-- staff login log -->
       <div id="login-log-section" style="margin-bottom:14px;"></div>
@@ -1497,9 +1507,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v104';
-const _BUILD_TS=1780411690617; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v104]';},1000);
+const _APP_VERSION='deploy-v105';
+const _BUILD_TS=1780761100256; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v105]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -3049,7 +3059,7 @@ function syncStockToEOD(e){
   let confirmMsg='Sync stock to match saved EOD logs?\n\nFormula: Left = Bought − Sold (from EOD logs only)\n\n';
   if(fixCount)confirmMsg+=changes.join('\n')+'\n\n'+fixCount+' items will be updated.\n';
   if(flavorFixCount)confirmMsg+=(fixCount?'\n':'')+'Flavor changes:\n'+flavorChanges.join('\n')+'\n\n'+flavorFixCount+' flavors will be updated.\n';
-  confirmMsg+='\nSources: '+eodLogs.length+' EOD logs ('+eodOrderCount+' orders)'+(pendCount?' + '+pendCount+' pending orders':'');
+  confirmMsg+='\nSources: '+eodLogs.length+' EOD logs ('+eodOrderCount+' orders)';
   if(!confirm(confirmMsg))return;
 
   // ── APPLY CHANGES ──
@@ -7700,6 +7710,94 @@ async function saveEODLog(){
   renderCancelledOrders();
   const _totalForDay=log.filter(e=>(e.type==='sell'||e.type==='order'||e.type==='selfbuy')).length;
   showToast('['+_APP_VERSION+'] Log #'+record.logNumber+' saved ✅ ('+record.txCount+' of '+_totalForDay+' orders, '+fmtP(record.grandTotal)+')','ok');
+}
+
+// ── IMPORT EOD LOG FROM SAVED TEXT FILE ──
+function importEODFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(ev){
+    const text=ev.target.result;
+    try{
+      // Try JSON first (if user saved/exported as JSON)
+      if(file.name.endsWith('.json')){
+        const data=JSON.parse(text);
+        if(data.orders||data.txCount!==undefined){
+          // Check for duplicate by snapshotId or savedAt
+          const isDup=eodLogs.some(l=>(l.snapshotId&&l.snapshotId===data.snapshotId)||(l.savedAt&&l.savedAt===data.savedAt));
+          if(isDup){showToast('This log is already saved','err');return;}
+          if(!data.snapshotId)data.snapshotId='import_'+Date.now();
+          _eodClearAllowed=true; // allow the high water mark to adjust
+          eodLogs.unshift(data);
+          _eodHighWater=eodLogs.length;
+          persist();renderEODLogsList();
+          showToast('Log imported: '+data.date+' — '+(data.txCount||0)+' orders, '+fmtP(data.grandTotal||0),'ok');
+          return;
+        }
+      }
+      // Parse text format: "END OF DAY LOG - May 31, 2026"
+      const lines=text.split('\n');
+      const dateLine=lines.find(l=>l.startsWith('END OF DAY LOG'));
+      const savedLine=lines.find(l=>l.startsWith('Saved:'));
+      const date=dateLine?dateLine.replace('END OF DAY LOG - ','').trim():'Unknown';
+      const savedAt=savedLine?savedLine.replace('Saved: ','').trim():new Date().toLocaleString();
+      // Parse totals
+      const getVal=(label)=>{const l=lines.find(x=>x.trim().startsWith(label));return l?parseFloat(l.split('$').pop())||0:0;};
+      const getNum=(label)=>{const l=lines.find(x=>x.trim().startsWith(label));return l?parseInt(l.split(':').pop())||0:0;};
+      const cashTotal=getVal('Cash:');
+      const virtTotal=getVal('Virtual:');
+      const grandTotal=getVal('Total In:');
+      const txCount=getNum('Transactions:');
+      // Parse orders
+      const orders=[];
+      const orderStart=lines.findIndex(l=>l.includes('ALL ORDERS'));
+      const invStart=lines.findIndex(l=>l.includes('INVENTORY AT END OF DAY'));
+      if(orderStart>-1){
+        const end=invStart>-1?invStart:lines.length;
+        let current=null;
+        for(let i=orderStart+1;i<end;i++){
+          const line=lines[i].trim();
+          if(!line)continue;
+          // Match: "1. guest - $65 - cash"
+          const m=line.match(/^\d+\.\s+(.+?)\s+-\s+\$(\d+(?:\.\d+)?)\s+-\s+(.+)$/);
+          if(m){
+            if(current)orders.push(current);
+            current={customer:m[1],total:parseFloat(m[2]),amtReceived:parseFloat(m[2]),payMethod:m[3].trim(),items:[],time:'',who:'Owner',type:'order'};
+          }
+          // Match: "Items: 2x boutiq switch triple tank"
+          const im=line.match(/^Items:\s+(.+)$/);
+          if(im&&current){
+            im[1].split(',').forEach(chunk=>{
+              const pm=chunk.trim().match(/^(\d+(?:\.\d+)?)x\s+(.+)$/);
+              if(pm)current.items.push({itemName:pm[2].trim(),qty:parseFloat(pm[1])});
+            });
+          }
+          // Match: "Time: 12:09 PM by Owner"
+          const tm=line.match(/^Time:\s+(.+?)\s+by\s+(.+)$/);
+          if(tm&&current){current.time=tm[1];current.who=tm[2];}
+        }
+        if(current)orders.push(current);
+      }
+      // Check for duplicate
+      const isDup=eodLogs.some(l=>l.savedAt===savedAt||(l.date===date&&l.txCount===txCount&&l.grandTotal===grandTotal));
+      if(isDup){showToast('This log is already saved','err');return;}
+      const record={
+        date,savedAt,snapshotId:'import_'+Date.now(),
+        cashTotal,virtTotal,grandTotal,txCount:orders.length||txCount,
+        staffComm:0,ownerNet:grandTotal,totalProfit:0,totalDailyDeductions:0,note:'',
+        commByPerson:{},payouts:{},orders
+      };
+      _eodClearAllowed=true;
+      eodLogs.unshift(record);
+      _eodHighWater=eodLogs.length;
+      persist();renderEODLogsList();
+      showToast('Log imported: '+date+' — '+orders.length+' orders, '+fmtP(grandTotal),'ok');
+    }catch(e){
+      console.error('Import failed:',e);
+      showToast('Could not parse file — make sure it\'s an EOD log text file','err');
+    }
+  };
+  reader.readAsText(file);
 }
 
 function renderEODLogsList(){
