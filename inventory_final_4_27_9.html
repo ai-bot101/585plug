@@ -1457,6 +1457,25 @@ let dayNotes={}; // {date: noteString}
 let eodLogs=[]; // saved end-of-day records
 let _eodHighWater=0; // tracks max eodLogs.length seen this session
 let _eodClearAllowed=false; // set true ONLY by explicit user actions (Reset Sold, Delete Log, Nuke)
+// ── ISOLATED EOD BACKUP ──────────────────────────
+// Saves eodLogs to a SEPARATE Firebase path that persist/fbPush/logout/emergencyPush NEVER touch.
+// Only written by explicit user actions: Save Log, Delete Log, Import, Reset Sold, Nuke.
+// On login, this backup is the source of truth — if it has more logs, it wins.
+async function _pushEodBackup(){
+  try{
+    const res=await fetch(FB_URL+'/eodBackup.json',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(eodLogs)
+    });
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    console.log('[EOD-BACKUP] Saved '+eodLogs.length+' logs to isolated backup');
+    return true;
+  }catch(e){
+    console.error('[EOD-BACKUP] FAILED to save backup:',e);
+    return false;
+  }
+}
 let staffBuyLogs=[]; // saved staff buy snapshots
 let cu=null,activeCat='ALL',srch='',selDay='today',staffSelDay='today',selPw=null;
 let inv={STRAINS:[],DISPOS:[],EDIBLES:[],PREROLLS:[],NICOTINE:[]};
@@ -1507,9 +1526,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v105';
-const _BUILD_TS=1780761100256; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v105]';},1000);
+const _APP_VERSION='deploy-v106';
+const _BUILD_TS=1780934802930; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v106]';},1000);
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -2014,6 +2033,27 @@ async function tryLogin(){
         }
       }
     }catch(e){console.error('Post-login sync failed:',e);}
+
+    // ── FINAL STEP: Restore EOD logs from ISOLATED BACKUP ──
+    // The backup path is NEVER touched by persist/fbPush/logout/emergencyPush.
+    // If the backup has more logs than whatever we restored above, USE THE BACKUP.
+    // This is the ultimate safety net — even if every other restore path failed,
+    // the backup has the logs because saveEODLog() wrote them there directly.
+    try{
+      const backupRes=await fetch(FB_URL+'/eodBackup.json?t='+Date.now());
+      if(backupRes.ok){
+        const backupLogs=await backupRes.json();
+        if(Array.isArray(backupLogs)&&backupLogs.length>eodLogs.length){
+          console.log('[EOD-BACKUP-RESTORE] Backup has '+backupLogs.length+' logs vs current '+eodLogs.length+' — USING BACKUP');
+          eodLogs=backupLogs;
+          showToast('Restored '+backupLogs.length+' EOD logs from backup ✅','ok');
+        } else {
+          console.log('[EOD-BACKUP-RESTORE] Current eodLogs ('+eodLogs.length+') >= backup ('+(Array.isArray(backupLogs)?backupLogs.length:0)+') — keeping current');
+        }
+      }
+    }catch(e){console.error('[EOD-BACKUP-RESTORE] Failed to fetch backup:',e);}
+    _eodHighWater=Math.max(_eodHighWater,eodLogs.length);
+
     // NOW run repairs with fresh Firebase data — no poll can interfere
     repairPassHashes();
     repairAllCommissions();
@@ -2857,6 +2897,7 @@ function resetAllSold(e){
   // Clear EOD logs — they would contradict the reset and make Sync to EOD show phantom sales
   _eodClearAllowed=true;
   eodLogs=[];
+  _pushEodBackup(); // sync isolated backup (now empty)
   clearedWebKeys=[];
   let fixCount=0;
   needsReset.forEach(item=>{
@@ -5770,6 +5811,7 @@ function doReverseConfirmed(fbKey) {
     r.txCount=r.orders.length;
   });
 
+  _pushEodBackup(); // sync isolated backup after order reversal
   persist();
   renderStats();
   renderItems();
@@ -7437,6 +7479,7 @@ function deleteEODOrder(logIdx,orderIdx){
     if(confirm('No orders left in this log. Delete the whole day log?')){
       _eodClearAllowed=true;
       eodLogs.splice(logIdx,1);
+      _pushEodBackup(); // sync isolated backup
       persist();renderItems();renderEODLogsList();
       if(cu?.role==='owner')renderDash(); else renderStaffLog();
       showToast('Day log deleted — stock restored ✅','ok');
@@ -7445,6 +7488,7 @@ function deleteEODOrder(logIdx,orderIdx){
     }
   }
 
+  _pushEodBackup(); // sync isolated backup after order deletion
   persist();
   renderItems();
   viewEODLog(logIdx);
@@ -7629,6 +7673,7 @@ function saveAddEODOrder(){
   }
   log.push(logEntry);
 
+  _pushEodBackup(); // sync isolated backup after modifying EOD log
   persist();
   closeOv('add-eod-order-modal');
   viewEODLog(addEODLogIdx);
@@ -7682,9 +7727,25 @@ async function saveEODLog(){
     delete pendingWebOrders[fbKey];
   });
 
-  // Save locally first
+  // ── STEP 1: Save to ISOLATED BACKUP first (awaited, verified) ──
+  // This backup path is NEVER touched by persist/fbPush/logout/emergencyPush.
+  // Even if every other save path fails, this backup survives.
+  const backupOk=await _pushEodBackup();
+  if(!backupOk){
+    showToast('⚠️ Backup save failed — retrying...','err');
+    // Retry once
+    const retry=await _pushEodBackup();
+    if(!retry){
+      showToast('⚠️ Could not save backup to server — check your connection and try again','err');
+      // Don't return — still try the main save below
+    }
+  }
+
+  // ── STEP 2: Save locally ──
+  _eodHighWater=Math.max(_eodHighWater,eodLogs.length);
   persistEncrypted().catch(()=>{});
-  // IMMEDIATE push to Firebase — no debounce. Critical: prevents data loss on reload.
+
+  // ── STEP 3: Push to main Firebase path (also awaited) ──
   if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
   fbPushInFlight=true;
   const _eodPayload={
@@ -7693,23 +7754,28 @@ async function saveEODLog(){
     updatedAt:Date.now()
   };
   fbLastTimestamp=_eodPayload.updatedAt;
-  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(_eodPayload)}).then(()=>{
+  try{
+    await fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(_eodPayload)});
     fbPushInFlight=false;
     document.getElementById('sdot').className='sdot ok';
     document.getElementById('slabel').textContent='Saved — '+tstr();
     console.log('[EOD-PUSH] Immediate push complete');
-  }).catch(e=>{
+  }catch(e){
     fbPushInFlight=false;
     console.error('[EOD-PUSH] Failed:',e);
-    showToast('EOD saved locally but Firebase sync failed — do NOT reload yet','err');
-  });
+    if(backupOk){
+      showToast('Main sync failed but backup is safe ✅','ok');
+    } else {
+      showToast('EOD saved locally but server sync failed — do NOT reload yet','err');
+    }
+  }
   renderEODLogsList();
   renderConfirmedWebOrders();
   renderDash();
   renderLoginLog();
   renderCancelledOrders();
   const _totalForDay=log.filter(e=>(e.type==='sell'||e.type==='order'||e.type==='selfbuy')).length;
-  showToast('['+_APP_VERSION+'] Log #'+record.logNumber+' saved ✅ ('+record.txCount+' of '+_totalForDay+' orders, '+fmtP(record.grandTotal)+')','ok');
+  showToast('['+_APP_VERSION+'] Log #'+record.logNumber+' saved ✅ ('+record.txCount+' of '+_totalForDay+' orders, '+fmtP(record.grandTotal)+')'+(backupOk?' — backup verified':''),'ok');
 }
 
 // ── IMPORT EOD LOG FROM SAVED TEXT FILE ──
@@ -7730,6 +7796,7 @@ function importEODFile(file){
           _eodClearAllowed=true; // allow the high water mark to adjust
           eodLogs.unshift(data);
           _eodHighWater=eodLogs.length;
+          _pushEodBackup(); // sync isolated backup
           persist();renderEODLogsList();
           showToast('Log imported: '+data.date+' — '+(data.txCount||0)+' orders, '+fmtP(data.grandTotal||0),'ok');
           return;
@@ -7790,6 +7857,7 @@ function importEODFile(file){
       _eodClearAllowed=true;
       eodLogs.unshift(record);
       _eodHighWater=eodLogs.length;
+      _pushEodBackup(); // sync isolated backup
       persist();renderEODLogsList();
       showToast('Log imported: '+date+' — '+orders.length+' orders, '+fmtP(grandTotal),'ok');
     }catch(e){
@@ -7944,6 +8012,7 @@ async function deleteEODLog(i){
       }
     }
   }
+  _pushEodBackup(); // sync isolated backup
   persist();renderDash();showToast('Log deleted — '+eodDate+' removed','ok');
 }
 
@@ -8364,6 +8433,7 @@ function doReset(type){
     log=[];
     customerCredits={};
     eodLogs=[];
+    _pushEodBackup(); // sync isolated backup (now empty)
     staffBuyLogs=[];
     cancelledOrders=[];
     vipCustomers={};
@@ -8387,6 +8457,7 @@ function doReset(type){
     if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;} // cancel any pending push
     log=[];
     eodLogs=[];
+    _pushEodBackup(); // sync isolated backup (now empty)
     staffBuyLogs=[];
     cancelledOrders=[];
     clearedWebKeys=[];
@@ -8586,6 +8657,7 @@ function autoLockDay(dateStr){
   const record=buildEODRecord(dateStr);
   record.autoSaved=true;
   eodLogs.unshift(record);
+  _pushEodBackup(); // sync isolated backup
   persist();
   if(cu?.role==='owner')renderEODLogsList();
   showToast('Day auto-locked: '+dateStr,'ok');
@@ -8599,6 +8671,7 @@ function lockDayNow(){
   const existing=eodLogs.findIndex(l=>l.date===today);
   if(existing>=0)eodLogs[existing]=record;
   else eodLogs.unshift(record);
+  _pushEodBackup(); // sync isolated backup
   persist();
   renderEODLogsList();
   renderLoginLog();
