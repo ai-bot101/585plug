@@ -1526,9 +1526,19 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v106';
-const _BUILD_TS=1780934802930; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v106]';},1000);
+const _APP_VERSION='deploy-v108';
+const _BUILD_TS=Date.now(); // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v108]';},1000);
+// Global error handler — catch uncaught errors so they don't silently crash the app
+window.onerror=function(msg,src,line,col,err){
+  console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
+  _debugOverlayLog('[ERR] '+msg+' L'+line);
+  return true; // prevent default browser error handling (page crash)
+};
+window.addEventListener('unhandledrejection',function(ev){
+  console.error('[UNHANDLED-PROMISE]',ev.reason);
+  _debugOverlayLog('[ERR-PROMISE] '+(ev.reason?.message||ev.reason));
+});
 
 // Clean up cache-bust query param after reload
 if(location.search.includes('_v=')){history.replaceState(null,'',location.pathname);}
@@ -1619,8 +1629,8 @@ function _flavorEntries(fl){
   if(typeof fl==='object')return Object.entries(fl);
   return[];
 }
-function gl(i){return(i.left!==null&&i.left!==undefined)?i.left:(i.bought||0);}
-function gp(i){if(!i.bought)return 100;return Math.min(100,(gl(i)/i.bought)*100);}
+function gl(i){if(!i)return 0;return(i.left!==null&&i.left!==undefined)?i.left:(i.bought||0);}
+function gp(i){if(!i||!i.bought)return 100;return Math.min(100,(gl(i)/i.bought)*100);}
 function tday(){
   const now=new Date();
   const h=now.getHours(),m=now.getMinutes();
@@ -2054,6 +2064,15 @@ async function tryLogin(){
     }catch(e){console.error('[EOD-BACKUP-RESTORE] Failed to fetch backup:',e);}
     _eodHighWater=Math.max(_eodHighWater,eodLogs.length);
 
+    // Scrub null/undefined items from inventory arrays — prevents search crashes
+    C().forEach(cat=>{
+      if(Array.isArray(inv[cat])){
+        const before=inv[cat].length;
+        inv[cat]=inv[cat].filter(item=>item&&item.name);
+        if(inv[cat].length<before)console.log('[REPAIR] Removed '+(before-inv[cat].length)+' corrupt items from '+cat);
+      }
+    });
+
     // NOW run repairs with fresh Firebase data — no poll can interfere
     repairPassHashes();
     repairAllCommissions();
@@ -2391,7 +2410,7 @@ function labelToQty(label) {
   }
   return 1;
 }
-function searchItems(q){const res=document.getElementById('isr');if(!q.trim()){res.classList.remove('open');return;}const m=[];C().forEach(cat=>{(inv[cat]||[]).forEach((item,ri)=>{if(item.name.toLowerCase().includes(q.toLowerCase())&&gl(item)>0)m.push({cat,ri,item});});});if(!m.length){res.classList.remove('open');return;}res.innerHTML=m.slice(0,8).map(({cat,ri,item})=>{const ao=isAddOnOnly(item);const blocked=ao&&orderItems.length===0;const badge=ao?`<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>`:'';const fc=(item.flavors||[]).filter(f=>f.name&&f.stock>0).length;const flavHint=fc>0?' · 🍬 '+fc+' flavors':'';return`<div class="isr-item" onclick="${blocked?`showToast('Add another item first — this is add-on only','err')`:`addIO('${cat}',${ri})`}" style="${blocked?'opacity:0.5;':''}"><span style="text-transform:capitalize">${item.name}${badge}</span><span class="isr-left">${cat} · ${fmt(gl(item))} left${flavHint}${blocked?' · needs other items':''}</span></div>`;}).join('');res.classList.add('open');}
+function searchItems(q){try{const res=document.getElementById('isr');if(!q.trim()){res.classList.remove('open');return;}const ql=q.toLowerCase();const m=[];C().forEach(cat=>{(inv[cat]||[]).forEach((item,ri)=>{if(!item||!item.name)return;if(item.name.toLowerCase().includes(ql)&&gl(item)>0)m.push({cat,ri,item});});});if(!m.length){res.classList.remove('open');return;}res.innerHTML=m.slice(0,8).map(({cat,ri,item})=>{const ao=isAddOnOnly(item);const blocked=ao&&orderItems.length===0;const badge=ao?`<span style="font-size:9px;background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:4px;padding:1px 5px;color:var(--accent);font-weight:600;margin-left:6px;">ADD-ON</span>`:'';const fc=(item.flavors||[]).filter(f=>f.name&&f.stock>0).length;const flavHint=fc>0?' · 🍬 '+fc+' flavors':'';return`<div class="isr-item" onclick="${blocked?`showToast('Add another item first — this is add-on only','err')`:`addIO('${cat}',${ri})`}" style="${blocked?'opacity:0.5;':''}"><span style="text-transform:capitalize">${item.name}${badge}</span><span class="isr-left">${cat} · ${fmt(gl(item))} left${flavHint}${blocked?' · needs other items':''}</span></div>`;}).join('');res.classList.add('open');}catch(e){console.error('[searchItems] error:',e);}}
 function addIO(cat,ri){const item=(inv[cat]||[])[ri];if(!item)return;if(isAddOnOnly(item)&&orderItems.length===0){showToast(item.name+' is add-on only — add another item first','err');return;}if(orderItems.find(o=>o.cat===cat&&o.ri===ri&&!o.flavorText)){showToast(item.name+' already in order','err');return;}
 // If item has price tiers, show price picker so label/qty are set correctly
 const priceTiers=(item.prices||[]).filter(p=>p.label&&p.price>0);
@@ -9190,14 +9209,18 @@ function openSelfBuy(){
 }
 function closeSelfBuy(){document.getElementById('self-buy-overlay').classList.remove('open');}
 function sbSearch(q){
+  try{
   const res=document.getElementById('sb-isr');
   if(!q.trim()){res.classList.remove('open');return;}
+  const ql=q.toLowerCase();
   const m=[];C().forEach(cat=>{(inv[cat]||[]).forEach((item,ri)=>{
-    if(item.name.toLowerCase().includes(q.toLowerCase())&&gl(item)>0&&cpuItem(item)>0)m.push({cat,ri,item});
+    if(!item||!item.name)return;
+    if(item.name.toLowerCase().includes(ql)&&gl(item)>0&&cpuItem(item)>0)m.push({cat,ri,item});
   });});
   if(!m.length){res.classList.remove('open');return;}
   res.innerHTML=m.slice(0,8).map(({cat,ri,item})=>`<div class="isr-item" onclick="addSBItem('${cat}',${ri})"><span style="text-transform:capitalize">${item.name}</span><span class="isr-left">${cat} · ${fmtP(cpuItem(item))}/unit · ${fmt(gl(item))} left</span></div>`).join('');
   res.classList.add('open');
+  }catch(e){console.error('[sbSearch] error:',e);}
 }
 function addSBItem(cat,ri){
   const item=(inv[cat]||[])[ri];if(!item)return;
@@ -9297,14 +9320,18 @@ function _osbPickStaff(name){
   _updateOSBCost();_chkOSB();
 }
 function osbSearch(q){
+  try{
   const res=document.getElementById('osb-isr');
   if(!q.trim()){res.classList.remove('open');return;}
+  const ql=q.toLowerCase();
   const m=[];C().forEach(cat=>{(inv[cat]||[]).forEach((item,ri)=>{
-    if(item.name.toLowerCase().includes(q.toLowerCase())&&gl(item)>0&&cpuItem(item)>0)m.push({cat,ri,item});
+    if(!item||!item.name)return;
+    if(item.name.toLowerCase().includes(ql)&&gl(item)>0&&cpuItem(item)>0)m.push({cat,ri,item});
   });});
   if(!m.length){res.classList.remove('open');return;}
   res.innerHTML=m.slice(0,8).map(({cat,ri,item})=>`<div class="isr-item" onclick="_addOSBItem('${cat}',${ri})"><span style="text-transform:capitalize">${item.name}</span><span class="isr-left">${cat} · ${fmtP(cpuItem(item))}/unit · ${fmt(gl(item))} left</span></div>`).join('');
   res.classList.add('open');
+  }catch(e){console.error('[osbSearch] error:',e);}
 }
 function _addOSBItem(cat,ri){
   const item=(inv[cat]||[])[ri];if(!item)return;
