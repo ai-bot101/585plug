@@ -1537,9 +1537,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v109';
-const _BUILD_TS=1782620391521; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v109]';},1000);
+const _APP_VERSION='deploy-v110';
+const _BUILD_TS=1782622564893; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v110]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -1657,6 +1657,7 @@ function tday(){
 function tstr(){return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
 function fmt(n){if(n===null||n===undefined)return'--';return(Math.round(n*10)/10).toString().replace(/\.0$/,'');}
 function fmtP(n){return'$'+parseFloat(n||0).toFixed(2).replace(/\.00$/,'');}
+function _esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function isV(m){return VIRT.includes(m);}
 function calcCashVirt(sells){
   let cash=0,virt=0,cCount=0,vCount=0;
@@ -2877,7 +2878,12 @@ function confirmOrder(){
   const{commission,deducted}=_isSelfOrder?{commission:0,deducted:0}:calcComm2(effectiveAmt,profit,cu.name);
   const e={type:'order',customer,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,label:o.label||'',price:o.price||0,flavors:o.flavors||null,flavorText:o.flavorText||''})),total,payMethod:orderPayMethod,payMethodLabel:ml,amtReceived:total,profit,commission,creditApplied,extraCredit:extra,shortPaid:short,note,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
   if(orderPayMethod==='split'){e.splitCash=splitCash;e.splitVirtual=splitVirtual;}
-  log.unshift(e);persist();closeOrder();
+  log.unshift(e);
+  // Loyalty tracking for manual orders — match what website order confirmation does
+  if(_orderCustUsername){
+    _incrementCustOrder(_orderCustUsername,{date:tday(),time:tstr(),total,orderItems:orderItems.map(o=>({cat:o.cat,itemName:o.itemName,qty:o.qty,label:o.label||'',price:o.price||0}))});
+  }
+  persist();closeOrder();
   renderStats();renderItems();
   renderStaffLog();
   pushSheet(e);
@@ -3193,6 +3199,7 @@ const soldOutOverlay=isSoldOut?'<div class="sold-out-overlay">SOLD OUT</div>':''
 const soldOutBtn=own?`<button class="${isSoldOut?'ebtn sold-out-active':'ebtn sold-out-btn'}" onclick="toggleSoldOut('${cat}',${ri})" style="${isSoldOut?'background:rgba(244,107,107,0.15);border-color:rgba(244,107,107,0.4);color:var(--red);':'background:rgba(244,107,107,0.06);border-color:rgba(244,107,107,0.15);color:rgba(244,107,107,0.5);'}">${isSoldOut?'✅ Restock':'🚫 Sold Out'}</button>`:'';
 html+=`<div class="icard ${so2?'gone':''} ${soldOutClass}" data-cat="${cat}" data-ri="${ri}" style="position:relative;${isSoldOut?'opacity:0.5;':''}">${soldOutOverlay}${pa}<div class="card-status">${so2?'<span class="tag sold">SOLD OUT</span>':isLow?'<span class="tag low">LOW</span>':''}</div><div class="iname">${item.name}${aoTag}${staffPriceTag}</div>${costDisplay}<div class="nums"><div class="nb"><div class="nl">Left</div><div class="nv hi">${fmt(left)}</div></div><div class="nb"><div class="nl">Bought</div><div class="nv">${fmt(bought)||'--'}</div></div>${bought?`<div class="nb"><div class="nl">Sold</div><div class="nv">${fmt(Math.max(0,bought-left))}</div></div>`:''}</div>${bought?`<div class="pbar"><div class="pfill ${fc}" style="width:${pct}%"></div></div>`:''}${own?`<div class="sell-row"><input class="qi" type="number" placeholder="Quick qty" min="0.1" step="0.1" id="qi-${cat}-${ri}" onkeydown="if(event.key==='Enter')sell('${cat}',${ri})"><button class="sbtn2" onclick="sell('${cat}',${ri})" ${so2||isSoldOut?'disabled':''}>Sell</button></div>`:''}${own?`<div class="oc"><button class="ebtn" onclick="openEdit('${cat}',${ri})">Edit</button><button class="ebtn" onclick="openRestock('${cat}',${ri})" style="background:rgba(62,207,142,0.08);border-color:rgba(62,207,142,0.2);color:var(--green);">Restock</button><button class="ebtn" onclick="openAdjust('${cat}',${ri})" style="background:rgba(108,99,255,0.08);border-color:rgba(108,99,255,0.2);color:var(--accent);">📏 Adjust</button>${soldOutBtn}<button class="dbtn" onclick="delItem('${cat}',${ri})">Delete</button></div>`:''}</div>`;});if(own)html+=`<div class="addcard" onclick="openAdd('${cat}')">+ Add item to ${cat}</div>`;html+='</div>';}area.innerHTML=html||'<div class="empty">No items yet</div>';}catch(e){console.error('[renderItems] crash:',e);}}
 // ── DRAG-AND-DROP REORDER (long-press) ──
+let _isDragging=false; // global flag — checked by fbPullNow to skip renderItems during drag
 (function(){
 let _dragSrc=null,_dragGhost=null,_dragTimer=null,_dragStartX=0,_dragStartY=0,_dragActive=false,_dragOverCard=null;
 const HOLD_MS=500,MOVE_THRESH=10;
@@ -3204,7 +3211,7 @@ function findDropTarget(x,y){
 }
 function startDrag(card,x,y){
   if(!cu||cu.role!=='owner')return;
-  _dragActive=true;
+  _dragActive=true;_isDragging=true;
   _dragSrc=card;
   card.classList.add('drag-active');
   // Create ghost
@@ -3229,7 +3236,7 @@ function moveGhost(x,y){
 function endDrag(){
   clearTimeout(_dragTimer);_dragTimer=null;
   if(!_dragActive){return;}
-  _dragActive=false;
+  _dragActive=false;_isDragging=false;
   if(_dragGhost){_dragGhost.remove();_dragGhost=null;}
   if(_dragSrc)_dragSrc.classList.remove('drag-active');
   if(_dragOverCard){
@@ -4950,6 +4957,8 @@ async function saveAdjust(){
     item.flavors.forEach((f,fi)=>{
       const inp=document.getElementById('adj-flav-'+fi);
       if(!inp)return;
+      // Skip empty inputs — don't silently zero out flavor stock
+      if(inp.value.trim()==='')return;
       const newFlav=parseInt(inp.value)||0;
       const oldFlav=f.stock||0;
       const fDelta=newFlav-oldFlav;
@@ -6634,8 +6643,8 @@ async function fbPullNow(){
     // save locally
     persistEncrypted().catch(e=>{});
     checkAndAutoLock();
-    // re-render silently
-    if(cu){
+    // re-render silently — skip if drag-and-drop is active to prevent stale index corruption
+    if(cu&&!_isDragging){
       renderStats();
       renderCatTabs();
       renderItems();
@@ -6732,6 +6741,7 @@ function fbPush(){
       });
       fbPushTimer=null; // clear so fbPull resumes
       fbPushInFlight=false;
+      _eodClearAllowed=false; // reset AFTER Firebase confirms — prevents race with debounced push
       _deletedLogKeys.clear(); // safe to clear — deletions are now persisted in Firebase
       document.getElementById('sdot').className='sdot ok';
       document.getElementById('slabel').textContent='Live — '+tstr()+' · '+document.title.match(/\[.*\]/)?.[0];
@@ -6816,7 +6826,9 @@ async function persistEncrypted(){
       return;
     }
     _eodHighWater=Math.max(_eodHighWater,eodLogs.length);
-    _eodClearAllowed=false; // reset flag after each successful save
+    // NOTE: _eodClearAllowed is reset in fbPush after Firebase PATCH confirms,
+    // NOT here — resetting here caused a race where the debounced fbPush
+    // would see the flag as false and block legitimate EOD deletions.
     const data={
       inv,log,cfg,
       customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts
@@ -9392,10 +9404,15 @@ function _chkOSB(){
 }
 function confirmOwnerStaffBuy(){
   if(!_osbStaff||!_osbItems.length)return;
+  // Validate all items still exist before processing — prevents partial log/debt if item was deleted mid-flow
+  for(const o of _osbItems){
+    const item=(inv[o.cat]||[])[o.ri];
+    if(!item){showToast('Item "'+o.itemName+'" no longer exists — please rebuild the order','err');return;}
+  }
   let totalOwed=0;
   const logItems=[];
   _osbItems.forEach(o=>{
-    const item=(inv[o.cat]||[])[o.ri];if(!item)return;
+    const item=(inv[o.cat]||[])[o.ri];
     const cost=staffCost(item,o.qty);totalOwed+=cost;
     item.left=Math.max(0,Math.round((gl(item)-o.qty)*10)/10);
     // Deduct flavor stock
@@ -9438,17 +9455,24 @@ let _orderCustUsername=null; // linked customer account for manual orders
 let _custAccountsCache=null; // cached registered customers
 let _custAccountsCacheTime=0;
 
+let _custAccountsInFlight=null; // prevents concurrent Firebase GETs from rapid typing
 async function _loadCustAccountsCache(){
   // Cache for 30 seconds
   if(_custAccountsCache&&Date.now()-_custAccountsCacheTime<30000)return _custAccountsCache;
-  try{
-    const res=await fetch(FB_URL+'/customers.json');
-    if(!res.ok)return{};
-    const data=await res.json();
-    _custAccountsCache=data||{};
-    _custAccountsCacheTime=Date.now();
-    return _custAccountsCache;
-  }catch(e){return{};}
+  // De-duplicate concurrent requests
+  if(_custAccountsInFlight)return _custAccountsInFlight;
+  _custAccountsInFlight=(async()=>{
+    try{
+      const res=await fetch(FB_URL+'/customers.json');
+      if(!res.ok)return{};
+      const data=await res.json();
+      _custAccountsCache=data||{};
+      _custAccountsCacheTime=Date.now();
+      return _custAccountsCache;
+    }catch(e){return{};}
+    finally{_custAccountsInFlight=null;}
+  })();
+  return _custAccountsInFlight;
 }
 
 function _searchCustAccounts(query){
@@ -9456,6 +9480,9 @@ function _searchCustAccounts(query){
   const linked=document.getElementById('cust-acct-linked');
   if(!sg)return;
   if(!query||query.length<1){sg.style.display='none';_orderCustUsername=null;if(linked)linked.style.display='none';return;}
+  // Clear previously linked account when user types a different name —
+  // prevents crediting the wrong loyalty account
+  _orderCustUsername=null;if(linked)linked.style.display='none';
   _loadCustAccountsCache().then(accounts=>{
     const q=query.trim().toLowerCase();
     const matches=Object.entries(accounts).filter(([user,d])=>{
@@ -9466,8 +9493,9 @@ function _searchCustAccounts(query){
     if(!matches.length){sg.style.display='none';return;}
     sg.innerHTML=matches.map(([user,d])=>{
       const oc=d.orderCount||0;
-      return`<div onclick="_pickCustAccount('${user.replace(/'/g,"\\'")}','${(d.name||user).replace(/'/g,"\\'")}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background='transparent'">
-        <div><div style="font-size:13px;font-weight:600;color:var(--text);">${d.name||user}</div><div style="font-size:10px;color:var(--text3);">@${user} · ${oc} order${oc!==1?'s':''}</div></div>
+      const safeUser=user.replace(/'/g,"\\'");const safeName=(d.name||user).replace(/'/g,"\\'");
+      return`<div onclick="_pickCustAccount('${safeUser}','${safeName}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background='transparent'">
+        <div><div style="font-size:13px;font-weight:600;color:var(--text);">${_esc(d.name||user)}</div><div style="font-size:10px;color:var(--text3);">@${_esc(user)} · ${oc} order${oc!==1?'s':''}</div></div>
         <div style="font-size:10px;color:var(--accent);font-weight:600;">Link ✓</div>
       </div>`;
     }).join('');
@@ -9653,7 +9681,12 @@ async function _loadLoyaltyGiftPreview(){
 
 function _renderLoyaltyGiftPreview(url){
   const el=document.getElementById('loyalty-gift-preview');
-  if(el)el.innerHTML='<img src="'+url+'" style="max-width:100%;max-height:150px;border-radius:10px;border:1px solid var(--border);margin-top:4px;" alt="Gift">';
+  if(!el)return;
+  // Use DOM API to prevent attribute injection via tampered URL
+  const img=document.createElement('img');
+  img.src=url;img.alt='Gift';
+  img.style.cssText='max-width:100%;max-height:150px;border-radius:10px;border:1px solid var(--border);margin-top:4px;';
+  el.innerHTML='';el.appendChild(img);
 }
 
 function _renderGiftOptions(options){
@@ -9662,7 +9695,7 @@ function _renderGiftOptions(options){
   if(!options||!options.length){el.innerHTML='<div style="font-size:11px;color:var(--text3);text-align:center;padding:8px;">No gift options yet — add some below</div>';return;}
   el.innerHTML=options.map((opt,i)=>
     `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">
-      <span style="font-size:13px;color:var(--text);font-family:var(--sans);">🎁 ${opt}</span>
+      <span style="font-size:13px;color:var(--text);font-family:var(--sans);">🎁 ${_esc(opt)}</span>
       <button onclick="removeGiftOption(${i})" style="background:rgba(226,75,74,0.12);border:1px solid rgba(226,75,74,0.3);border-radius:6px;padding:2px 8px;color:var(--red);font-size:11px;cursor:pointer;">✕</button>
     </div>`
   ).join('');
