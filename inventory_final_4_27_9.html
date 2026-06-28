@@ -1479,6 +1479,17 @@ async function _pushEodBackup(){
 let staffBuyLogs=[]; // saved staff buy snapshots
 let cu=null,activeCat='ALL',srch='',selDay='today',staffSelDay='today',selPw=null;
 let inv={STRAINS:[],DISPOS:[],EDIBLES:[],PREROLLS:[],NICOTINE:[]};
+// Scrub null/undefined/nameless items from ALL inventory arrays — prevents crashes everywhere
+function _scrubInv(){
+  let removed=0;
+  Object.keys(inv).forEach(cat=>{
+    if(!Array.isArray(inv[cat])){inv[cat]=[];return;}
+    const before=inv[cat].length;
+    inv[cat]=inv[cat].filter(item=>item&&typeof item==='object'&&item.name);
+    removed+=before-inv[cat].length;
+  });
+  if(removed)console.log('[SCRUB] Removed '+removed+' corrupt items from inventory');
+}
 let log=[],pendingSale=null,selMethod=null,orderItems=[],orderPayMethod=null;
 let pendingWebOrders={}; // website orders waiting for confirmation
 // Debug logger — outputs to console only (no visible panel)
@@ -1526,9 +1537,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v108';
-const _BUILD_TS=Date.now(); // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v108]';},1000);
+const _APP_VERSION='deploy-v109';
+const _BUILD_TS=1782620391521; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v109]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -1930,6 +1941,7 @@ async function tryLogin(){
       } else {
         await restoreEncrypted();
       }
+      _scrubInv(); // clean up corrupt items BEFORE any rendering
       const localLog=[...log];
       const localEodLogs=[...(Array.isArray(eodLogs)?eodLogs:[])];
       const localInv=JSON.parse(JSON.stringify(inv));
@@ -1952,6 +1964,7 @@ async function tryLogin(){
             // Using Firebase inv here would overwrite stock deductions that happened during the session.
             inv=localInv;
             C().forEach(c=>{if(!inv[c])inv[c]=[];});
+            _scrubInv();
             log=localLog;
             eodLogs=localEodLogs;
             clearedWebKeys=localClearedWebKeys;
@@ -1986,6 +1999,7 @@ async function tryLogin(){
             // Firebase is newer or same — use Firebase data (normal flow)
             if(data.inv)inv=data.inv;
             C().forEach(c=>{if(!inv[c])inv[c]=[];});
+            _scrubInv();
             const incomingLog=Array.isArray(data.log)?data.log:[];
             // PROTECT locally-confirmed orders from being lost during login sync
             const localConfirmed=localLog.filter(e=>e.webOrderKey&&processedOrderIds.has(e.webOrderKey));
@@ -2064,14 +2078,7 @@ async function tryLogin(){
     }catch(e){console.error('[EOD-BACKUP-RESTORE] Failed to fetch backup:',e);}
     _eodHighWater=Math.max(_eodHighWater,eodLogs.length);
 
-    // Scrub null/undefined items from inventory arrays — prevents search crashes
-    C().forEach(cat=>{
-      if(Array.isArray(inv[cat])){
-        const before=inv[cat].length;
-        inv[cat]=inv[cat].filter(item=>item&&item.name);
-        if(inv[cat].length<before)console.log('[REPAIR] Removed '+(before-inv[cat].length)+' corrupt items from '+cat);
-      }
-    });
+    _scrubInv(); // final scrub before repairs
 
     // NOW run repairs with fresh Firebase data — no poll can interfere
     repairPassHashes();
@@ -2898,10 +2905,10 @@ function openCatModal(){renderCatList();document.getElementById('new-cat-inp').v
 function renderCatList(){document.getElementById('cat-list').innerHTML=C().map(cat=>{const n=(inv[cat]||[]).length;return`<div class="cat-row-item"><div class="cat-row-name">${cat}</div><div class="cat-row-count">${n} item${n!==1?'s':''}</div><button class="cat-row-del" onclick="deleteCat('${cat}')">Remove</button></div>`;}).join('');}
 async function addCat(){if(!await _ownerGuard())return;const inp=document.getElementById('new-cat-inp');const name=inp.value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'');if(!name){showToast('Enter a name','err');return;}if(C().includes(name)){showToast('Already exists','err');return;}cfg.categories.push(name);if(!inv[name])inv[name]=[];inp.value='';persist();renderCatList();renderAll();showToast('Added: '+name,'ok');}
 function deleteCat(cat){const n=(inv[cat]||[]).length;if(n>0&&!confirm('"'+cat+'" has '+n+' items inside. Delete everything in it?'))return;cfg.categories=C().filter(c=>c!==cat);delete inv[cat];if(activeCat===cat)activeCat='ALL';persist();renderCatList();renderAll();showToast('Removed: '+cat,'err');}
-function renderAll(){renderStats();renderCatTabs();renderItems();renderConfirmedWebOrders();if(cu?.role==='owner')renderDash();else renderStaffLog();}
-function renderStats(){const all=C().flatMap(c=>inv[c]||[]);const so=all.filter(i=>gl(i)===0&&i.bought).length;const lw=all.filter(i=>{const p=gp(i);return p<=25&&p>0;}).length;const tS=log.filter(e=>e.date===tday()&&(e.type==='sell'||e.type==='order'));
+function renderAll(){try{renderStats();renderCatTabs();renderItems();renderConfirmedWebOrders();if(cu?.role==='owner')renderDash();else renderStaffLog();}catch(e){console.error('[renderAll] crash:',e);}}
+function renderStats(){try{const all=C().flatMap(c=>(inv[c]||[]).filter(i=>i&&i.name));const so=all.filter(i=>gl(i)===0&&i.bought).length;const lw=all.filter(i=>{const p=gp(i);return p<=25&&p>0;}).length;const tS=log.filter(e=>e.date===tday()&&(e.type==='sell'||e.type==='order'));
 const webOrders=log.filter(e=>e.date===tday()&&e.source==='website');const ts=tS.reduce((s,e)=>s+(e.amtReceived||0),0);const isOwn2=cu?.role==='owner';
-document.getElementById('srow').innerHTML=`<div class="scard"><div class="sl">Total Items</div><div class="sv">${all.length}</div><div class="ss">${C().filter(c=>(inv[c]||[]).length>0).length} cats</div></div><div class="scard red"><div class="sl">Sold Out</div><div class="sv">${so}</div><div class="ss">need restock${isOwn2?'&ensp;<span onclick="resetAllSold(event)" style="background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:5px;padding:1px 7px;font-size:9px;font-weight:700;color:var(--accent);cursor:pointer;letter-spacing:.5px;">RESET SOLD</span>&ensp;<span onclick="syncStockToEOD(event)" style="background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.25);border-radius:5px;padding:1px 7px;font-size:9px;font-weight:700;color:var(--green);cursor:pointer;letter-spacing:.5px;">SYNC TO EOD</span>':''}</div></div><div class="scard orange"><div class="sl">Running Low</div><div class="sv">${lw}</div><div class="ss">under 25%</div></div><div class="scard green"><div class="sl">Today Revenue</div><div class="sv">${fmtP(ts)}</div><div class="ss">${tS.length} sales${isOwn2&&tS.length?'&ensp;<span onclick="clearTodaySales(event)" style="background:rgba(244,107,107,0.12);border:1px solid rgba(244,107,107,0.25);border-radius:5px;padding:1px 7px;font-size:9px;font-weight:700;color:var(--red);cursor:pointer;letter-spacing:.5px;">CLEAR</span>':''}</div></div><div class="add-order-btn" onclick="openOrderSheet()"><div class="ao-icon">+</div><div class="ao-label">Add Order</div></div>${!isOwn2?'<div class="add-order-btn" onclick="openSelfBuy()" style="border-color:rgba(244,162,74,0.3);background:rgba(244,162,74,0.08);"><div class="ao-icon">🛒</div><div class="ao-label" style="color:var(--orange);">Buy For Me</div></div>':''}`;}
+document.getElementById('srow').innerHTML=`<div class="scard"><div class="sl">Total Items</div><div class="sv">${all.length}</div><div class="ss">${C().filter(c=>(inv[c]||[]).length>0).length} cats</div></div><div class="scard red"><div class="sl">Sold Out</div><div class="sv">${so}</div><div class="ss">need restock${isOwn2?'&ensp;<span onclick="resetAllSold(event)" style="background:rgba(108,99,255,0.12);border:1px solid rgba(108,99,255,0.25);border-radius:5px;padding:1px 7px;font-size:9px;font-weight:700;color:var(--accent);cursor:pointer;letter-spacing:.5px;">RESET SOLD</span>&ensp;<span onclick="syncStockToEOD(event)" style="background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.25);border-radius:5px;padding:1px 7px;font-size:9px;font-weight:700;color:var(--green);cursor:pointer;letter-spacing:.5px;">SYNC TO EOD</span>':''}</div></div><div class="scard orange"><div class="sl">Running Low</div><div class="sv">${lw}</div><div class="ss">under 25%</div></div><div class="scard green"><div class="sl">Today Revenue</div><div class="sv">${fmtP(ts)}</div><div class="ss">${tS.length} sales${isOwn2&&tS.length?'&ensp;<span onclick="clearTodaySales(event)" style="background:rgba(244,107,107,0.12);border:1px solid rgba(244,107,107,0.25);border-radius:5px;padding:1px 7px;font-size:9px;font-weight:700;color:var(--red);cursor:pointer;letter-spacing:.5px;">CLEAR</span>':''}</div></div><div class="add-order-btn" onclick="openOrderSheet()"><div class="ao-icon">+</div><div class="ao-label">Add Order</div></div>${!isOwn2?'<div class="add-order-btn" onclick="openSelfBuy()" style="border-color:rgba(244,162,74,0.3);background:rgba(244,162,74,0.08);"><div class="ao-icon">🛒</div><div class="ao-label" style="color:var(--orange);">Buy For Me</div></div>':''}`;}catch(e){console.error('[renderStats] crash:',e);}}
 function resetAllSold(e){
   if(e)e.stopPropagation();
   const all=C().flatMap(c=>inv[c]||[]).filter(i=>i.bought>0);
@@ -3169,7 +3176,7 @@ function clearTodaySales(e){
   showToast('Today sales cleared — revenue reset to $0','ok');
 }
 function renderCatTabs(){const allN=C().flatMap(c=>inv[c]||[]).length;document.getElementById('ctabs').innerHTML=`<div class="ctab ${activeCat==='ALL'?'active':''}" onclick="setCat('ALL')">ALL <span class="cnt">${allN}</span></div>`+C().map(c=>`<div class="ctab ${activeCat===c?'active':''}" onclick="setCat('${c}')">${c} <span class="cnt">${(inv[c]||[]).length}</span></div>`).join('');}
-function renderItems(){const area=document.getElementById('iarea'),own=cu?.role==='owner';const show2=activeCat==='ALL'?C():[activeCat];const mcat=document.getElementById('m-cat');if(mcat)mcat.innerHTML=C().map(c=>`<option value="${c}">${c}</option>`).join('');let html='';for(const cat of show2){let items=(inv[cat]||[]);if(srch)items=items.filter(i=>i.name.toLowerCase().includes(srch));if(!items.length&&!own)continue;html+=`<div class="sec-head"><h2>${cat}</h2><span class="cnt">${items.length}</span></div><div class="igrid">`;items.forEach(item=>{const ri=(inv[cat]||[]).indexOf(item);const left=gl(item),bought=item.bought||0,pct=gp(item);const so2=left===0&&bought>0,isLow=pct<=25&&pct>0&&bought>0,fc=pct<=10?'crit':pct<=25?'low':'';const prices=item.prices||[];const pa=''; // price pills removed// cost display for owner
+function renderItems(){try{const area=document.getElementById('iarea'),own=cu?.role==='owner';const show2=activeCat==='ALL'?C():[activeCat];const mcat=document.getElementById('m-cat');if(mcat)mcat.innerHTML=C().map(c=>`<option value="${c}">${c}</option>`).join('');let html='';for(const cat of show2){let items=(inv[cat]||[]).filter(i=>i&&i.name);if(srch)items=items.filter(i=>i.name.toLowerCase().includes(srch));if(!items.length&&!own)continue;html+=`<div class="sec-head"><h2>${cat}</h2><span class="cnt">${items.length}</span></div><div class="igrid">`;items.forEach(item=>{const ri=(inv[cat]||[]).indexOf(item);const left=gl(item),bought=item.bought||0,pct=gp(item);const so2=left===0&&bought>0,isLow=pct<=25&&pct>0&&bought>0,fc=pct<=10?'crit':pct<=25?'low':'';const prices=item.prices||[];const pa=''; // price pills removed// cost display for owner
 const cpu2=cpuItem(item);
 const costDisplay=own?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
   <div style="font-size:9px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;white-space:nowrap;">Cost/unit:</div>
@@ -3184,7 +3191,7 @@ const isSoldOut=!!item.soldOutAt;
 const soldOutClass=isSoldOut?'sold-out-card':'';
 const soldOutOverlay=isSoldOut?'<div class="sold-out-overlay">SOLD OUT</div>':'';
 const soldOutBtn=own?`<button class="${isSoldOut?'ebtn sold-out-active':'ebtn sold-out-btn'}" onclick="toggleSoldOut('${cat}',${ri})" style="${isSoldOut?'background:rgba(244,107,107,0.15);border-color:rgba(244,107,107,0.4);color:var(--red);':'background:rgba(244,107,107,0.06);border-color:rgba(244,107,107,0.15);color:rgba(244,107,107,0.5);'}">${isSoldOut?'✅ Restock':'🚫 Sold Out'}</button>`:'';
-html+=`<div class="icard ${so2?'gone':''} ${soldOutClass}" data-cat="${cat}" data-ri="${ri}" style="position:relative;${isSoldOut?'opacity:0.5;':''}">${soldOutOverlay}${pa}<div class="card-status">${so2?'<span class="tag sold">SOLD OUT</span>':isLow?'<span class="tag low">LOW</span>':''}</div><div class="iname">${item.name}${aoTag}${staffPriceTag}</div>${costDisplay}<div class="nums"><div class="nb"><div class="nl">Left</div><div class="nv hi">${fmt(left)}</div></div><div class="nb"><div class="nl">Bought</div><div class="nv">${fmt(bought)||'--'}</div></div>${bought?`<div class="nb"><div class="nl">Sold</div><div class="nv">${fmt(Math.max(0,bought-left))}</div></div>`:''}</div>${bought?`<div class="pbar"><div class="pfill ${fc}" style="width:${pct}%"></div></div>`:''}${own?`<div class="sell-row"><input class="qi" type="number" placeholder="Quick qty" min="0.1" step="0.1" id="qi-${cat}-${ri}" onkeydown="if(event.key==='Enter')sell('${cat}',${ri})"><button class="sbtn2" onclick="sell('${cat}',${ri})" ${so2||isSoldOut?'disabled':''}>Sell</button></div>`:''}${own?`<div class="oc"><button class="ebtn" onclick="openEdit('${cat}',${ri})">Edit</button><button class="ebtn" onclick="openRestock('${cat}',${ri})" style="background:rgba(62,207,142,0.08);border-color:rgba(62,207,142,0.2);color:var(--green);">Restock</button><button class="ebtn" onclick="openAdjust('${cat}',${ri})" style="background:rgba(108,99,255,0.08);border-color:rgba(108,99,255,0.2);color:var(--accent);">📏 Adjust</button>${soldOutBtn}<button class="dbtn" onclick="delItem('${cat}',${ri})">Delete</button></div>`:''}</div>`;});if(own)html+=`<div class="addcard" onclick="openAdd('${cat}')">+ Add item to ${cat}</div>`;html+='</div>';}area.innerHTML=html||'<div class="empty">No items yet</div>';}
+html+=`<div class="icard ${so2?'gone':''} ${soldOutClass}" data-cat="${cat}" data-ri="${ri}" style="position:relative;${isSoldOut?'opacity:0.5;':''}">${soldOutOverlay}${pa}<div class="card-status">${so2?'<span class="tag sold">SOLD OUT</span>':isLow?'<span class="tag low">LOW</span>':''}</div><div class="iname">${item.name}${aoTag}${staffPriceTag}</div>${costDisplay}<div class="nums"><div class="nb"><div class="nl">Left</div><div class="nv hi">${fmt(left)}</div></div><div class="nb"><div class="nl">Bought</div><div class="nv">${fmt(bought)||'--'}</div></div>${bought?`<div class="nb"><div class="nl">Sold</div><div class="nv">${fmt(Math.max(0,bought-left))}</div></div>`:''}</div>${bought?`<div class="pbar"><div class="pfill ${fc}" style="width:${pct}%"></div></div>`:''}${own?`<div class="sell-row"><input class="qi" type="number" placeholder="Quick qty" min="0.1" step="0.1" id="qi-${cat}-${ri}" onkeydown="if(event.key==='Enter')sell('${cat}',${ri})"><button class="sbtn2" onclick="sell('${cat}',${ri})" ${so2||isSoldOut?'disabled':''}>Sell</button></div>`:''}${own?`<div class="oc"><button class="ebtn" onclick="openEdit('${cat}',${ri})">Edit</button><button class="ebtn" onclick="openRestock('${cat}',${ri})" style="background:rgba(62,207,142,0.08);border-color:rgba(62,207,142,0.2);color:var(--green);">Restock</button><button class="ebtn" onclick="openAdjust('${cat}',${ri})" style="background:rgba(108,99,255,0.08);border-color:rgba(108,99,255,0.2);color:var(--accent);">📏 Adjust</button>${soldOutBtn}<button class="dbtn" onclick="delItem('${cat}',${ri})">Delete</button></div>`:''}</div>`;});if(own)html+=`<div class="addcard" onclick="openAdd('${cat}')">+ Add item to ${cat}</div>`;html+='</div>';}area.innerHTML=html||'<div class="empty">No items yet</div>';}catch(e){console.error('[renderItems] crash:',e);}}
 // ── DRAG-AND-DROP REORDER (long-press) ──
 (function(){
 let _dragSrc=null,_dragGhost=null,_dragTimer=null,_dragStartX=0,_dragStartY=0,_dragActive=false,_dragOverCard=null;
@@ -6551,7 +6558,7 @@ async function fbPullNow(){
         console.log('[PULL] Nuke detected from another device — accepting full wipe');
       }
       // always overwrite ALL fields so resets/clears propagate to all devices
-      inv=data.inv||{};C().forEach(c=>{if(!inv[c])inv[c]=[];});
+      inv=data.inv||{};C().forEach(c=>{if(!inv[c])inv[c]=[];});_scrubInv();
       // PROTECT locally-confirmed orders from being lost during log overwrite
       // If we confirmed an order locally but our push hasn't reached Firebase yet,
       // the incoming log won't have the entry — merge it back in
