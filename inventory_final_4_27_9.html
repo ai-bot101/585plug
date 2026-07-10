@@ -1446,7 +1446,7 @@ async function unlockApp(){
   else{buildLogin();show('screen-login');}
 }
 function backToCalc(){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('calc-screen').style.display='flex';}
-let cfg={users:[{name:'Owner',pass:'',role:'owner'},{name:'Staff 1',pass:'',role:'staff'},{name:'Staff 2',pass:'',role:'staff'}],categories:['STRAINS','DISPOS','EDIBLES','PREROLLS','NICOTINE'],sheetsUrl:'',done:false,showEarnings:false,lockHour:8,lockMin:30,commissionTiers:[{min:0,max:75,pct:50},{min:75,max:200,pct:30}],commissionFloorUnder:20,commissionFloorMin:10};
+let cfg={users:[{name:'Owner',pass:'',role:'owner'},{name:'Staff 2',pass:'',role:'staff'}],categories:['STRAINS','DISPOS','EDIBLES','PREROLLS','NICOTINE'],sheetsUrl:'',done:false,showEarnings:false,lockHour:8,lockMin:30,commissionTiers:[{min:0,max:75,pct:50},{min:75,max:200,pct:30}],commissionFloorUnder:20,commissionFloorMin:10};
 let customerCredits={}; // {name: dollarAmount} positive=credit, negative=owes
 let vipCustomers={}; // {name: true} — VIP flag per customer
 let customerDeals={}; // { "name": [{ itemName, label, dealPrice }] } — custom pricing per customer
@@ -1537,9 +1537,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v111';
-const _BUILD_TS=1783622745879; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v111]';},1000);
+const _APP_VERSION='deploy-v112';
+const _BUILD_TS=1783711733404; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v112]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -2087,6 +2087,10 @@ async function tryLogin(){
     repairEODtoLog();
     // Auto-repair any double-deducted stock (compares log totals vs inventory)
     _autoRepairStock();
+    // ONE-TIME MIGRATION: remove Staff 1 from users list
+    const _s1idx=cfg.users.findIndex(u=>u.name==='Staff 1');
+    if(_s1idx!==-1){cfg.users.splice(_s1idx,1);console.log('[MIGRATE] Removed Staff 1 from users');}
+
     // Data is fully restored — NOW it's safe to enable saves and persist
     _dataLoaded=true; // enables _emergencyPush and auto-update saves
     persist();
