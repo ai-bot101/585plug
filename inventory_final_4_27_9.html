@@ -1537,9 +1537,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v112';
-const _BUILD_TS=1783711733404; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v112]';},1000);
+const _APP_VERSION='deploy-v113';
+const _BUILD_TS=1784902505535; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v113]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -1637,7 +1637,16 @@ function C(){return cfg.categories;}
 function _flavorEntries(fl){
   if(!fl)return[];
   if(Array.isArray(fl))return fl.map(f=>[f.name,f.qty||0]);
-  if(typeof fl==='object')return Object.entries(fl);
+  if(typeof fl==='object'){
+    // Firebase converts arrays to objects with numeric keys: {"0":{name,qty},"1":{name,qty}}
+    // Detect this pattern and convert back to [name,qty] pairs
+    const vals=Object.values(fl);
+    if(vals.length>0&&typeof vals[0]==='object'&&vals[0]!==null&&'name' in vals[0]){
+      return vals.map(f=>[f.name,f.qty||0]);
+    }
+    // Normal format from manual orders: {"Grape":2,"Mango":1}
+    return Object.entries(fl);
+  }
   return[];
 }
 function gl(i){if(!i)return 0;return(i.left!==null&&i.left!==undefined)?i.left:(i.bought||0);}
@@ -3045,10 +3054,8 @@ function _autoRepairStock(){
     });
   });
   if(!fixes.length)return;
-  // Auto-fix
+  // Auto-fix — just update the data, persist+render happens once in postLoginSync
   fixes.forEach(f=>{f.item.left=f.correctLeft;});
-  persist();renderStats();renderItems();renderCatTabs();
-  if(cu?.role==='owner')renderDash();else renderStaffLog();
   const names=fixes.map(f=>f.item.name+' (+'+f.diff+')').join(', ');
   console.log('[AUTO-REPAIR] Fixed '+fixes.length+' over-deducted items:', names);
   showToast('Auto-fixed '+fixes.length+' over-deducted items: '+names,'ok');
@@ -5658,28 +5665,27 @@ function cancelWebOrder(fbKey) {
   cancelledOrders.unshift(cancelEntry);
   if (cancelledOrders.length > 200) cancelledOrders = cancelledOrders.slice(0, 200);
 
-  // Only restore stock if it was actually deducted — prevents phantom stock
-  if(order._stockDeductedLocally){
-    (order.orderItems||[]).forEach(oi=>{
-      const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
-      const qty=Math.max(oi.qty||1,labelToQty(oi.label));
-      const cat=oi.cat||'';
-      let realCat=cat;
-      if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
-      let foundItem=null;
-      if(!realCat||!inv[realCat]){
-        for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
-      }else{
-        const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
-        if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
-      }
-      _restoreFlavorStock(foundItem,oi,qty);
-    });
-    _debugPending('CANCELLED',fbKey,'user cancelled — stock restored');
-  }else{
-    _debugPending('CANCELLED',fbKey,'user cancelled — stock was never deducted, nothing to restore');
-    showToast('Order cancelled (stock was not deducted for this order)','err');
-  }
+  // ALWAYS restore stock on cancel — stock is deducted when any order enters pending,
+  // so cancelling must always add it back. Check multiple flags as safety net.
+  const _wasDeducted=order._stockDeductedLocally||order._stockDeductedV2||order._stockDeducted;
+  (order.orderItems||[]).forEach(oi=>{
+    const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
+    const qty=Math.max(oi.qty||1,labelToQty(oi.label));
+    const cat=oi.cat||'';
+    let realCat=cat;
+    if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
+    let foundItem=null;
+    if(!realCat||!inv[realCat]){
+      for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
+    }else{
+      const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
+      if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
+    }
+    if(foundItem)console.log('[CANCEL-RESTORE] ✅',itemName,'qty='+qty,'newLeft='+foundItem.left);
+    else console.warn('[CANCEL-RESTORE] ❌ Item not found:',itemName,'cat='+cat);
+    _restoreFlavorStock(foundItem,oi,qty);
+  });
+  _debugPending('CANCELLED',fbKey,'user cancelled — stock restored'+((!_wasDeducted)?' (flags missing but restored anyway)':''));
   // No loyalty decrement needed here — orders are only counted when confirmed,
   // so cancelling a pending order doesn't need to undo anything.
 
@@ -6362,8 +6368,10 @@ function repairAllCommissions(){
   });
 
   if(changed){
-    persist();
-    renderAll();
+    // NOTE: persist() and renderAll() are NOT called here — they happen once
+    // at the end of postLoginSync after ALL repairs are done.
+    // Calling them inside each repair function caused 3x persist+render cycles
+    // during login, which crashed mobile devices due to memory pressure.
     console.log('Commission repair complete — ' + log.length + ' entries checked, profit/commission recalculated with ' + itemCount + ' inventory items');
     showToast('Commissions recalculated ✅','ok');
   }
@@ -6510,7 +6518,7 @@ function repairEODtoLog(){
     r.staffComm=sc;r.ownerNet=Math.max(0,tp-sc);
   });
   if(fixed>0){
-    persist();
+    // persist() deferred to postLoginSync — single persist after all repairs
     console.log('EOD↔Log sync repair V3: fixed '+fixed+' entries');
   }
   localStorage.setItem(rk,'done');
