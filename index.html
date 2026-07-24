@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260710152853';
+var _MENU_V = 'v20260724101503';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -1805,6 +1805,85 @@ function _cartQtyForItem(itemId){
   return cart.filter(c=>c.itemId===itemId).reduce((s,c)=>s+_lq(c.label),0);
 }
 
+// ── SHOP-SIDE STOCK DEDUCTION ──
+// Deducts stock directly in Firebase when a customer places an order.
+// This ensures stock updates immediately even when nobody is logged into the inventory app.
+// The inventory app checks _stockDeductedV2 flag and skips its own deduction if already done.
+async function _shopDeductStock(cartItems, orderKey){
+  try{
+    // Read fresh inventory from Firebase (just the inv object, not the whole DB)
+    const res=await fetch(FB_URL+'/inv_d6bb4/inv.json');
+    if(!res.ok){console.error('[SHOP-DEDUCT] Failed to read inventory:',res.status);return;}
+    const fbInv=await res.json();
+    if(!fbInv){console.error('[SHOP-DEDUCT] No inventory data');return;}
+
+    const cats=Object.keys(fbInv);
+
+    // Group cart items by item name+category to handle multiple price tiers of same item
+    const grouped={};
+    cartItems.forEach(c=>{
+      const key=(c.cat||'').toUpperCase()+'|'+(c.name||'').toLowerCase();
+      if(!grouped[key])grouped[key]={cat:c.cat,name:c.name,totalQty:0,flavors:{}};
+      grouped[key].totalQty+=_lq(c.label);
+      if(c.flavors&&typeof c.flavors==='object'){
+        Object.entries(c.flavors).forEach(([fname,fqty])=>{
+          if(fqty>0)grouped[key].flavors[fname]=(grouped[key].flavors[fname]||0)+fqty;
+        });
+      }
+    });
+
+    const updates={};
+    Object.values(grouped).forEach(g=>{
+      // Find the real category key (cart stores UPPERCASE, Firebase key may differ)
+      const cat=cats.find(k=>k.toUpperCase()===(g.cat||'').toUpperCase());
+      if(!cat||!Array.isArray(fbInv[cat]))return;
+
+      // Find the item by name
+      const idx=fbInv[cat].findIndex(i=>i&&i.name&&i.name.toLowerCase()===g.name.toLowerCase());
+      if(idx===-1)return;
+      const item=fbInv[cat][idx];
+
+      // Deduct overall stock
+      const curLeft=(item.left!==undefined&&item.left!==null)?parseFloat(item.left):(parseFloat(item.bought)||0);
+      if(isNaN(curLeft))return;
+      updates['inv/'+cat+'/'+idx+'/left']=Math.max(0,Math.round((curLeft-g.totalQty)*10)/10);
+
+      // Deduct flavor stock
+      if(Array.isArray(item.flavors)&&Object.keys(g.flavors).length>0){
+        Object.entries(g.flavors).forEach(([fname,fqty])=>{
+          const fi=item.flavors.findIndex(f=>f&&f.name&&f.name.toLowerCase()===fname.toLowerCase());
+          if(fi===-1)return;
+          const curStock=parseFloat(item.flavors[fi].stock)||0;
+          updates['inv/'+cat+'/'+idx+'/flavors/'+fi+'/stock']=Math.max(0,Math.round((curStock-fqty)*10)/10);
+        });
+      }
+    });
+
+    // Mark order as stock-deducted so inventory app doesn't double-deduct
+    updates['pending_orders/'+orderKey+'/_stockDeducted']=true;
+    updates['pending_orders/'+orderKey+'/_stockDeductedV2']=true;
+
+    if(Object.keys(updates).length<=2){console.log('[SHOP-DEDUCT] No items matched inventory — skipping');return;}
+
+    // Single atomic PATCH — all stock changes + flag in one request
+    const pr=await fetch(FB_URL+'/inv_d6bb4.json',{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(updates)
+    });
+    if(pr.ok){
+      console.log('[SHOP-DEDUCT] ✅ Stock deducted from customer shop:',JSON.stringify(updates));
+      // Refresh local inventory so the menu reflects immediately
+      doFetch();
+    }else{
+      console.error('[SHOP-DEDUCT] ❌ PATCH failed:',pr.status);
+    }
+  }catch(e){
+    console.error('[SHOP-DEDUCT] Error:',e);
+    // Not critical — inventory app will handle on next login
+  }
+}
+
 // ── CART ──
 function addToCart(itemId) {
   const item = menuItems.find(i => i.id===itemId);
@@ -2257,6 +2336,19 @@ function sendOrder() {
       if(r.ok){
         _orderSubmitted=true;
         console.log('[ORDER] Submitted successfully: '+orderKey);
+        // Deduct stock directly from customer shop — updates Firebase immediately
+        // so other customers see correct stock even when nobody is logged into inventory app
+        _shopDeductStock(cart, orderKey);
+        // Send push notification ONLY after Firebase confirms order was written
+        // This prevents phantom notifications when Firebase PUT fails
+        try{
+          const _ni=cart.map(c=>c.name+' ('+c.label+')').join(', ');
+          fetch('https://ntfy.sh/'+NTFY_TOPIC,{
+            method:'POST',
+            headers:{'Title':'🍁 New Order — $'+total,'Tags':'moneybag','Priority':'high','Click':'https://585menu.live'},
+            body:_ni+'\nPayment: '+pm+'\n'+(orderType==='pickup'?'Pickup':'Delivery'+(addr?' — '+addr:''))+'\nTotal: $'+total
+          }).catch(e=>console.error('[NTFY] notification failed:',e));
+        }catch(e){console.error('[NTFY] error:',e);}
       } else {
         const errText=await r.text().catch(()=>'');
         console.error('[ORDER] Failed status='+r.status+' body='+errText);
@@ -2290,18 +2382,8 @@ function sendOrder() {
     }).catch(()=>{});
   }catch(e){}
 
-  // Send push notification to owner via ntfy
-  const notifItems = cart.map(c => c.name + ' (' + c.label + ')').join(', ');
-  fetch('https://ntfy.sh/' + NTFY_TOPIC, {
-    method: 'POST',
-    headers: {
-      'Title': '🍁 New Order — $' + total,
-      'Tags': 'moneybag',
-      'Priority': 'high',
-      'Click': 'https://585menu.live'
-    },
-    body: notifItems + '\nPayment: ' + pm + '\n' + (orderType==='pickup'?'Pickup':'Delivery' + (addr?' — '+addr:'')) + '\nTotal: $' + total
-  }).catch(e => console.error('Notification failed:', e));
+  // ntfy notification moved inside submitOrder() success handler above —
+  // only fires after Firebase confirms the order was written
 
   // NOTE: Do NOT track order here — counting happens when owner confirms the order
   // in the inventory app. This prevents double-counting and false counts from
