@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260726123625';
+var _MENU_V = 'v20260729231410';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -246,7 +246,10 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .sold-badge{position:absolute;top:10px;right:10px;background:rgba(10,10,10,0.85);border:1px solid var(--red);border-radius:5px;padding:3px 9px;font-size:10px;color:var(--red);font-family:'Oswald',sans-serif;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;}
 .item-body{padding:10px;}
 .item-name{font-family:'Oswald',sans-serif;font-size:15px;font-weight:600;color:var(--white);margin-bottom:4px;text-transform:capitalize;line-height:1.2;}
-.item-desc{font-size:10px;color:var(--white3);line-height:1.5;margin-bottom:8px;min-height:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.item-desc{font-size:10px;color:var(--white3);line-height:1.5;margin-bottom:0;min-height:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.item-desc.expanded{-webkit-line-clamp:unset;display:block;}
+.more-info-btn{background:none;border:none;color:#4a9eff;font-family:'Oswald',sans-serif;font-size:10px;font-weight:600;cursor:pointer;padding:2px 0;margin-bottom:6px;letter-spacing:0.5px;display:none;}
+.more-info-btn:hover{text-decoration:underline;}
 .price-grid{display:grid;gap:4px;margin-bottom:8px;}
 .price-row{display:flex;align-items:center;justify-content:space-between;background:var(--black3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;cursor:pointer;transition:border-color .15s,background .15s;}
 .price-row:hover{border-color:rgba(204,31,31,0.4);}
@@ -1551,6 +1554,23 @@ function renderMenu() {
       ${catItems.map(item => renderCard(item)).join('')}
     </div>`
   ).join('');
+  // After DOM update, show "More Info" buttons only on truncated descriptions
+  requestAnimationFrame(()=>{
+    document.querySelectorAll('.item-desc').forEach(el=>{
+      const btn=el.nextElementSibling;
+      if(!btn||!btn.classList.contains('more-info-btn'))return;
+      // scrollHeight > clientHeight means text is clipped
+      btn.style.display=(el.scrollHeight>el.clientHeight+1)?'block':'none';
+    });
+  });
+}
+
+function toggleDesc(itemId){
+  const desc=document.getElementById('desc-'+itemId);
+  const btn=document.getElementById('mib-'+itemId);
+  if(!desc||!btn)return;
+  const isExpanded=desc.classList.toggle('expanded');
+  btn.textContent=isExpanded?'LESS INFO':'MORE INFO';
 }
 
 function renderCard(item) {
@@ -1614,7 +1634,8 @@ function renderCard(item) {
     </div>
     <div class="item-body">
       <div class="item-name">${item.name}</div>
-      <div class="item-desc">${item.desc||'&nbsp;'}</div>
+      <div class="item-desc" id="desc-${item.id}">${item.desc||'&nbsp;'}</div>
+      <button class="more-info-btn" id="mib-${item.id}" onclick="toggleDesc(${item.id})">MORE INFO</button>
       <div class="price-grid">${priceRows}</div>
       <button class="add-btn ${btnClass}" onclick="addToCart(${item.id})" ${btnDisabled?'disabled':''}>${btnText}</button>
     </div>
