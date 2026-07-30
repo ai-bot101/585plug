@@ -1537,9 +1537,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v115';
-const _BUILD_TS=1785381251439; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v115]';},1000);
+const _APP_VERSION='deploy-v116';
+const _BUILD_TS=1785382388932; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v116]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -4175,7 +4175,7 @@ async function deleteLogEntry(idx) {
                 _flavorEntries(oi.flavors).forEach(([fname, fqty]) => {
                   if (fqty <= 0) return;
                   const flav = found.flavors.find(fl => fl.name && fl.name.toLowerCase() === fname.toLowerCase());
-                  if (flav) flav.stock = (flav.stock||0) + fqty;
+                  if (flav) flav.stock = Math.round((flav.stock||0) + fqty);
                 });
               } else if (oi.flavorText && oi.flavorText.indexOf(',') === -1) {
                 const fl = found.flavors.find(f => f.name && f.name.toLowerCase() === oi.flavorText.toLowerCase());
@@ -7689,7 +7689,7 @@ function saveAddEODOrder(){
     C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.name&&item.name.toLowerCase()===row.name)properName=item.name;});});
     const it={itemName:properName,qty:row.qty||0};
     // Include flavor data if selected
-    if(row.flavorText){it.flavorText=row.flavorText;it.flavors=row.flavors||{[row.flavorText]:(row.qty||1)};}
+    if(row.flavorText){it.flavorText=row.flavorText;it.flavors={[row.flavorText]:(row.qty||1)};}
     items.push(it);
   });
 
@@ -9491,7 +9491,7 @@ function confirmSelfBuy(){
   selfBuyItems.forEach(o=>{
     const item=(inv[o.cat]||[])[o.ri];if(!item)return;
     const cost=staffCost(item,o.qty);totalOwed+=cost;
-    item.left=Math.round((gl(item)-o.qty)*10)/10;
+    item.left=Math.max(0,Math.round((gl(item)-o.qty)*10)/10);
     // Deduct flavor stock
     if(o.flavorText&&Array.isArray(item.flavors)){
       const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===o.flavorText.toLowerCase());
