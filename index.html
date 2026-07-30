@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260730001441';
+var _MENU_V = 'v20260730012224';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -220,6 +220,16 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .cat-pill{flex-shrink:0;padding:7px 16px;border-radius:6px;border:1px solid var(--border2);background:var(--black3);color:var(--white3);font-family:'Oswald',sans-serif;font-size:13px;font-weight:500;cursor:pointer;letter-spacing:.5px;transition:all .2s;white-space:nowrap;text-transform:uppercase;}
 .cat-pill:hover{border-color:var(--red);color:var(--white2);}
 .cat-pill.active{background:var(--red);border-color:var(--red);color:#fff;}
+.cat-pill.fav-pill{display:flex;align-items:center;gap:4px;}
+.cat-pill.fav-pill svg{width:12px;height:12px;}
+.sort-row{display:flex;gap:6px;max-width:1100px;margin:8px auto 0;padding:0 16px;overflow-x:auto;scrollbar-width:none;}
+.sort-row::-webkit-scrollbar{display:none;}
+.sort-pill{flex-shrink:0;padding:4px 10px;border-radius:14px;border:1px solid var(--border2);background:var(--black3);color:var(--white3);font-family:'Oswald',sans-serif;font-size:10px;font-weight:500;cursor:pointer;letter-spacing:.8px;transition:all .2s;white-space:nowrap;text-transform:uppercase;}
+.sort-pill:hover{border-color:var(--red);color:var(--white2);}
+.sort-pill.active{background:rgba(204,31,31,0.15);border-color:rgba(204,31,31,0.4);color:var(--red);}
+.fav-btn{position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,0.55);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:3;transition:transform .2s;}
+.fav-btn:active{transform:scale(1.2);}
+.fav-btn svg{width:16px;height:16px;}
 
 /* MENU */
 .menu-section{padding:24px 16px 100px;max-width:1100px;margin:0 auto;}
@@ -498,6 +508,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
   .ag-brand{font-size:42px;}
   .fp-card{padding:18px 14px;}
   .cat-pill{font-size:11px;padding:6px 12px;}
+  .sort-pill{font-size:9px;padding:3px 8px;}
 }
 /* Standard phones: iPhone 12/13/14, Pixel, Galaxy S21-S24 (376-430px) */
 @media(min-width:376px) and (max-width:430px){
@@ -760,6 +771,7 @@ footer{background:var(--black2);border-top:1px solid var(--border);padding:28px 
   <div class="cat-section">
     <div class="cat-scroll" id="cat-tabs"></div>
   </div>
+  <div class="sort-row" id="sort-row"></div>
 
   <div class="menu-section" id="menu-section">
     <div class="empty-state"><div class="ei">🍁</div><p>Loading menu...</p></div>
@@ -1514,12 +1526,61 @@ function clearSearch() {
   renderMenu();
 }
 
+// ── FAVORITES ──
+const _favs=new Set(JSON.parse(localStorage.getItem('585_favs')||'[]'));
+function _saveFavs(){localStorage.setItem('585_favs',JSON.stringify([..._favs]));}
+function toggleFav(itemId,ev){
+  if(ev)ev.stopPropagation();
+  if(_favs.has(itemId))_favs.delete(itemId); else _favs.add(itemId);
+  _saveFavs();buildCatTabs();renderMenu();
+}
+
+// ── SORT ──
+let currentSort='default';
+const sortOptions=[
+  {key:'default',label:'DEFAULT'},
+  {key:'price-low',label:'$ LOW-HIGH'},
+  {key:'price-high',label:'$ HIGH-LOW'},
+  {key:'az',label:'A-Z'},
+  {key:'new',label:'NEW DROPS'}
+];
+function setSort(key){currentSort=key;buildSortRow();renderMenu();}
+function buildSortRow(){
+  document.getElementById('sort-row').innerHTML=sortOptions.map(s=>
+    `<button class="sort-pill ${s.key===currentSort?'active':''}" onclick="setSort('${s.key}')">${s.label}</button>`
+  ).join('');
+}
+function _getMinPrice(item){
+  if(!item.prices||!item.prices.length)return 9999;
+  const vals=item.prices.map(p=>p.price).filter(p=>p!==null&&p!==undefined);
+  return vals.length?Math.min(...vals):9999;
+}
+function _sortItems(items){
+  if(currentSort==='default')return items;
+  const sorted=[...items];
+  if(currentSort==='price-low')sorted.sort((a,b)=>_getMinPrice(a)-_getMinPrice(b));
+  else if(currentSort==='price-high')sorted.sort((a,b)=>_getMinPrice(b)-_getMinPrice(a));
+  else if(currentSort==='az')sorted.sort((a,b)=>a.name.localeCompare(b.name));
+  else if(currentSort==='new')sorted.sort((a,b)=>{
+    const aN=_activeDropNames.has(a.name.toLowerCase())?0:1;
+    const bN=_activeDropNames.has(b.name.toLowerCase())?0:1;
+    return aN-bN;
+  });
+  return sorted;
+}
+
 // ── CATEGORIES ──
 function buildCatTabs() {
   const cats = ['ALL', ...new Set(menuItems.map(i => i.cat))];
-  document.getElementById('cat-tabs').innerHTML = cats.map(c =>
+  let html = cats.map(c =>
     `<button class="cat-pill ${c===selectedCat?'active':''}" onclick="filterCat('${c}')">${c==='ALL'?'🍁 All':c}</button>`
   ).join('');
+  if(_favs.size>0){
+    html=html.replace('</button>','</button>')+
+      `<button class="cat-pill fav-pill ${'FAVORITES'===selectedCat?'active':''}" onclick="filterCat('FAVORITES')"><svg viewBox="0 0 24 24" fill="${'FAVORITES'===selectedCat?'#fff':'#cc1f1f'}" stroke="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>FAVORITES</button>`;
+  }
+  document.getElementById('cat-tabs').innerHTML = html;
+  buildSortRow();
 }
 
 function filterCat(cat) {
@@ -1531,19 +1592,24 @@ function filterCat(cat) {
 // ── RENDER MENU ──
 function renderMenu() {
   const section = document.getElementById('menu-section');
-  let items = selectedCat === 'ALL' ? menuItems : menuItems.filter(i => i.cat === selectedCat);
+  let items = selectedCat === 'FAVORITES' ? menuItems.filter(i => _favs.has(i.id))
+    : selectedCat === 'ALL' ? menuItems : menuItems.filter(i => i.cat === selectedCat);
   if (searchQuery) items = items.filter(i =>
     i.name.toLowerCase().includes(searchQuery) ||
     (i.desc && i.desc.toLowerCase().includes(searchQuery)) ||
     i.cat.toLowerCase().includes(searchQuery)
   );
+  items = _sortItems(items);
 
   if (!menuItems.length) {
     section.innerHTML = '<div class="empty-state"><div class="ei">🍁</div><p>Loading menu...</p></div>';
     return;
   }
   if (!items.length) {
-    section.innerHTML = '<div class="empty-state"><div class="ei">🍁</div><p>' + (searchQuery ? 'No results for "'+searchQuery+'"' : 'No items here') + '</p></div>';
+    const emptyMsg = searchQuery ? 'No results for "'+searchQuery+'"'
+      : selectedCat==='FAVORITES' ? 'Tap the ♥ on any product to save it here'
+      : 'No items here';
+    section.innerHTML = '<div class="empty-state"><div class="ei">🍁</div><p>' + emptyMsg + '</p></div>';
     return;
   }
 
@@ -1647,6 +1713,7 @@ function renderCard(item) {
     <div class="item-img-wrap">
       ${imgHtml}
       <div class="cat-badge">${item.cat}${_activeDropNames.has(item.name.toLowerCase())?'<span class="nd-badge"><span class="nd-dot"></span>NEW DROP</span>':''}</div>
+      <button class="fav-btn" onclick="toggleFav(${item.id},event)" aria-label="Toggle favorite"><svg viewBox="0 0 24 24" fill="${_favs.has(item.id)?'#cc1f1f':'none'}" stroke="#cc1f1f" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
       ${item.soldOut?'<div class="sold-badge">Sold Out</div>':''}
       ${item.allAddOn?'<div style="position:absolute;top:8px;left:8px;background:rgba(200,50,50,0.9);border-radius:6px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;font-weight:600;color:#fff;letter-spacing:1px;z-index:2;">ADD-ON ONLY</div>':''}
       ${item.flavors&&item.flavors.length?'<div style="position:absolute;bottom:8px;left:8px;background:rgba(244,162,74,0.9);border-radius:6px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;font-weight:600;color:#fff;letter-spacing:1px;z-index:2;">🍬 '+item.flavors.length+' FLAVORS</div>':''}
