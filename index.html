@@ -11,7 +11,7 @@
 // Unregister any stale service workers that might cache old pages
 if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(w){w.unregister();});});}
 // Auto-refresh: version stamp changes on every deploy, forces fresh load
-var _MENU_V = 'v20260729235717';
+var _MENU_V = 'v20260730001441';
 (function(){
   var stored = localStorage.getItem('_menuV');
   if(stored && stored !== _MENU_V){
@@ -244,6 +244,9 @@ header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.96);backdrop
 .img-placeholder p{font-size:10px;letter-spacing:1px;text-transform:uppercase;font-family:'Oswald',sans-serif;}
 .cat-badge{position:absolute;top:10px;left:10px;background:rgba(10,10,10,0.8);border:1px solid var(--border2);border-radius:5px;padding:3px 9px;font-size:10px;color:var(--white3);font-family:'Oswald',sans-serif;letter-spacing:1px;text-transform:uppercase;}
 .sold-badge{position:absolute;top:10px;right:10px;background:rgba(10,10,10,0.85);border:1px solid var(--red);border-radius:5px;padding:3px 9px;font-size:10px;color:var(--red);font-family:'Oswald',sans-serif;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;}
+.nd-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(204,31,31,0.15);border:1px solid rgba(204,31,31,0.5);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;letter-spacing:1px;color:var(--red);margin-left:6px;vertical-align:middle;}
+.nd-dot{width:6px;height:6px;border-radius:50%;background:var(--red);animation:nd-pulse 1.5s ease-in-out infinite;display:inline-block;}
+@keyframes nd-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(1.3)}}
 .item-body{padding:10px;}
 .item-name{font-family:'Oswald',sans-serif;font-size:15px;font-weight:600;color:var(--white);margin-bottom:4px;text-transform:capitalize;line-height:1.2;}
 .item-desc{font-size:10px;color:var(--white3);line-height:1.5;margin-bottom:0;min-height:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
@@ -1379,15 +1382,21 @@ function processData(data) {
 // ── NEW DROP MODAL ──
 let _newDropData = null;
 let _newDropShownThisSession = false;
+const _activeDropNames = new Set();
 
 function checkNewDrops(data) {
   // Called from processData with the full Firebase data
   const drops = data.newDrops;
+  _activeDropNames.clear();
   if (!drops || !drops.active || !Array.isArray(drops.items) || !drops.items.length) return;
 
-  // Auto-expire: only show if created within last 24 hours
-  const ONE_DAY = 24 * 60 * 60 * 1000;
-  if (Date.now() - (drops.createdAt || 0) > ONE_DAY) return;
+  // Auto-expire: only show if created within last 72 hours
+  const THREE_DAYS = 72 * 60 * 60 * 1000;
+  if (Date.now() - (drops.createdAt || 0) > THREE_DAYS) return;
+
+  // Populate active drop names for card badges (shown even after modal dismissed)
+  drops.items.forEach(d => { if(d.name) _activeDropNames.add(d.name.toLowerCase()); });
+  renderMenu();
 
   // Don't show if user already dismissed this drop (stored by createdAt timestamp)
   const dismissKey = 'nd_' + drops.createdAt;
@@ -1637,7 +1646,7 @@ function renderCard(item) {
     ${item.soldOut?'<div class="sold-out-text">SOLD OUT</div>':''}
     <div class="item-img-wrap">
       ${imgHtml}
-      <div class="cat-badge">${item.cat}</div>
+      <div class="cat-badge">${item.cat}${_activeDropNames.has(item.name.toLowerCase())?'<span class="nd-badge"><span class="nd-dot"></span>NEW DROP</span>':''}</div>
       ${item.soldOut?'<div class="sold-badge">Sold Out</div>':''}
       ${item.allAddOn?'<div style="position:absolute;top:8px;left:8px;background:rgba(200,50,50,0.9);border-radius:6px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;font-weight:600;color:#fff;letter-spacing:1px;z-index:2;">ADD-ON ONLY</div>':''}
       ${item.flavors&&item.flavors.length?'<div style="position:absolute;bottom:8px;left:8px;background:rgba(244,162,74,0.9);border-radius:6px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;font-weight:600;color:#fff;letter-spacing:1px;z-index:2;">🍬 '+item.flavors.length+' FLAVORS</div>':''}
