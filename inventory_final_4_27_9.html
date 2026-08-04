@@ -1537,9 +1537,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v126';
-const _BUILD_TS=1785858763785; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v126]';},1000);
+const _APP_VERSION='deploy-v127';
+const _BUILD_TS=1785859002613; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v127]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -5201,11 +5201,10 @@ function processWebsiteOrders(pendingOrders) {
       pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:alreadyDeducted};
       console.log('[PENDING] New order from Firebase:', fbKey, 'source:', order.source||'website', 'total:', order.total, 'alreadyDeducted:', alreadyDeducted);
       newCount++;
-      // Always deduct stock for new local orders.
-      // _autoRepairStock runs BEFORE this on login and restores stock for pending orders
-      // it can't count (pendingWebOrders is empty at that point). So even if _stockDeductedV2
-      // is set, the deduction has been undone by auto-repair and needs to be re-applied.
-      const needsDeduct = true;
+      // Deduct stock only if not already done.
+      // _autoRepairStock now fetches pending orders from Firebase before running,
+      // so it correctly preserves stock for held orders. No need to re-deduct.
+      const needsDeduct = !order._stockDeductedV2;
       if (needsDeduct) {
         pendingWebOrders[fbKey]._stockDeductedLocally = true;
         pendingWebOrders[fbKey]._stockDeducted = true;
