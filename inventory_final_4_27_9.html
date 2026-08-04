@@ -1537,9 +1537,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v123';
-const _BUILD_TS=1785474437185; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v123]';},1000);
+const _APP_VERSION='deploy-v124';
+const _BUILD_TS=1785857734457; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v124]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -2103,7 +2103,7 @@ async function tryLogin(){
     repairAllCommissions();
     repairEODtoLog();
     // Auto-repair any double-deducted stock (compares log totals vs inventory)
-    _autoRepairStock();
+    await _autoRepairStock();
     // ONE-TIME MIGRATION: remove Staff 1 from users list
     const _s1idx=cfg.users.findIndex(u=>u.name==='Staff 1');
     if(_s1idx!==-1){cfg.users.splice(_s1idx,1);console.log('[MIGRATE] Removed Staff 1 from users');}
@@ -2993,7 +2993,7 @@ function resetAllSold(e){
 // ── AUTO-REPAIR: fix double-deducted stock on every login ──
 // Runs silently — compares log/staffBuy/pending totals against inventory,
 // and corrects any item where SOLD is higher than what records justify.
-function _autoRepairStock(){
+async function _autoRepairStock(){
   try{
   const soldMap={}; // { itemNameLower: totalQtySold }
   // 1. Confirmed orders + selfbuys in log
@@ -3027,7 +3027,30 @@ function _autoRepairStock(){
       soldMap[name]=(soldMap[name]||0)+(parseFloat(si.qty)||1);
     });
   });
-  // 3. Pending orders (stock already deducted for these)
+  // 3. Pending orders — fetch directly from Firebase since pendingWebOrders
+  //    is empty at login time. Without this, auto-repair incorrectly restores
+  //    stock for held orders, causing the customer menu to show wrong stock.
+  try{
+    const pendRes=await fetch(FB_URL+'/pending_orders.json');
+    const pendData=pendRes.ok?await pendRes.json():null;
+    if(pendData&&typeof pendData==='object'){
+      Object.entries(pendData).forEach(([fbKey,order])=>{
+        if(!order||order.confirmed||order.cancelled)return;
+        // Skip orders already in the log (already confirmed)
+        if(log.some(e=>e.webOrderKey===fbKey))return;
+        // Skip orders already cleared by EOD
+        if(clearedWebKeys.includes(fbKey))return;
+        let items=order.orderItems||[];
+        if(items&&!Array.isArray(items))items=Object.values(items);
+        items.forEach(oi=>{
+          const name=(oi.itemName||oi.name||'').toLowerCase().trim();
+          if(!name)return;
+          soldMap[name]=(soldMap[name]||0)+Math.max(parseFloat(oi.qty)||1,labelToQty(oi.label));
+        });
+      });
+    }
+  }catch(pendErr){console.warn('[AUTO-REPAIR] Could not fetch pending orders:',pendErr);}
+  // Also count any already-loaded local pending orders (fallback)
   Object.values(pendingWebOrders).forEach(order=>{
     if(!order||order.cancelled)return;
     (Array.isArray(order.orderItems)?order.orderItems:[]).forEach(oi=>{
