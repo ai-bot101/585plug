@@ -1537,9 +1537,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v124';
-const _BUILD_TS=1785857734457; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v124]';},1000);
+const _APP_VERSION='deploy-v125';
+const _BUILD_TS=1785858712788; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v125]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -5245,11 +5245,12 @@ function processWebsiteOrders(pendingOrders) {
         // see deducted inv but no flag → re-deduct → stock drops twice.
         _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeducted']=true;
         _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeductedV2']=true;
-        persist();renderStats();renderItems();
       }
     }
     }catch(orderErr){console.error('[PENDING] Error processing order:', fbKey, orderErr);}
   });
+  // Batch persist + render ONCE after all orders processed (not per-order)
+  if(newCount>0){persist();renderStats();renderItems();}
   // NEVER auto-remove pending orders from local map.
   // Orders are ONLY removed by explicit user action: confirm or cancel buttons.
   // This prevents the poll from wiping orders before Firebase sync completes.
@@ -5290,25 +5291,29 @@ function processWebsiteOrders(pendingOrders) {
   }
 }
 
+let _pendingShowAll=false; // whether to show all pending orders or just first 5
 function renderPendingOrders() {
   const allOrders = Object.values(pendingWebOrders);
   const orders = allOrders.filter(o => !o.confirmed && !o.cancelled);
-  // DEBUG: ALWAYS log render calls to trace disappearing orders
-  console.log('[RENDER-PENDING] Total in map:', allOrders.length, 'Showing:', orders.length,
-    'Keys:', Object.keys(pendingWebOrders).map(k=>k.substr(0,20)).join(', '),
-    'Filtered:', allOrders.filter(o=>o.confirmed||o.cancelled).map(o=>o.fbKey?.substr(0,15)+'[C:'+o.confirmed+' X:'+o.cancelled+']').join(', '));
-  if(allOrders.length !== orders.length){
-    const filtered = allOrders.filter(o => o.confirmed || o.cancelled);
-    console.warn('[RENDER-PENDING] Filtered out', filtered.length, 'orders:', filtered.map(o=>({key:o.fbKey,confirmed:o.confirmed,cancelled:o.cancelled,source:o.source})));
-  }
+  // Sort newest first
+  orders.sort((a,b)=>(b.heldAt||b.timestamp||0)-(a.heldAt||a.timestamp||0));
+  console.log('[RENDER-PENDING] Total in map:', allOrders.length, 'Showing:', orders.length);
   const ownerEl = document.getElementById('pending-orders-section');
   const staffEl = document.getElementById('pending-orders-staff');
 
   if (!orders.length) {
     if (ownerEl) ownerEl.style.display = 'none';
     if (staffEl) staffEl.style.display = 'none';
+    _pendingShowAll=false;
     return;
   }
+
+  // Paginate on mobile only: show max 5 unless "Show All" was tapped
+  const PENDING_PAGE_SIZE=5;
+  const isMobile=window.innerWidth<768;
+  const shouldPaginate=isMobile&&!_pendingShowAll&&orders.length>PENDING_PAGE_SIZE;
+  const visibleOrders=shouldPaginate?orders.slice(0,PENDING_PAGE_SIZE):orders;
+  const hiddenCount=orders.length-visibleOrders.length;
 
   const html = `<div style="background:rgba(108,99,255,0.06);border:1px solid rgba(108,99,255,0.3);border-radius:14px;padding:16px;margin-bottom:4px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
@@ -5317,7 +5322,7 @@ function renderPendingOrders() {
         <span style="background:var(--accent);color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-family:var(--mono);font-weight:700;">${orders.length}</span>
       </div>
     </div>
-    ${orders.map(o => {
+    ${visibleOrders.map(o => {
       const items = (o.orderItems||[]).map(i => {
         let txt = `${i.qty||1}x ${i.itemName||i.name||'?'} (${i.label||'?'} · $${i.price||0})`;
         if (i.flavorText) txt += ` 🍬 ${i.flavorText}`;
@@ -5375,6 +5380,7 @@ function renderPendingOrders() {
         </div>
       </div>`;
     }).join('')}
+    ${hiddenCount>0?`<button onclick="_pendingShowAll=true;renderPendingOrders();" style="width:100%;padding:12px;background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.3);border-radius:8px;color:var(--accent);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;margin-top:4px;">Show ${hiddenCount} More Order${hiddenCount!==1?'s':''}</button>`:''}
   </div>`;
 
   // Only render to ONE section to avoid duplicate element IDs in the DOM.
