@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v141';
-const _BUILD_TS=1785961897810; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v141]';},1000);
+const _APP_VERSION='deploy-v142';
+const _BUILD_TS=1785962419065; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v142]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -3096,6 +3096,18 @@ async function _autoRepairStock(){
       });
     });
   });
+  // Fuzzy-match EOD names to inventory names (same logic as syncStockToEOD)
+  // e.g. EOD has "tincture 1" but inventory has "tincture 1,000mg thc"
+  const _allInvNamesRepair=[];
+  C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.name)_allInvNamesRepair.push(item.name.toLowerCase().trim());});});
+  Object.keys(_eodSoldMap).forEach(eodKey=>{
+    if(_allInvNamesRepair.includes(eodKey))return; // exact match exists
+    const match=_allInvNamesRepair.find(invName=>invName.includes(eodKey)||eodKey.includes(invName));
+    if(match&&!_eodSoldMap[match]){
+      _eodSoldMap[match]=(_eodSoldMap[match]||0)+_eodSoldMap[eodKey];
+      console.log('[AUTO-REPAIR] Fuzzy matched EOD "'+eodKey+'" → "'+match+'" ('+_eodSoldMap[eodKey]+' sold)');
+    }
+  });
   // 5. Track net adjustments
   const _repairAdjMap={};
   log.forEach(entry=>{
@@ -3106,6 +3118,14 @@ async function _autoRepairStock(){
         else if(entry.direction==='add') _repairAdjMap[name]=(_repairAdjMap[name]||0)+(entry.amount||0);
       }
     }
+  });
+  // Fuzzy-match soldMap and _pendingSoldMap keys too
+  [soldMap,_pendingSoldMap].forEach(map=>{
+    Object.keys(map).forEach(key=>{
+      if(_allInvNamesRepair.includes(key))return;
+      const match=_allInvNamesRepair.find(invName=>invName.includes(key)||key.includes(invName));
+      if(match){map[match]=(map[match]||0)+map[key];}
+    });
   });
   // Compare and fix
   // Formula: totalSold = MAX(logSold, eodSold) + pendingSold
