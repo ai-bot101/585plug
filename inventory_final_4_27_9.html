@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v135';
-const _BUILD_TS=1785958064383; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v135]';},1000);
+const _APP_VERSION='deploy-v136';
+const _BUILD_TS=1785958666480; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v136]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -5295,6 +5295,22 @@ function processWebsiteOrders(pendingOrders) {
         _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeducted']=true;
         _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeductedV2']=true;
       }
+    } else if(pendingWebOrders[fbKey]._stockDeductedLocally && !order._stockDeductedV2){
+      // RECOVERY: order is held locally with deduction, but Firebase lost it
+      // (push failed or was overwritten). Re-apply deduction from Firebase's clean inv values.
+      console.log('[STOCK-RECOVERY] Re-deducting for',fbKey.substr(0,20),'— local has deduction but Firebase does not');
+      (pendingWebOrders[fbKey].orderItems||[]).forEach(oi=>{
+        const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
+        if(!itemName)return;
+        const qty=Math.max(oi.qty||1,labelToQty(oi.label));
+        for(const c of C()){
+          const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
+          if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);_deductFlavorStock(f,oi,qty);break;}
+        }
+      });
+      _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeducted']=true;
+      _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeductedV2']=true;
+      newCount++; // trigger immediate push
     }
     }catch(orderErr){console.error('[PENDING] Error processing order:', fbKey, orderErr);}
   });
