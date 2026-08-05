@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v138';
-const _BUILD_TS=1785960147278; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v138]';},1000);
+const _APP_VERSION='deploy-v139';
+const _BUILD_TS=1785960677436; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v139]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -3039,11 +3039,12 @@ async function _autoRepairStock(){
   // 3. Pending orders — fetch directly from Firebase since pendingWebOrders
   //    is empty at login time. Without this, auto-repair incorrectly restores
   //    stock for held orders, causing the customer menu to show wrong stock.
+  let _fbPendData=null;
   try{
     const pendRes=await fetch(FB_URL+'/pending_orders.json');
-    const pendData=pendRes.ok?await pendRes.json():null;
-    if(pendData&&typeof pendData==='object'){
-      Object.entries(pendData).forEach(([fbKey,order])=>{
+    _fbPendData=pendRes.ok?await pendRes.json():null;
+    if(_fbPendData&&typeof _fbPendData==='object'){
+      Object.entries(_fbPendData).forEach(([fbKey,order])=>{
         if(!order||order.confirmed||order.cancelled)return;
         // Skip orders already in the log (already confirmed)
         if(log.some(e=>e.webOrderKey===fbKey))return;
@@ -3059,16 +3060,33 @@ async function _autoRepairStock(){
       });
     }
   }catch(pendErr){console.warn('[AUTO-REPAIR] Could not fetch pending orders:',pendErr);}
-  // Also count any already-loaded local pending orders (fallback)
-  Object.values(pendingWebOrders).forEach(order=>{
+  // Also count any already-loaded local pending orders NOT already counted from Firebase
+  const _fbPendingKeys=new Set();
+  if(_fbPendData&&typeof _fbPendData==='object')Object.keys(_fbPendData).forEach(k=>_fbPendingKeys.add(k));
+  Object.entries(pendingWebOrders).forEach(([fbKey,order])=>{
     if(!order||order.cancelled)return;
+    if(_fbPendingKeys.has(fbKey))return; // already counted from Firebase fetch
     (Array.isArray(order.orderItems)?order.orderItems:[]).forEach(oi=>{
       const name=(oi.itemName||oi.name||'').toLowerCase().trim();
       if(!name)return;
       soldMap[name]=(soldMap[name]||0)+Math.max(parseFloat(oi.qty)||1,labelToQty(oi.label));
     });
   });
-  // 4. Track net adjustments — corrections to supply, not sales
+  // 4. Count EOD log sales separately — EOD logs may have orders not in the activity log
+  // (e.g. after Clear Today Sales, or imported EOD files). Use MAX(logSold, eodSold) per item
+  // so auto-repair never reverses deductions from either source.
+  const _eodSoldMap={};
+  (Array.isArray(eodLogs)?eodLogs:[]).forEach(r=>{
+    (r.orders||[]).forEach(o=>{
+      (o.items||[]).forEach(it=>{
+        const name=(it.itemName||'').toLowerCase().trim();
+        if(!name)return;
+        const qty=Math.max(parseFloat(it.qty)||1,labelToQty(it.label));
+        _eodSoldMap[name]=(_eodSoldMap[name]||0)+qty;
+      });
+    });
+  });
+  // 5. Track net adjustments — corrections to supply, not sales
   const _repairAdjMap={};
   log.forEach(entry=>{
     if(entry.type==='adjustment'&&!entry.flavorName){
@@ -3079,7 +3097,7 @@ async function _autoRepairStock(){
       }
     }
   });
-  // Compare and fix
+  // Compare and fix — use MAX(log+pending sold, eod sold) + pending to avoid undoing either
   const fixes=[];
   C().forEach(cat=>{
     (inv[cat]||[]).forEach(item=>{
@@ -3091,7 +3109,10 @@ async function _autoRepairStock(){
       const effectiveBought=bought+netAdj; // adjustments correct supply
       const left=item.left!==undefined&&item.left!==null?parseFloat(item.left):effectiveBought;
       const invSold=Math.round((effectiveBought-left)*10)/10;
-      const logSold=Math.round((soldMap[key]||0)*10)/10;
+      // Use whichever source shows MORE sales — prevents undoing deductions from either system
+      const logAndPendingSold=Math.round((soldMap[key]||0)*10)/10;
+      const eodSold=Math.round((_eodSoldMap[key]||0)*10)/10;
+      const logSold=Math.max(logAndPendingSold,eodSold);
       if(invSold>logSold+0.05){
         const correctLeft=Math.min(effectiveBought,Math.round((effectiveBought-logSold)*10)/10);
         fixes.push({item,invSold,logSold,currentLeft:left,correctLeft,diff:Math.round((invSold-logSold)*10)/10});
