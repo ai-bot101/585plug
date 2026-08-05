@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v137';
-const _BUILD_TS=1785959246687; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v137]';},1000);
+const _APP_VERSION='deploy-v138';
+const _BUILD_TS=1785960147278; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v138]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -5835,7 +5835,22 @@ function cancelWebOrder(fbKey) {
     fetch(FB_URL+'/pending_orders/'+fbKey+'.json',{method:'DELETE'}).catch(()=>{});
   });
 
-  persist();
+  // IMMEDIATE push — restored stock is critical, don't risk losing to debounce
+  persistEncrypted().catch(()=>{});
+  if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+  fbPushInFlight=true;
+  const _cancelPayload={
+    inv,log,cfg,
+    customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,staffBuysStore,
+    failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,
+    commissionPaused,autoDailyDebts,
+    updatedAt:Date.now()
+  };
+  fbLastTimestamp=_cancelPayload.updatedAt;
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(_cancelPayload)}).catch(e=>console.error('[CANCEL-PUSH] Failed:',e))
+    .finally(()=>{fbPushInFlight=false;fbPushTimer=null;});
+
   renderPendingOrders();
   renderCancelledOrders();
   renderStats();renderItems();
@@ -5880,7 +5895,22 @@ function cancelAllPending(){
     }).catch(()=>{});
   });
   if(cancelledOrders.length>200)cancelledOrders=cancelledOrders.slice(0,200);
-  persist();renderPendingOrders();renderCancelledOrders();renderStats();renderItems();
+  // IMMEDIATE push — restored stock is critical
+  persistEncrypted().catch(()=>{});
+  if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+  fbPushInFlight=true;
+  const _cancelAllPayload={
+    inv,log,cfg,
+    customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,staffBuysStore,
+    failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,
+    commissionPaused,autoDailyDebts,
+    updatedAt:Date.now()
+  };
+  fbLastTimestamp=_cancelAllPayload.updatedAt;
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(_cancelAllPayload)}).catch(e=>console.error('[CANCEL-ALL-PUSH] Failed:',e))
+    .finally(()=>{fbPushInFlight=false;fbPushTimer=null;});
+  renderPendingOrders();renderCancelledOrders();renderStats();renderItems();
   if(cu?.role==='owner')renderDash();
   showToast(keys.length+' pending orders cancelled — stock restored 🔄','ok');
 }
