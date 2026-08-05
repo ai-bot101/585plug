@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v134';
-const _BUILD_TS=1785957527409; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v134]';},1000);
+const _APP_VERSION='deploy-v135';
+const _BUILD_TS=1785958064383; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v135]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -8041,16 +8041,19 @@ function importEODFile(file){
             if(current)orders.push(current);
             current={customer:m[1],total:parseFloat(m[2]),amtReceived:parseFloat(m[2]),payMethod:m[3].trim(),items:[],time:'',who:'Owner',type:'order'};
           }
-          // Match: "Items: 2x boutiq switch triple tank"
-          const im=line.match(/^Items:\s+(.+)$/);
+          // Match: "Items: 2x boutiq switch triple tank" (may have leading spaces from export)
+          const im=line.match(/^\s*Items:\s+(.+)$/);
           if(im&&current){
             im[1].split(',').forEach(chunk=>{
               const pm=chunk.trim().match(/^(\d+(?:\.\d+)?)x\s+(.+)$/);
               if(pm)current.items.push({itemName:pm[2].trim(),qty:parseFloat(pm[1])});
             });
           }
-          // Match: "Time: 12:09 PM by Owner"
-          const tm=line.match(/^Time:\s+(.+?)\s+by\s+(.+)$/);
+          // Match: "Note: ..." (may have leading spaces)
+          const nm=line.match(/^\s*Note:\s+(.+)$/);
+          if(nm&&current){current.note=nm[1].trim();}
+          // Match: "Time: 12:09 PM by Owner" (may have leading spaces)
+          const tm=line.match(/^\s*Time:\s+(.+?)\s+by\s+(.+)$/);
           if(tm&&current){current.time=tm[1];current.who=tm[2];}
         }
         if(current)orders.push(current);
