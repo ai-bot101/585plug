@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v128';
-const _BUILD_TS=1785945942719; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v128]';},1000);
+const _APP_VERSION='deploy-v129';
+const _BUILD_TS=1785947661673; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v129]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -5669,6 +5669,10 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   _debugPending('CONFIRMED',fbKey,'moved to sales log');
   delete pendingWebOrders[fbKey];
   processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
+  // Persist to clearedWebKeys IMMEDIATELY — processedOrderIds is in-memory only
+  // and gets lost on page reload. Without this, a failed Firebase DELETE + reload
+  // causes the order to reappear and potentially double-deduct stock.
+  if(!clearedWebKeys.includes(fbKey))clearedWebKeys.push(fbKey);
 
   // Mark as confirmed in Firebase FIRST (safety net), then DELETE
   // If DELETE fails, the confirmed flag prevents re-processing on next refresh
@@ -5687,7 +5691,21 @@ function finalizeConfirmOrder(fbKey, assignedTo){
     _incrementCustOrder(order.custUsername,{date:tday(),time:tstr(),total,orderItems:order.orderItems||[]});
   }
 
-  persist();
+  // IMMEDIATE push — confirmed orders are critical data, don't risk losing to debounce
+  persistEncrypted().catch(()=>{});
+  if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+  fbPushInFlight=true;
+  const _confirmPayload={
+    inv,log,cfg,
+    customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,staffBuysStore,
+    failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,
+    commissionPaused,autoDailyDebts,
+    updatedAt:Date.now()
+  };
+  fbLastTimestamp=_confirmPayload.updatedAt;
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(_confirmPayload)}).catch(e=>console.error('[CONFIRM-PUSH] Failed:',e))
+    .finally(()=>{fbPushInFlight=false;fbPushTimer=null;});
   renderPendingOrders();
   renderConfirmedWebOrders(); // always re-render confirmed section immediately
   renderStats();
@@ -6709,6 +6727,29 @@ async function fbPullNow(){
     // Process pending orders AFTER inv is up-to-date so stock deductions stick
     if(data.pending_orders && cu){
       processWebsiteOrders(data.pending_orders);
+    }
+    // RE-APPLY stock deductions for locally-held pending orders.
+    // When inv is overwritten from Firebase, local deductions get wiped.
+    // processWebsiteOrders skips orders already in pendingWebOrders,
+    // so those deductions are lost. Re-apply them here.
+    if(cu){
+      Object.values(pendingWebOrders).forEach(po=>{
+        if(!po||!po._stockDeductedLocally)return;
+        (po.orderItems||[]).forEach(oi=>{
+          const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
+          if(!itemName)return;
+          const qty=Math.max(oi.qty||1,labelToQty(oi.label));
+          for(const c of C()){
+            const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
+            if(f){
+              const expected=Math.max(0,Math.round((gl(f)-qty)*10)/10);
+              // Only deduct if Firebase has un-deducted stock (left >= bought or left > expected)
+              if(f.left>expected){f.left=expected;}
+              break;
+            }
+          }
+        });
+      });
     }
     // save locally
     persistEncrypted().catch(e=>{});
