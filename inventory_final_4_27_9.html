@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v131';
-const _BUILD_TS=1785948608805; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v131]';},1000);
+const _APP_VERSION='deploy-v132';
+const _BUILD_TS=1785956533767; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v132]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -3238,9 +3238,25 @@ function syncStockToEOD(e){
     });
   });
 
+  // Re-apply stock deductions for pending orders (SYNC ignores them)
+  let _pendDeduct=0;
+  Object.values(pendingWebOrders).forEach(po=>{
+    if(!po||!po._stockDeductedLocally)return;
+    (po.orderItems||[]).forEach(oi=>{
+      const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
+      if(!itemName)return;
+      const qty=Math.max(oi.qty||1,labelToQty(oi.label));
+      for(const c of C()){
+        const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
+        if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);_deductFlavorStock(f,oi,qty);_pendDeduct++;break;}
+      }
+    });
+  });
+  if(_pendDeduct)console.log('[SYNC-EOD] Re-applied '+_pendDeduct+' pending order deductions');
+
   persist();renderStats();renderItems();renderCatTabs();
   if(cu?.role==='owner')renderDash();else renderStaffLog();
-  showToast(fixCount+' items synced to EOD ✅','ok');
+  showToast(fixCount+' items synced to EOD'+ (_pendDeduct?' ('+_pendDeduct+' pending held)':'')+' ✅','ok');
 }
 function clearTodaySales(e){
   e.stopPropagation();
@@ -5283,7 +5299,26 @@ function processWebsiteOrders(pendingOrders) {
     }catch(orderErr){console.error('[PENDING] Error processing order:', fbKey, orderErr);}
   });
   // Batch persist + render ONCE after all orders processed (not per-order)
-  if(newCount>0){persist();renderStats();renderItems();}
+  // Use IMMEDIATE push (not debounced) so deductions reach Firebase before next pull
+  if(newCount>0){
+    persistEncrypted().catch(()=>{});
+    if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+    fbPushInFlight=true;
+    const _deductPayload={
+      inv,log,cfg,
+      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,staffBuysStore,
+      failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,
+      commissionPaused,autoDailyDebts,
+      updatedAt:Date.now(),
+      ..._pendingFbPatches
+    };
+    _pendingFbPatches={};
+    fbLastTimestamp=_deductPayload.updatedAt;
+    fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(_deductPayload)}).catch(e=>console.error('[DEDUCT-PUSH] Failed:',e))
+      .finally(()=>{fbPushInFlight=false;fbPushTimer=null;});
+    renderStats();renderItems();
+  }
   // NEVER auto-remove pending orders from local map.
   // Orders are ONLY removed by explicit user action: confirm or cancel buttons.
   // This prevents the poll from wiping orders before Firebase sync completes.
