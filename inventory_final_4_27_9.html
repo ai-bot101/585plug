@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v140';
-const _BUILD_TS=1785961148314; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v140]';},1000);
+const _APP_VERSION='deploy-v141';
+const _BUILD_TS=1785961897810; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v141]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -3026,13 +3026,30 @@ async function _autoRepairStock(){
       }
     }
   });
-  // 2. Staff buys
+  // 2. Staff buys — staffBuyLogs structure: { buys: [{ items: [{ itemName, qty }] }] }
   (Array.isArray(staffBuyLogs)?staffBuyLogs:[]).forEach(sb=>{
     if(!sb||typeof sb!=='object')return;
-    (Array.isArray(sb.items)?sb.items:[]).forEach(si=>{
-      const name=(si.name||'').toLowerCase().trim();
+    (Array.isArray(sb.buys)?sb.buys:[]).forEach(buy=>{
+      (Array.isArray(buy.items)?buy.items:[]).forEach(si=>{
+        const name=(si.itemName||si.name||'').toLowerCase().trim();
+        if(!name)return;
+        soldMap[name]=(soldMap[name]||0)+(parseFloat(si.qty)||1);
+      });
+    });
+  });
+  // 2b. staffBuysStore — permanent selfbuy records (fallback if log entries lost)
+  (Array.isArray(staffBuysStore)?staffBuysStore:[]).forEach(entry=>{
+    if(!entry||typeof entry!=='object')return;
+    // staffBuysStore entries have items[] with {itemName, qty} — same as log selfbuy entries
+    (Array.isArray(entry.items)?entry.items:(Array.isArray(entry.orderItems)?entry.orderItems:[])).forEach(si=>{
+      const name=(si.itemName||si.name||'').toLowerCase().trim();
       if(!name)return;
-      soldMap[name]=(soldMap[name]||0)+(parseFloat(si.qty)||1);
+      // Only count if NOT already counted from log (avoid double-count)
+      // staffBuysStore entries have a timestamp — check if matching log entry exists
+      const alreadyInLog=log.some(e=>(e.type==='selfbuy'||e.type==='order')&&e.timestamp===entry.timestamp);
+      if(!alreadyInLog){
+        soldMap[name]=(soldMap[name]||0)+(parseFloat(si.qty)||1);
+      }
     });
   });
   // 3. Pending orders — counted SEPARATELY because they're additive to EOD/log sales
