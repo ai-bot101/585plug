@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v132';
-const _BUILD_TS=1785956533767; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v132]';},1000);
+const _APP_VERSION='deploy-v133';
+const _BUILD_TS=1785957263290; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v133]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -5720,10 +5720,10 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   _debugPending('CONFIRMED',fbKey,'moved to sales log');
   delete pendingWebOrders[fbKey];
   processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
-  // Persist to clearedWebKeys IMMEDIATELY — processedOrderIds is in-memory only
-  // and gets lost on page reload. Without this, a failed Firebase DELETE + reload
-  // causes the order to reappear and potentially double-deduct stock.
-  if(!clearedWebKeys.includes(fbKey))clearedWebKeys.push(fbKey);
+  // NOTE: Do NOT push to clearedWebKeys here — that hides the order from
+  // the Confirmed Orders section. clearedWebKeys is only for orders
+  // already captured by EOD. The confirmed:true Firebase flag + alreadyInLog
+  // check prevent reappearing.
 
   // Mark as confirmed in Firebase FIRST (safety net), then DELETE
   // If DELETE fails, the confirmed flag prevents re-processing on next refresh
@@ -6111,8 +6111,9 @@ function renderConfirmedWebOrders() {
   }));
   // Find all confirmed website orders that haven't been cleared (by EOD save or manual clear)
   // Also filter out any order already in an EOD log (safety net if _cleared flag was lost)
-  const clearedSet=new Set(clearedWebKeys||[]);
-  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && !e._cleared && !clearedSet.has(e.webOrderKey) && !eodWebKeys.has(e.webOrderKey) && !(e.timestamp && eodTimestamps.has(e.timestamp)));
+  // NOTE: Uses _cleared flag per-entry + EOD checks. Do NOT filter by clearedWebKeys here —
+  // that array is for processWebsiteOrders skip logic, not for hiding confirmed orders.
+  const webOrders = log.filter(e => e.source === 'website' && e.webOrderKey && !e._cleared && !eodWebKeys.has(e.webOrderKey) && !(e.timestamp && eodTimestamps.has(e.timestamp)));
   if (!webOrders.length) {
     if(el){ el.style.display = 'none'; el.innerHTML = ''; }
     if(globalEl){ globalEl.style.display = 'none'; globalEl.innerHTML = ''; }
