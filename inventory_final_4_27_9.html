@@ -1477,6 +1477,7 @@ async function _pushEodBackup(){
   }
 }
 let staffBuyLogs=[]; // saved staff buy snapshots
+let staffBuysStore=[]; // PERMANENT per-buy records — never cleared by Reset Sold
 let cu=null,activeCat='ALL',srch='',selDay='today',staffSelDay='today',selPw=null;
 let inv={STRAINS:[],DISPOS:[],EDIBLES:[],PREROLLS:[],NICOTINE:[]};
 // Scrub null/undefined/nameless items from ALL inventory arrays — prevents crashes everywhere
@@ -1537,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v127';
-const _BUILD_TS=1785859002613; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v127]';},1000);
+const _APP_VERSION='deploy-v128';
+const _BUILD_TS=1785945942719; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v128]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -1743,7 +1744,7 @@ function _emergencyPush(){
     // 2. Push to Firebase
     const payload={
       inv,log,cfg,
-      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,
+      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,staffBuysStore,
       failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,
       commissionPaused,autoDailyDebts,
       updatedAt:Date.now()
@@ -1954,6 +1955,7 @@ async function tryLogin(){
           if(snapData.staffDebts)staffDebts=snapData.staffDebts;
           if(snapData.commissionPaused)commissionPaused=snapData.commissionPaused;
           if(snapData.staffBuyLogs)staffBuyLogs=snapData.staffBuyLogs;
+          if(Array.isArray(snapData.staffBuysStore))staffBuysStore=snapData.staffBuysStore;
           if(snapData.cashRecons)cashRecons=snapData.cashRecons;
         }
       } else {
@@ -1999,6 +2001,7 @@ async function tryLogin(){
               if(snapData.staffDebts)staffDebts=snapData.staffDebts;
               if(snapData.commissionPaused)commissionPaused=snapData.commissionPaused;
               if(snapData.staffBuyLogs)staffBuyLogs=snapData.staffBuyLogs;
+              if(Array.isArray(snapData.staffBuysStore))staffBuysStore=snapData.staffBuysStore;
               if(snapData.cashRecons)cashRecons=snapData.cashRecons;
             } else {
               customerCredits=data.customerCredits||{};vipCustomers=data.vipCustomers||{};
@@ -2067,6 +2070,7 @@ async function tryLogin(){
             failedAttempts=Array.isArray(data.failedAttempts)?data.failedAttempts:[];
             loginLog=Array.isArray(data.loginLog)?data.loginLog:[];
             cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
+            staffBuysStore=Array.isArray(data.staffBuysStore)?data.staffBuysStore:[];
             const incomingCleared=Array.isArray(data.clearedWebKeys)?data.clearedWebKeys:[];
             clearedWebKeys=[...new Set([...localClearedWebKeys,...incomingCleared])];
             fbLastTimestamp=data.updatedAt||0;
@@ -2124,7 +2128,7 @@ async function logout(){
     const _logoutTs=Date.now();
     const _logoutPayload={
       inv,log,cfg,
-      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,
+      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,staffBuysStore,
       failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,
       commissionPaused,autoDailyDebts,
       updatedAt:_logoutTs
@@ -2271,7 +2275,12 @@ function openStaffBuysModal(){
   document.getElementById('staffbuys-modal').classList.add('open');
 }
 function renderStaffBuys(){
-  const buys=log.filter(e=>e.type==='selfbuy');
+  // Merge permanent store + log for complete view
+  const storeBuys=staffBuysStore.filter(e=>e.type==='selfbuy');
+  const logBuys=log.filter(e=>e.type==='selfbuy');
+  const storeTs=new Set(storeBuys.map(e=>e.timestamp+'|'+(e.who||'')));
+  const extra=logBuys.filter(e=>!storeTs.has(e.timestamp+'|'+(e.who||'')));
+  const buys=[...storeBuys,...extra].sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
   // Build staff tabs
   const staffNames=[...new Set(buys.map(e=>e.who))];
   const tabs=document.getElementById('staffbuys-tabs');
@@ -3811,8 +3820,13 @@ function renderStaffBuys(){
   const isLog=selDay.startsWith('log_');
   const today=tday();
   const staffNames=cfg.users.filter(u=>u.role==='staff').map(u=>u.name);
-  // Always show ALL staff buys across all time, regardless of selected day
-  let buys=log.filter(e=>e.type==='selfbuy'&&staffNames.includes(e.who));
+  // Read from permanent store first, fall back to log for legacy entries
+  const storeBuys=staffBuysStore.filter(e=>e.type==='selfbuy'&&staffNames.includes(e.who));
+  const logBuys=log.filter(e=>e.type==='selfbuy'&&staffNames.includes(e.who));
+  // Merge: use store as base, add any log entries not already in store
+  const storeTs=new Set(storeBuys.map(e=>e.timestamp+'|'+(e.who||'')));
+  const extra=logBuys.filter(e=>!storeTs.has(e.timestamp+'|'+(e.who||'')));
+  let buys=[...storeBuys,...extra].sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
   if(!buys.length){
     el.innerHTML='<div class="empty" style="padding:12px 0;">No staff purchases recorded</div>';
     if(cnt)cnt.textContent='';
@@ -3855,7 +3869,11 @@ function renderStaffBuys(){
   renderStaffBuyLogsList();
 }
 function saveStaffBuyLog(){
-  const buys=log.filter(e=>e.type==='selfbuy');
+  // Merge permanent store + log
+  const sb1=staffBuysStore.filter(e=>e.type==='selfbuy');
+  const sb2=log.filter(e=>e.type==='selfbuy');
+  const tsSet=new Set(sb1.map(e=>e.timestamp+'|'+(e.who||'')));
+  const buys=[...sb1,...sb2.filter(e=>!tsSet.has(e.timestamp+'|'+(e.who||'')))].sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
   if(!buys.length){showToast('No staff purchases to log','err');return;}
   // Use localStorage cutoff to prevent duplicates (same approach as EOD)
   const lsCutoff=parseInt(localStorage.getItem('_sbLogCutoff')||'0');
@@ -6668,6 +6686,15 @@ async function fbPullNow(){
       const _pullEod=Array.isArray(data.eodLogs)?data.eodLogs:[];
       if(_pullEod.length>=eodLogs.length){eodLogs=_pullEod;}
       staffBuyLogs=Array.isArray(data.staffBuyLogs)?data.staffBuyLogs:[];
+      // PERMANENT staff buys store — merge incoming with local to never lose entries
+      const incomingSBS=Array.isArray(data.staffBuysStore)?data.staffBuysStore:[];
+      if(incomingSBS.length>0){
+        const localTs=new Set(staffBuysStore.map(e=>e.timestamp+'|'+(e.who||'')));
+        const missing=incomingSBS.filter(e=>!localTs.has(e.timestamp+'|'+(e.who||'')));
+        if(missing.length>0){staffBuysStore.push(...missing);staffBuysStore.sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));}
+        // If incoming has more, just take it wholesale
+        if(incomingSBS.length>staffBuysStore.length)staffBuysStore=incomingSBS;
+      }
       failedAttempts=Array.isArray(data.failedAttempts)?data.failedAttempts:[];
       loginLog=Array.isArray(data.loginLog)?data.loginLog:[];
       cashRecons=Array.isArray(data.cashRecons)?data.cashRecons:[];
@@ -6771,7 +6798,7 @@ function fbPush(){
       _eodHighWater=Math.max(_eodHighWater,eodLogs.length);
       const payload={
         inv,log,cfg,
-        customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts,
+        customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,staffBuysStore,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts,
         updatedAt:Date.now(),
         ..._pendingFbPatches
       };
@@ -6874,7 +6901,7 @@ async function persistEncrypted(){
     // would see the flag as false and block legitimate EOD deletions.
     const data={
       inv,log,cfg,
-      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts
+      customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,staffBuysStore,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts
     };
     const encrypted=await encryptData(data);
     localStorage.setItem('ig_enc',encrypted);
@@ -6902,6 +6929,7 @@ async function restoreEncrypted(){
         if(Array.isArray(data.clearedWebKeys))clearedWebKeys=data.clearedWebKeys;
         if(data.staffDebts)staffDebts=data.staffDebts;
         if(data.commissionPaused)commissionPaused=data.commissionPaused;
+        if(Array.isArray(data.staffBuysStore))staffBuysStore=data.staffBuysStore;
         /* autoDailyDebts removed — no longer loading */
         return true;
       }
@@ -8547,6 +8575,7 @@ function doReset(type){
     eodLogs=[];
     _pushEodBackup(); // sync isolated backup (now empty)
     staffBuyLogs=[];
+    staffBuysStore=[];
     cancelledOrders=[];
     vipCustomers={};
     customerDeals={};
@@ -8571,6 +8600,7 @@ function doReset(type){
     eodLogs=[];
     _pushEodBackup(); // sync isolated backup (now empty)
     staffBuyLogs=[];
+    staffBuysStore=[];
     cancelledOrders=[];
     clearedWebKeys=[];
     customerCredits={};
@@ -9497,7 +9527,7 @@ function confirmOwnerStaffBuy(){
     logItems.push({cat:o.cat,itemName:o.itemName,qty:o.qty,cost,flavorText:o.flavorText||''});
   });
   const e={type:'selfbuy',who:_osbStaff,items:logItems,totalOwed,amtReceived:totalOwed,profit:0,commission:0,payMethod:'cash',payMethodLabel:'Cash',timestamp:Date.now(),date:tday(),time:tstr(),loggedBy:cu.name};
-  log.unshift(e);persist();closeOwnerStaffBuy();
+  log.unshift(e);staffBuysStore.unshift(e);persist();closeOwnerStaffBuy();
   renderStats();renderItems();renderDash();
   showToast(_osbStaff+'\'s purchase logged · '+fmtP(totalOwed)+' owed','ok');
 }
@@ -9518,7 +9548,7 @@ function confirmSelfBuy(){
     logItems.push({cat:o.cat,itemName:o.itemName,qty:o.qty,cost,flavorText:o.flavorText||''});
   });
   const e={type:'selfbuy',who:cu.name,items:logItems,totalOwed,amtReceived:totalOwed,profit:0,commission:0,payMethod:'cash',payMethodLabel:ml,timestamp:Date.now(),date:tday(),time:tstr()};
-  log.unshift(e);persist();closeSelfBuy();
+  log.unshift(e);staffBuysStore.unshift(e);persist();closeSelfBuy();
   renderStats();renderItems();
   if(cu?.role==='owner')renderDash();else renderStaffLog();
   showToast('Purchase logged · '+fmtP(totalOwed)+' owed','ok');
