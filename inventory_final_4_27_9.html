@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v129';
-const _BUILD_TS=1785947661673; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v129]';},1000);
+const _APP_VERSION='deploy-v130';
+const _BUILD_TS=1785948065976; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v130]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -3148,6 +3148,22 @@ function syncStockToEOD(e){
     showToast('No saved EOD logs to sync from','err');
     return;
   }
+
+  // ── FUZZY MATCH: resolve EOD names that don't exactly match inventory names ──
+  // e.g. EOD has "titty bar 10" but inventory has "titty bar 10,000mg"
+  const _allInvNames=[];
+  C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.name)_allInvNames.push(item.name.toLowerCase());});});
+  const _soldKeys=Object.keys(soldMap);
+  _soldKeys.forEach(eodKey=>{
+    if(_allInvNames.includes(eodKey))return; // exact match exists
+    // Try to find an inventory item where one name contains the other
+    const match=_allInvNames.find(invName=>invName.includes(eodKey)||eodKey.includes(invName));
+    if(match&&!soldMap[match]){
+      soldMap[match]=(soldMap[match]||0)+soldMap[eodKey];
+      if(flavorSoldMap[eodKey]){flavorSoldMap[match]={...(flavorSoldMap[match]||{}),...flavorSoldMap[eodKey]};}
+      console.log('[SYNC-EOD] Fuzzy matched "'+eodKey+'" → "'+match+'" ('+soldMap[eodKey]+' sold)');
+    }
+  });
 
   // ── PREVIEW CHANGES ──
   const changes=[];
