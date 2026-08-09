@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v146';
-const _BUILD_TS=1786248462724; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v146]';},1000);
+const _APP_VERSION='deploy-v147';
+const _BUILD_TS=1786249058870; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v147]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -3146,27 +3146,18 @@ async function _autoRepairStock(){
       const eodSold=Math.round((_eodSoldMap[key]||0)*10)/10;
       const pendingSold=Math.round((_pendingSoldMap[key]||0)*10)/10;
       const logSold=Math.round((Math.max(confirmedSold,eodSold)+pendingSold)*10)/10;
-      if(Math.abs(invSold-logSold)>0.05){
+      if(invSold>logSold+0.05){
         const correctLeft=Math.max(0,Math.min(effectiveBought,Math.round((effectiveBought-logSold)*10)/10));
-        const diff=Math.round((invSold-logSold)*10)/10;
-        fixes.push({item,invSold,logSold,currentLeft:left,correctLeft,diff,direction:diff>0?'over':'under'});
+        fixes.push({item,invSold,logSold,currentLeft:left,correctLeft,diff:Math.round((invSold-logSold)*10)/10});
       }
     });
   });
   if(!fixes.length)return;
   // Auto-fix — just update the data, persist+render happens once in postLoginSync
   fixes.forEach(f=>{f.item.left=f.correctLeft;});
-  const overFixes=fixes.filter(f=>f.direction==='over');
-  const underFixes=fixes.filter(f=>f.direction==='under');
-  if(overFixes.length){
-    const names=overFixes.map(f=>f.item.name+' (+'+Math.abs(f.diff)+')').join(', ');
-    console.log('[AUTO-REPAIR] Fixed '+overFixes.length+' over-deducted items:', names);
-  }
-  if(underFixes.length){
-    const names=underFixes.map(f=>f.item.name+' (-'+Math.abs(f.diff)+')').join(', ');
-    console.log('[AUTO-REPAIR] Fixed '+underFixes.length+' under-deducted items:', names);
-  }
-  showToast('Auto-fixed '+fixes.length+' item'+(fixes.length!==1?'s':'')+' stock','ok');
+  const names=fixes.map(f=>f.item.name+' (+'+f.diff+')').join(', ');
+  console.log('[AUTO-REPAIR] Fixed '+fixes.length+' over-deducted items:', names);
+  showToast('Auto-fixed '+fixes.length+' over-deducted items: '+names,'ok');
   }catch(err){console.error('[AUTO-REPAIR] Error:',err);}
 }
 function syncStockToEOD(e){
