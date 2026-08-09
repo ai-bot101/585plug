@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v142';
-const _BUILD_TS=1785962419065; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v142]';},1000);
+const _APP_VERSION='deploy-v145';
+const _BUILD_TS=1786247937027; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v145]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -3948,6 +3948,7 @@ function renderStaffBuys(){
           <div style="font-size:10px;color:var(--text3);margin-top:3px;">${b.date||''} · ${b.time||''}</div>
         </div>
         <div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--orange);">${fmtP(b.totalOwed||b.amtReceived||0)}</div>
+        <button onclick="deleteStaffBuyEntry(${b.timestamp||0},'${(b.who||'').replace(/'/g,"\\'")}')" style="background:rgba(244,107,107,0.08);border:1px solid rgba(244,107,107,0.2);border-radius:7px;color:#f46b6b;padding:4px 8px;font-size:14px;cursor:pointer;line-height:1;flex-shrink:0;" title="Delete & restock">✕</button>
       </div>`;
     });
     html+='</div>';
@@ -4096,6 +4097,44 @@ async function deleteStaffBuyLog(idx){
   staffBuyLogs.splice(idx,1);
   persist();renderStaffBuyLogsList();
   showToast('Staff Buy Log deleted','ok');
+}
+async function deleteStaffBuyEntry(ts,who){
+  if(!await _ownerGuard())return;
+  // Find the entry in staffBuysStore or log
+  const storeIdx=staffBuysStore.findIndex(e=>e.timestamp===ts&&e.who===who&&e.type==='selfbuy');
+  const logIdx=log.findIndex(e=>e.timestamp===ts&&e.who===who&&e.type==='selfbuy');
+  const entry=storeIdx!==-1?staffBuysStore[storeIdx]:logIdx!==-1?log[logIdx]:null;
+  if(!entry){showToast('Entry not found','err');return;}
+  const items=(entry.items||[]).map(it=>(it.qty||1)+'x '+it.itemName).join(', ');
+  if(!confirm('Delete staff buy & restock?\n'+items+'\nOwed: '+fmtP(entry.totalOwed||entry.amtReceived||0)))return;
+  // Restock items
+  (entry.items||[]).forEach(it=>{
+    const cat=it.cat||(entry.cat||'');
+    const iName=(it.itemName||it.name||'').toLowerCase();
+    C().forEach(c=>{
+      (inv[c]||[]).forEach(item=>{
+        if(!item||!item.name)return;
+        if(item.name.toLowerCase()!==iName)return;
+        item.left=Math.round((gl(item)+(it.qty||0))*10)/10;
+        // Restore flavor stock
+        if(it.flavorText&&Array.isArray(item.flavors)){
+          const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===it.flavorText.toLowerCase());
+          if(fl)fl.stock=Math.round(((fl.stock||0)+(it.qty||0))*10)/10;
+        }
+      });
+    });
+  });
+  // Reduce debt
+  if(who&&staffDebts[who]){
+    staffDebts[who]=Math.max(0,staffDebts[who]-(entry.totalOwed||entry.amtReceived||0));
+    if(staffDebts[who]===0)delete staffDebts[who];
+  }
+  // Remove from both stores
+  if(storeIdx!==-1)staffBuysStore.splice(storeIdx,1);
+  if(logIdx!==-1)log.splice(logIdx,1);
+  persist();renderStaffBuys();renderItems();renderStats();
+  if(cu?.role==='owner')renderDash();
+  showToast('Staff buy deleted & items restocked','ok');
 }
 function renderCredits(){
   const entries=Object.entries(customerCredits);
@@ -9701,7 +9740,15 @@ function confirmOwnerStaffBuy(){
     logItems.push({cat:o.cat,itemName:o.itemName,qty:o.qty,cost,flavorText:o.flavorText||''});
   });
   const e={type:'selfbuy',who:_osbStaff,items:logItems,totalOwed,amtReceived:totalOwed,profit:0,commission:0,payMethod:'cash',payMethodLabel:'Cash',timestamp:Date.now(),date:tday(),time:tstr(),loggedBy:cu.name};
-  log.unshift(e);staffBuysStore.unshift(e);persist();closeOwnerStaffBuy();
+  log.unshift(e);staffBuysStore.unshift(e);
+  // Immediate push — debounced persist() gets overwritten by fbPullNow before it fires
+  persistEncrypted().catch(()=>{});
+  if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+  fbPushInFlight=true;
+  const _osbPayload={inv,log,cfg,customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,staffBuysStore,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts,updatedAt:Date.now()};
+  fbLastTimestamp=_osbPayload.updatedAt;
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(_osbPayload)}).catch(e=>console.error('[OWNER-STAFFBUY-PUSH] Failed:',e)).finally(()=>{fbPushInFlight=false;fbPushTimer=null;});
+  closeOwnerStaffBuy();
   renderStats();renderItems();renderDash();
   showToast(_osbStaff+'\'s purchase logged · '+fmtP(totalOwed)+' owed','ok');
 }
@@ -9722,7 +9769,15 @@ function confirmSelfBuy(){
     logItems.push({cat:o.cat,itemName:o.itemName,qty:o.qty,cost,flavorText:o.flavorText||''});
   });
   const e={type:'selfbuy',who:cu.name,items:logItems,totalOwed,amtReceived:totalOwed,profit:0,commission:0,payMethod:'cash',payMethodLabel:ml,timestamp:Date.now(),date:tday(),time:tstr()};
-  log.unshift(e);staffBuysStore.unshift(e);persist();closeSelfBuy();
+  log.unshift(e);staffBuysStore.unshift(e);
+  // Immediate push — debounced persist() gets overwritten by fbPullNow before it fires
+  persistEncrypted().catch(()=>{});
+  if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+  fbPushInFlight=true;
+  const _sbPayload={inv,log,cfg,customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,staffBuysStore,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts,updatedAt:Date.now()};
+  fbLastTimestamp=_sbPayload.updatedAt;
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(_sbPayload)}).catch(e=>console.error('[SELFBUY-PUSH] Failed:',e)).finally(()=>{fbPushInFlight=false;fbPushTimer=null;});
+  closeSelfBuy();
   renderStats();renderItems();
   if(cu?.role==='owner')renderDash();else renderStaffLog();
   showToast('Purchase logged · '+fmtP(totalOwed)+' owed','ok');
