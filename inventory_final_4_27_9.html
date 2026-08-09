@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v147';
-const _BUILD_TS=1786249058870; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v147]';},1000);
+const _APP_VERSION='deploy-v148';
+const _BUILD_TS=1786249773550; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v148]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -4132,7 +4132,14 @@ async function deleteStaffBuyEntry(ts,who){
   // Remove from both stores
   if(storeIdx!==-1)staffBuysStore.splice(storeIdx,1);
   if(logIdx!==-1)log.splice(logIdx,1);
-  persist();renderStaffBuys();renderItems();renderStats();
+  // Immediate push — debounced persist() gets overwritten by fbPullNow
+  persistEncrypted().catch(()=>{});
+  if(fbPushTimer){clearTimeout(fbPushTimer);fbPushTimer=null;}
+  fbPushInFlight=true;
+  const _delSbPayload={inv,log,cfg,customerCredits,vipCustomers,customerDeals,dayNotes,eodLogs,staffBuyLogs,staffBuysStore,failedAttempts,loginLog,cashRecons,cancelledOrders,clearedWebKeys,staffDebts,commissionPaused,autoDailyDebts,updatedAt:Date.now()};
+  fbLastTimestamp=_delSbPayload.updatedAt;
+  fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(_delSbPayload)}).catch(e=>console.error('[DEL-STAFFBUY-PUSH] Failed:',e)).finally(()=>{fbPushInFlight=false;fbPushTimer=null;});
+  renderStaffBuys();renderItems();renderStats();
   if(cu?.role==='owner')renderDash();
   showToast('Staff buy deleted & items restocked','ok');
 }
