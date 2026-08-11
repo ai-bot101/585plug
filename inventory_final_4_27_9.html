@@ -1538,9 +1538,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v148';
-const _BUILD_TS=1786249773550; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v148]';},1000);
+const _APP_VERSION='deploy-v149';
+const _BUILD_TS=1786492547631; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v149]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -3152,12 +3152,26 @@ async function _autoRepairStock(){
       }
     });
   });
+  // Also cap any item where left > bought (e.g. from repeated restock bugs)
+  C().forEach(cat=>{
+    (inv[cat]||[]).forEach(item=>{
+      if(!item||!item.name)return;
+      const bought=parseFloat(item.bought)||0;
+      if(!bought)return;
+      const left=item.left!==undefined&&item.left!==null?parseFloat(item.left):bought;
+      if(left>bought+0.05){
+        fixes.push({item,invSold:0,logSold:0,currentLeft:left,correctLeft:bought,diff:Math.round((left-bought)*10)/10});
+        item.left=bought;
+        console.log('[AUTO-REPAIR] Capped '+item.name+': left '+left+' > bought '+bought+' → set to '+bought);
+      }
+    });
+  });
   if(!fixes.length)return;
   // Auto-fix — just update the data, persist+render happens once in postLoginSync
-  fixes.forEach(f=>{f.item.left=f.correctLeft;});
+  fixes.forEach(f=>{if(f.correctLeft!==undefined)f.item.left=f.correctLeft;});
   const names=fixes.map(f=>f.item.name+' (+'+f.diff+')').join(', ');
-  console.log('[AUTO-REPAIR] Fixed '+fixes.length+' over-deducted items:', names);
-  showToast('Auto-fixed '+fixes.length+' over-deducted items: '+names,'ok');
+  console.log('[AUTO-REPAIR] Fixed '+fixes.length+' items:', names);
+  showToast('Auto-fixed '+fixes.length+' item'+(fixes.length!==1?'s':'')+' stock','ok');
   }catch(err){console.error('[AUTO-REPAIR] Error:',err);}
 }
 function syncStockToEOD(e){
@@ -5346,56 +5360,51 @@ function processWebsiteOrders(pendingOrders) {
       return;
     }
     if (!pendingWebOrders[fbKey]) {
-      // If stock was already deducted globally (_stockDeductedV2), mark as locally held too
-      // so confirmWebOrder doesn't double-deduct
-      const alreadyDeducted = !!order._stockDeductedV2;
-      pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:alreadyDeducted};
-      console.log('[PENDING] New order from Firebase:', fbKey, 'source:', order.source||'website', 'total:', order.total, 'alreadyDeducted:', alreadyDeducted);
+      // ALWAYS deduct stock locally, even if shop already deducted (_stockDeductedV2).
+      // WHY: The shop's _shopDeductStock uses multi-path PATCH (inv/CAT/idx/left=X),
+      // but the inventory app's fbPush sends {inv:{...entire object...}} which REPLACES
+      // the whole inv key in Firebase, potentially overwriting the shop's deduction.
+      // If _stockDeductedV2 is true but fbPush already overwrote the deduction,
+      // skipping the local deduction means stock is NEVER deducted (the zookies bug).
+      // By always deducting here, we guarantee at least one deduction sticks.
+      // If both the shop AND inventory app deduct (temporary double-deduction),
+      // _autoRepairStock on next login detects invSold > logSold and restores the excess.
+      pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:true};
+      console.log('[PENDING] New order from Firebase:', fbKey, 'source:', order.source||'website', 'total:', order.total, 'shopDeducted:', !!order._stockDeductedV2, '— always deducting locally');
       newCount++;
-      // Deduct stock only if not already done.
-      // _autoRepairStock now fetches pending orders from Firebase before running,
-      // so it correctly preserves stock for held orders. No need to re-deduct.
-      const needsDeduct = !order._stockDeductedV2;
-      if (needsDeduct) {
-        pendingWebOrders[fbKey]._stockDeductedLocally = true;
-        pendingWebOrders[fbKey]._stockDeducted = true;
-        pendingWebOrders[fbKey]._stockDeductedV2 = true;
-        let _deductOk=0, _deductFail=0;
-        (order.orderItems||[]).forEach(oi=>{
-          const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
-          const qty=Math.max(oi.qty||1,labelToQty(oi.label));
-          const cat=(oi.cat||'').trim();
-          let realCat=cat;
-          if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase().trim()===cat.toLowerCase());if(m)realCat=m;}
-          let foundItem=null;
-          if(!realCat||!inv[realCat]){
-            for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);foundItem=f;break;}}
-          }else{
-            const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
-            if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);foundItem=f;}
-          }
-          if(foundItem){
-            console.log('[STOCK-DEDUCT] ✅',itemName,'qty='+qty,'newLeft='+foundItem.left,'cat='+realCat);
-            _deductOk++;
-          }else{
-            console.warn('[STOCK-DEDUCT] ❌ ITEM NOT FOUND:','"'+itemName+'"','cat='+cat,'realCat='+realCat,'— stock NOT deducted for this item!');
-            console.warn('[STOCK-DEDUCT] Available items in',realCat||'ALL',':',(inv[realCat]||[]).map(i=>'"'+(i.name||'').toLowerCase().trim()+'"').join(', ')||'(checking all cats...)');
-            _deductFail++;
-          }
-          _deductFlavorStock(foundItem,oi,qty);
-        });
-        if(_deductFail>0){
-          console.error('[STOCK-DEDUCT] ⚠️ '+_deductFail+' items NOT FOUND — stock not fully deducted for order '+fbKey);
-          // Mark that deduction was incomplete so cancel doesn't over-restore
-          pendingWebOrders[fbKey]._deductIncomplete=true;
+      pendingWebOrders[fbKey]._stockDeductedLocally = true;
+      pendingWebOrders[fbKey]._stockDeducted = true;
+      pendingWebOrders[fbKey]._stockDeductedV2 = true;
+      let _deductOk=0, _deductFail=0;
+      (order.orderItems||[]).forEach(oi=>{
+        const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
+        const qty=Math.max(oi.qty||1,labelToQty(oi.label));
+        const cat=(oi.cat||'').trim();
+        let realCat=cat;
+        if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase().trim()===cat.toLowerCase());if(m)realCat=m;}
+        let foundItem=null;
+        if(!realCat||!inv[realCat]){
+          for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);foundItem=f;break;}}
+        }else{
+          const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
+          if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);foundItem=f;}
         }
-        // Queue V2 flag to be written ATOMICALLY with the inv update in fbPush().
-        // This prevents double-deduction: if inv push succeeds but flag push fails
-        // (which happened with the old fire-and-forget fetch), a page reload would
-        // see deducted inv but no flag → re-deduct → stock drops twice.
-        _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeducted']=true;
-        _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeductedV2']=true;
+        if(foundItem){
+          console.log('[STOCK-DEDUCT] ✅',itemName,'qty='+qty,'newLeft='+foundItem.left,'cat='+realCat);
+          _deductOk++;
+        }else{
+          console.warn('[STOCK-DEDUCT] ❌ ITEM NOT FOUND:','"'+itemName+'"','cat='+cat,'realCat='+realCat,'— stock NOT deducted for this item!');
+          console.warn('[STOCK-DEDUCT] Available items in',realCat||'ALL',':',(inv[realCat]||[]).map(i=>'"'+(i.name||'').toLowerCase().trim()+'"').join(', ')||'(checking all cats...)');
+          _deductFail++;
+        }
+        _deductFlavorStock(foundItem,oi,qty);
+      });
+      if(_deductFail>0){
+        console.error('[STOCK-DEDUCT] ⚠️ '+_deductFail+' items NOT FOUND — stock not fully deducted for order '+fbKey);
+        pendingWebOrders[fbKey]._deductIncomplete=true;
       }
+      _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeducted']=true;
+      _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeductedV2']=true;
     } else if(pendingWebOrders[fbKey]._stockDeductedLocally && !order._stockDeductedV2){
       // RECOVERY: order is held locally with deduction, but Firebase lost it
       // (push failed or was overwritten). Re-apply deduction from Firebase's clean inv values.
