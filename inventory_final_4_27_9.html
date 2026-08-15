@@ -1610,9 +1610,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v152';
-const _BUILD_TS=1786808172527; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v152]';},1000);
+const _APP_VERSION='deploy-v153';
+const _BUILD_TS=1786809429993; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v153]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -3152,29 +3152,29 @@ async function _autoRepairStock(){
       }
     }
   });
-  // 2. Staff buys — staffBuyLogs structure: { buys: [{ items: [{ itemName, qty }] }] }
+  // 2. Staff buys — kept in their OWN map, not merged into the log totals.
+  // Merged in, they were impossible to see: an item could show as sold with
+  // nothing in the activity log to explain it.
+  const _staffSoldMap={};
   (Array.isArray(staffBuyLogs)?staffBuyLogs:[]).forEach(sb=>{
     if(!sb||typeof sb!=='object')return;
     (Array.isArray(sb.buys)?sb.buys:[]).forEach(buy=>{
       (Array.isArray(buy.items)?buy.items:[]).forEach(si=>{
         const name=(si.itemName||si.name||'').toLowerCase().trim();
         if(!name)return;
-        soldMap[name]=(soldMap[name]||0)+(parseFloat(si.qty)||1);
+        _staffSoldMap[name]=(_staffSoldMap[name]||0)+(parseFloat(si.qty)||1);
       });
     });
   });
   // 2b. staffBuysStore — permanent selfbuy records (fallback if log entries lost)
   (Array.isArray(staffBuysStore)?staffBuysStore:[]).forEach(entry=>{
     if(!entry||typeof entry!=='object')return;
-    // staffBuysStore entries have items[] with {itemName, qty} — same as log selfbuy entries
     (Array.isArray(entry.items)?entry.items:(Array.isArray(entry.orderItems)?entry.orderItems:[])).forEach(si=>{
       const name=(si.itemName||si.name||'').toLowerCase().trim();
       if(!name)return;
-      // Only count if NOT already counted from log (avoid double-count)
-      // staffBuysStore entries have a timestamp — check if matching log entry exists
       const alreadyInLog=log.some(e=>(e.type==='selfbuy'||e.type==='order')&&e.timestamp===entry.timestamp);
       if(!alreadyInLog){
-        soldMap[name]=(soldMap[name]||0)+(parseFloat(si.qty)||1);
+        _staffSoldMap[name]=(_staffSoldMap[name]||0)+(parseFloat(si.qty)||1);
       }
     });
   });
@@ -3275,18 +3275,29 @@ async function _autoRepairStock(){
       const confirmedSold=Math.round((soldMap[key]||0)*10)/10;
       const eodSold=Math.round((_eodSoldMap[key]||0)*10)/10;
       const pendingSold=Math.round((_pendingSoldMap[key]||0)*10)/10;
-      const logSold=Math.round((Math.max(confirmedSold,eodSold)+pendingSold)*10)/10;
+      const staffSold=Math.round((_staffSoldMap[key]||0)*10)/10;
+      // log and EOD describe the same confirmed sales, so take the larger of
+      // the two rather than adding them. Pending holds and staff buys are
+      // separate movements and stack on top.
+      const logSold=Math.round((Math.max(confirmedSold,eodSold)+pendingSold+staffSold)*10)/10;
+      // Which records claim this sale — shown to you before anything is removed.
+      const src=[];
+      if(confirmedSold)src.push('activity log '+confirmedSold);
+      if(eodSold)src.push('EOD '+eodSold);
+      if(pendingSold)src.push('pending '+pendingSold);
+      if(staffSold)src.push('staff buys '+staffSold);
+      if(netAdj)src.push('adjustments '+(netAdj>0?'+':'')+netAdj);
+      const why=src.length?src.join(' · '):'NOTHING — no record claims this';
+
       if(invSold>logSold+0.05){
-        // OVER-deduction: stock went down too much — restore excess
+        // Stock went down more than the records justify → give it back.
         const correctLeft=Math.max(0,Math.min(effectiveBought,Math.round((effectiveBought-logSold)*10)/10));
-        fixes.push({item,invSold,logSold,currentLeft:left,correctLeft,diff:Math.round((invSold-logSold)*10)/10});
+        fixes.push({item,invSold,logSold,currentLeft:left,correctLeft,why,dir:'up',diff:Math.round((invSold-logSold)*10)/10});
       } else if(logSold>invSold+0.05){
-        // UNDER-deduction: stock didn't go down enough — deduct the missing amount
-        // This fixes the case where EOD logs show more sold than inventory reflects
-        // (e.g. login restores stale left value, or flavor deduction push was lost)
+        // Records claim more sold than stock reflects → would remove stock.
+        // Collected, not applied — see the gate below.
         const correctLeft=Math.max(0,Math.min(effectiveBought,Math.round((effectiveBought-logSold)*10)/10));
-        fixes.push({item,invSold,logSold,currentLeft:left,correctLeft,diff:Math.round((logSold-invSold)*10)/10});
-        console.log('[AUTO-REPAIR] Under-deducted: '+item.name+' invSold='+invSold+' vs logSold='+logSold+' → left '+left+' → '+correctLeft);
+        fixes.push({item,invSold,logSold,currentLeft:left,correctLeft,why,dir:'down',diff:Math.round((logSold-invSold)*10)/10});
       }
     });
   });
@@ -3305,30 +3316,53 @@ async function _autoRepairStock(){
     });
   });
   if(fixes.length){
-  // Auto-fix — just update the data, persist+render happens once in postLoginSync
-  fixes.forEach(f=>{
+  // ── Restores apply on their own. Deductions must be approved. ──
+  // Giving stock back can only ever be wrong in the safe direction — you see
+  // phantom stock and correct it. Taking stock away destroys real inventory,
+  // and if a stale or unexplained record drives it you would never know.
+  // So anything that would REMOVE stock is listed with the record claiming
+  // the sale, and you decide.
+  const _ups=fixes.filter(f=>f.dir==='up');
+  const _downs=fixes.filter(f=>f.dir==='down');
+
+  let _applyDowns=false;
+  if(_downs.length){
+    const _unexplained=_downs.filter(f=>/NOTHING/.test(f.why));
+    let msg='Stock check wants to REMOVE stock from '+_downs.length+' item'+(_downs.length!==1?'s':'')+'.\n\n';
+    _downs.slice(0,15).forEach(f=>{
+      msg+='• '+f.item.name+':  '+fmt(f.currentLeft)+' → '+fmt(f.correctLeft)+'  (−'+fmt(f.diff)+')\n     claimed by: '+f.why+'\n';
+    });
+    if(_downs.length>15)msg+='…and '+(_downs.length-15)+' more\n';
+    if(_unexplained.length){
+      msg+='\n⚠️ '+_unexplained.length+' of these have NO record explaining the sale.\n'
+         +'That usually means leftover data — old pending orders still sitting in\n'
+         +'Firebase, or staff buys that survived a wipe. Say No and check those first.\n';
+    }
+    msg+='\nRemove this stock?\n(No = leave inventory alone. Nothing else is affected.)';
+    _applyDowns=confirm(msg);
+    console.warn('[AUTO-REPAIR] Proposed deductions:',_downs.map(f=>f.item.name+' '+f.currentLeft+'→'+f.correctLeft+' ['+f.why+']'));
+    if(!_applyDowns)console.warn('[AUTO-REPAIR] Deductions DECLINED — inventory left as-is.');
+  }
+
+  const _applied=_applyDowns?fixes:_ups;
+  _applied.forEach(f=>{
     if(f.correctLeft!==undefined){
       _trace('REPAIR',{item:f.item.name,before:f.currentLeft,after:f.correctLeft,invSold:f.invSold,logSold:f.logSold,
-        dir:f.correctLeft>f.currentLeft?'UP':'DOWN',
-        note:f.invSold>f.logSold?'over-deducted, restoring':'under-deducted, deducting'});
+        dir:f.dir==='up'?'UP':'DOWN',why:f.why});
       f.item.left=f.correctLeft;
     }
   });
-  const names=fixes.map(f=>f.item.name+' (+'+f.diff+')').join(', ');
-  console.log('[AUTO-REPAIR] Fixed '+fixes.length+' items:', names);
-  _trace('REPAIR_SUMMARY',{n:fixes.length,items:names.substr(0,300)});
-  // Repair can move stock either way, so say which — silently removing stock
-  // is the thing that caused trouble, and it should never be invisible.
-  const _up=fixes.filter(f=>f.correctLeft>f.currentLeft).length;
-  const _down=fixes.filter(f=>f.correctLeft<f.currentLeft).length;
+  // Full breakdown to console so any surprise can be traced to its record.
+  console.log('[AUTO-REPAIR] '+_ups.length+' restore(s), '+_downs.length+' proposed deduction(s), '
+    +(_applyDowns?'deductions APPLIED':(_downs.length?'deductions DECLINED':'none to apply')));
+  if(_applied.length)console.table(_applied.map(f=>({item:f.item.name,from:f.currentLeft,to:f.correctLeft,
+    invSold:f.invSold,recordsSay:f.logSold,claimedBy:f.why})));
+  _trace('REPAIR_SUMMARY',{restored:_ups.length,proposedDown:_downs.length,appliedDown:_applyDowns?1:0});
+
   const _parts=[];
-  if(_up)_parts.push(_up+' restored');
-  if(_down)_parts.push(_down+' deducted');
-  showToast('Auto-fixed stock: '+_parts.join(', '),_down?'err':'ok');
-  if(_down){
-    console.warn('[AUTO-REPAIR] Removed stock from '+_down+' item(s) because records showed more sold than inventory reflected:',
-      fixes.filter(f=>f.correctLeft<f.currentLeft).map(f=>f.item.name+' '+f.currentLeft+'→'+f.correctLeft).join(', '));
-  }
+  if(_ups.length)_parts.push(_ups.length+' restored');
+  if(_downs.length)_parts.push(_downs.length+(_applyDowns?' deducted':' deduction'+(_downs.length!==1?'s':'')+' skipped'));
+  if(_parts.length)showToast('Stock check: '+_parts.join(', '),(_applyDowns&&_downs.length)?'err':'ok');
   }
   // ── FLAVOR STOCK REPAIR ──
   // Build flavor-level sold map from log + pending orders, then compare with inventory
