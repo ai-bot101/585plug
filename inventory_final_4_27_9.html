@@ -1481,6 +1481,63 @@ let staffBuysStore=[]; // PERMANENT per-buy records — never cleared by Reset S
 let cu=null,activeCat='ALL',srch='',selDay='today',staffSelDay='today',selPw=null;
 let inv={STRAINS:[],DISPOS:[],EDIBLES:[],PREROLLS:[],NICOTINE:[]};
 // Scrub null/undefined/nameless items from ALL inventory arrays — prevents crashes everywhere
+// ══════════════════════════════════════════════════════════════════════
+// ── STOCK TRACE SYSTEM ──
+// Records every stock mutation to Firebase /_trace so the full lifecycle of
+// an order can be reconstructed after the fact from the CLI (bash trace.sh).
+// Batched + fire-and-forget so it never blocks or breaks the app.
+// ══════════════════════════════════════════════════════════════════════
+const _TRACE_ON=true;
+let _traceBuf=[],_traceTimer=null,_devId=null;
+function _getDevId(){
+  if(_devId)return _devId;
+  try{
+    _devId=localStorage.getItem('_devId');
+    if(!_devId){
+      const ua=navigator.userAgent||'';
+      const plat=/iPhone/.test(ua)?'iPhone':/iPad/.test(ua)?'iPad':/Android/.test(ua)?'Android':/Mac/.test(ua)?'Mac':/Win/.test(ua)?'Win':'Other';
+      _devId=plat+'-'+Math.random().toString(36).substr(2,4);
+      localStorage.setItem('_devId',_devId);
+    }
+  }catch(e){_devId='dev-'+Math.random().toString(36).substr(2,4);}
+  return _devId;
+}
+// _trace(stage, {item, flavor, qty, before, after, key, ok, note})
+function _trace(stage,data){
+  if(!_TRACE_ON)return;
+  try{
+    const e={ts:Date.now(),stage:stage,...(data||{})};
+    if(typeof cu!=='undefined'&&cu&&cu.name)e.user=cu.name;
+    _traceBuf.push(e);
+    console.log('[TRACE:'+stage+']',JSON.stringify(data||{}));
+    if(_traceBuf.length>=30){_flushTrace();return;}
+    if(_traceTimer)clearTimeout(_traceTimer);
+    _traceTimer=setTimeout(_flushTrace,1500);
+  }catch(err){}
+}
+function _flushTrace(){
+  if(_traceTimer){clearTimeout(_traceTimer);_traceTimer=null;}
+  if(!_traceBuf.length)return;
+  const batch=_traceBuf.splice(0,_traceBuf.length);
+  try{
+    const rec={ts:Date.now(),t:new Date().toLocaleString('en-US'),src:'inv',dev:_getDevId(),n:batch.length,ev:batch};
+    // POST = Firebase push key — append-only, can never clobber another device's entries
+    fetch(FB_URL+'/_trace.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)}).catch(()=>{});
+  }catch(err){}
+}
+// Flush on page close so nothing is lost
+window.addEventListener('beforeunload',()=>{try{
+  if(!_traceBuf.length)return;
+  const rec={ts:Date.now(),t:new Date().toLocaleString('en-US'),src:'inv',dev:_getDevId(),n:_traceBuf.length,ev:_traceBuf.splice(0)};
+  if(navigator.sendBeacon)navigator.sendBeacon(FB_URL+'/_trace.json',new Blob([JSON.stringify(rec)],{type:'application/json'}));
+}catch(e){}});
+// Snapshot helper — captures current stock of an item for before/after comparison
+function _snapItem(item){
+  if(!item)return null;
+  const o={left:item.left,bought:item.bought};
+  if(Array.isArray(item.flavors))o.fl=item.flavors.map(f=>(f&&f.name?f.name:'?')+':'+(f&&f.stock!==undefined?f.stock:'?')).join(',');
+  return o;
+}
 function _scrubInv(){
   let removed=0;
   Object.keys(inv).forEach(cat=>{
@@ -1553,9 +1610,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v151';
-const _BUILD_TS=1786497849160; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v151]';},1000);
+const _APP_VERSION='deploy-v152';
+const _BUILD_TS=1786808172527; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v152]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -1721,11 +1778,23 @@ function _restoreFlavorStock(foundItem,oi,qty){
     _flavorEntries(oi.flavors).forEach(([fname,fqty])=>{
       if(fqty<=0)return;
       const flav=foundItem.flavors.find(fl=>fl.name&&fl.name.toLowerCase()===fname.toLowerCase());
-      if(flav)flav.stock=Math.round((flav.stock||0)+fqty);
+      if(flav){
+        const before=flav.stock||0;
+        flav.stock=Math.round(before+fqty);
+        _trace('FLAV_RESTORE',{item:foundItem.name,flavor:fname,qty:fqty,before:before,after:flav.stock,ok:1,via:'obj'});
+      }else{
+        _trace('FLAV_MISS',{item:foundItem.name,flavor:fname,qty:fqty,ok:0,note:'restore: name not in inventory'});
+      }
     });
   }else if(oi.flavorText){
     const fl=foundItem.flavors.find(f=>f.name&&f.name.toLowerCase()===oi.flavorText.toLowerCase());
-    if(fl)fl.stock=Math.round((fl.stock||0)+qty);
+    if(fl){
+      const before=fl.stock||0;
+      fl.stock=Math.round(before+qty);
+      _trace('FLAV_RESTORE',{item:foundItem.name,flavor:oi.flavorText,qty:qty,before:before,after:fl.stock,ok:1,via:'text'});
+    }else{
+      _trace('FLAV_MISS',{item:foundItem.name,flavor:oi.flavorText,qty:qty,ok:0,note:'restore: flavorText not in inventory'});
+    }
   }
 }
 // Helper: deduct flavor stock for an order item from the found inventory item
@@ -1750,8 +1819,10 @@ function _deductFlavorStock(foundItem,oi,qty){
         const before=flav.stock||0;
         flav.stock=Math.max(0,Math.round(before-fqty));
         console.log('[FLAVOR-DEDUCT] ✅',foundItem.name,'flavor "'+fname+'" stock:',before,'→',flav.stock,'(deducted '+fqty+')');
+        _trace('FLAV_DEDUCT',{item:foundItem.name,flavor:fname,qty:fqty,before:before,after:flav.stock,ok:1,via:'obj'});
       }else{
         console.warn('[FLAVOR-DEDUCT] ❌ Flavor NOT FOUND: "'+fname+'" in',foundItem.name,'— available:',foundItem.flavors.map(f=>'"'+f.name+'"').join(', '));
+        _trace('FLAV_MISS',{item:foundItem.name,flavor:fname,qty:fqty,ok:0,note:'name not in inventory',avail:foundItem.flavors.map(f=>f.name).join('|')});
       }
     });
   }else if(oi.flavorText){
@@ -1760,8 +1831,10 @@ function _deductFlavorStock(foundItem,oi,qty){
       const before=fl.stock||0;
       fl.stock=Math.max(0,Math.round(before-qty));
       console.log('[FLAVOR-DEDUCT] ✅',foundItem.name,'flavor "'+oi.flavorText+'" stock:',before,'→',fl.stock,'(deducted '+qty+')');
+      _trace('FLAV_DEDUCT',{item:foundItem.name,flavor:oi.flavorText,qty:qty,before:before,after:fl.stock,ok:1,via:'text'});
     }else{
       console.warn('[FLAVOR-DEDUCT] ❌ flavorText NOT FOUND: "'+oi.flavorText+'" in',foundItem.name,'— available:',foundItem.flavors.map(f=>'"'+f.name+'"').join(', '));
+      _trace('FLAV_MISS',{item:foundItem.name,flavor:oi.flavorText,qty:qty,ok:0,note:'flavorText not in inventory',avail:foundItem.flavors.map(f=>f.name).join('|')});
     }
   }else{
     console.log('[FLAVOR-DEDUCT] SKIP — no oi.flavors or oi.flavorText for',foundItem.name);
@@ -3050,9 +3123,18 @@ async function _autoRepairStock(){
   try{
   const soldMap={}; // { itemNameLower: totalQtySold } — confirmed orders only (log + staffbuys)
   const _pendingSoldMap={}; // { itemNameLower: totalQtyHeld } — pending orders (separate, additive)
-  // 1. Confirmed orders + selfbuys in log
+
+  // Days that already have a saved EOD log. For those days the EOD log is the
+  // authority, so the matching activity-log entries are skipped — otherwise
+  // the same sale is counted twice, and stale entries from before a wipe can
+  // drive a deduction that nothing justifies.
+  const _eodDates=new Set();
+  (Array.isArray(eodLogs)?eodLogs:[]).forEach(r=>{ if(r&&r.date)_eodDates.add(String(r.date).trim()); });
+
+  // 1. Confirmed orders + selfbuys in log — only for days with no saved EOD
   log.forEach(entry=>{
     if(!entry||typeof entry!=='object')return;
+    if(entry.date&&_eodDates.has(String(entry.date).trim()))return;
     if(entry.type==='order'||entry.type==='selfbuy'){
       const items=Array.isArray(entry.orderItems)?entry.orderItems:(Array.isArray(entry.items)?entry.items:[]);
       items.forEach(oi=>{
@@ -3140,17 +3222,18 @@ async function _autoRepairStock(){
       });
     });
   });
-  // Fuzzy-match EOD names to inventory names (same logic as syncStockToEOD)
-  // e.g. EOD has "tincture 1" but inventory has "tincture 1,000mg thc"
+  // EXACT NAME MATCHING ONLY.
+  // This used to fuzzy match on substrings, so a record for "haze" would
+  // attach itself to "purple haze", "lemon haze" and anything else it fitted
+  // inside. After renaming or rebuilding the menu that silently invents sales
+  // against the wrong items — and because repair can deduct, it then removes
+  // real stock. A record that does not name an item exactly is now ignored
+  // and reported instead.
   const _allInvNamesRepair=[];
   C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.name)_allInvNamesRepair.push(item.name.toLowerCase().trim());});});
+  const _unmatchedRepair=[];
   Object.keys(_eodSoldMap).forEach(eodKey=>{
-    if(_allInvNamesRepair.includes(eodKey))return; // exact match exists
-    const match=_allInvNamesRepair.find(invName=>invName.includes(eodKey)||eodKey.includes(invName));
-    if(match&&!_eodSoldMap[match]){
-      _eodSoldMap[match]=(_eodSoldMap[match]||0)+_eodSoldMap[eodKey];
-      console.log('[AUTO-REPAIR] Fuzzy matched EOD "'+eodKey+'" → "'+match+'" ('+_eodSoldMap[eodKey]+' sold)');
-    }
+    if(!_allInvNamesRepair.includes(eodKey))_unmatchedRepair.push('EOD "'+eodKey+'"');
   });
   // 5. Track net adjustments
   const _repairAdjMap={};
@@ -3163,14 +3246,17 @@ async function _autoRepairStock(){
       }
     }
   });
-  // Fuzzy-match soldMap and _pendingSoldMap keys too
-  [soldMap,_pendingSoldMap].forEach(map=>{
+  // Same rule for the log and pending maps: exact names only. Anything that
+  // does not match an item exactly is collected for reporting rather than
+  // being attached to whichever item happens to contain the same letters.
+  [['log',soldMap],['pending',_pendingSoldMap]].forEach(([label,map])=>{
     Object.keys(map).forEach(key=>{
-      if(_allInvNamesRepair.includes(key))return;
-      const match=_allInvNamesRepair.find(invName=>invName.includes(key)||key.includes(invName));
-      if(match){map[match]=(map[match]||0)+map[key];}
+      if(!_allInvNamesRepair.includes(key))_unmatchedRepair.push(label+' "'+key+'"');
     });
   });
+  if(_unmatchedRepair.length){
+    console.warn('[AUTO-REPAIR] '+_unmatchedRepair.length+' record(s) name items that no longer exist — ignored, NOT matched to similar names:',_unmatchedRepair.slice(0,20).join(', '));
+  }
   // Compare and fix
   // Formula: totalSold = MAX(logSold, eodSold) + pendingSold
   // - log and EOD overlap (confirmed orders appear in both) → use MAX
@@ -3220,10 +3306,29 @@ async function _autoRepairStock(){
   });
   if(fixes.length){
   // Auto-fix — just update the data, persist+render happens once in postLoginSync
-  fixes.forEach(f=>{if(f.correctLeft!==undefined)f.item.left=f.correctLeft;});
+  fixes.forEach(f=>{
+    if(f.correctLeft!==undefined){
+      _trace('REPAIR',{item:f.item.name,before:f.currentLeft,after:f.correctLeft,invSold:f.invSold,logSold:f.logSold,
+        dir:f.correctLeft>f.currentLeft?'UP':'DOWN',
+        note:f.invSold>f.logSold?'over-deducted, restoring':'under-deducted, deducting'});
+      f.item.left=f.correctLeft;
+    }
+  });
   const names=fixes.map(f=>f.item.name+' (+'+f.diff+')').join(', ');
   console.log('[AUTO-REPAIR] Fixed '+fixes.length+' items:', names);
-  showToast('Auto-fixed '+fixes.length+' item'+(fixes.length!==1?'s':'')+' stock','ok');
+  _trace('REPAIR_SUMMARY',{n:fixes.length,items:names.substr(0,300)});
+  // Repair can move stock either way, so say which — silently removing stock
+  // is the thing that caused trouble, and it should never be invisible.
+  const _up=fixes.filter(f=>f.correctLeft>f.currentLeft).length;
+  const _down=fixes.filter(f=>f.correctLeft<f.currentLeft).length;
+  const _parts=[];
+  if(_up)_parts.push(_up+' restored');
+  if(_down)_parts.push(_down+' deducted');
+  showToast('Auto-fixed stock: '+_parts.join(', '),_down?'err':'ok');
+  if(_down){
+    console.warn('[AUTO-REPAIR] Removed stock from '+_down+' item(s) because records showed more sold than inventory reflected:',
+      fixes.filter(f=>f.correctLeft<f.currentLeft).map(f=>f.item.name+' '+f.currentLeft+'→'+f.correctLeft).join(', '));
+  }
   }
   // ── FLAVOR STOCK REPAIR ──
   // Build flavor-level sold map from log + pending orders, then compare with inventory
@@ -3302,6 +3407,7 @@ async function _autoRepairStock(){
         if(invSold>totalSold+0.5){
           const correctStock=Math.max(0,Math.round((bought-totalSold)*10)/10);
           console.log('[FLAVOR-REPAIR] ✅',item.name,'flavor "'+flav.name+'": stock',currentStock,'→',correctStock,'(invSold='+invSold+' vs logSold='+logSold+'+pend='+pendSold+')');
+          _trace('FLAV_REPAIR',{item:item.name,flavor:flav.name,before:currentStock,after:correctStock,invSold:invSold,logSold:logSold,pendSold:pendSold,dir:'UP',note:'over-deducted'});
           flav.stock=correctStock;
           flavorFixes++;
         }
@@ -3309,6 +3415,7 @@ async function _autoRepairStock(){
         if(invSold<totalSold-0.5){
           const correctStock=Math.max(0,Math.round((bought-totalSold)*10)/10);
           console.log('[FLAVOR-REPAIR] ✅',item.name,'flavor "'+flav.name+'": stock',currentStock,'→',correctStock,'(invSold='+invSold+' vs logSold='+logSold+'+pend='+pendSold+') — UNDER-DEDUCTED');
+          _trace('FLAV_REPAIR',{item:item.name,flavor:flav.name,before:currentStock,after:correctStock,invSold:invSold,logSold:logSold,pendSold:pendSold,dir:'DOWN',note:'under-deducted — a deduction was LOST'});
           flav.stock=correctStock;
           flavorFixes++;
         }
@@ -3365,21 +3472,15 @@ function syncStockToEOD(e){
     return;
   }
 
-  // ── FUZZY MATCH: resolve EOD names that don't exactly match inventory names ──
-  // e.g. EOD has "titty bar 10" but inventory has "titty bar 10,000mg"
+  // ── EXACT NAMES ONLY ──
+  // Substring matching used to live here, so an EOD record for "haze" would
+  // attach to "purple haze" and deduct from the wrong item. Records that no
+  // longer name a real item are listed in the confirmation instead, so you
+  // can see what was ignored rather than having it guessed at.
   const _allInvNames=[];
   C().forEach(cat=>{(inv[cat]||[]).forEach(item=>{if(item.name)_allInvNames.push(item.name.toLowerCase());});});
-  const _soldKeys=Object.keys(soldMap);
-  _soldKeys.forEach(eodKey=>{
-    if(_allInvNames.includes(eodKey))return; // exact match exists
-    // Try to find an inventory item where one name contains the other
-    const match=_allInvNames.find(invName=>invName.includes(eodKey)||eodKey.includes(invName));
-    if(match&&!soldMap[match]){
-      soldMap[match]=(soldMap[match]||0)+soldMap[eodKey];
-      if(flavorSoldMap[eodKey]){flavorSoldMap[match]={...(flavorSoldMap[match]||{}),...flavorSoldMap[eodKey]};}
-      console.log('[SYNC-EOD] Fuzzy matched "'+eodKey+'" → "'+match+'" ('+soldMap[eodKey]+' sold)');
-    }
-  });
+  const _unmatchedSync=Object.keys(soldMap).filter(k=>!_allInvNames.includes(k));
+  if(_unmatchedSync.length)console.warn('[SYNC-EOD] Ignoring '+_unmatchedSync.length+' EOD record(s) for items that no longer exist:',_unmatchedSync.slice(0,20).join(', '));
 
   // ── Count pending order deductions for preview ──
   const pendingSoldMap={};
@@ -3437,6 +3538,10 @@ function syncStockToEOD(e){
   if(fixCount)confirmMsg+=changes.join('\n')+'\n\n'+fixCount+' items will be updated.\n';
   if(flavorFixCount)confirmMsg+=(fixCount?'\n':'')+'Flavor changes:\n'+flavorChanges.join('\n')+'\n\n'+flavorFixCount+' flavors will be updated.\n';
   confirmMsg+='\nSources: '+eodLogs.length+' EOD logs ('+eodOrderCount+' orders)';
+  if(_unmatchedSync.length){
+    confirmMsg+='\n\n⚠️ '+_unmatchedSync.length+' EOD record(s) name items that no longer exist and are being IGNORED:\n  '
+      +_unmatchedSync.slice(0,10).join('\n  ')+(_unmatchedSync.length>10?'\n  …and '+(_unmatchedSync.length-10)+' more':'');
+  }
   if(!confirm(confirmMsg))return;
 
   // ── APPLY CHANGES (includes pending deductions in formula) ──
@@ -3449,17 +3554,23 @@ function syncStockToEOD(e){
       const pendingSold=pendingSoldMap[key]||0;
       if(pendingSold)_pendDeduct++;
       const correctLeft=Math.round(Math.max(0,item.bought-totalSold-pendingSold)*10)/10;
+      const _bSync=gl(item);
+      if(Math.abs(_bSync-correctLeft)>0.05)_trace('SYNC_EOD',{item:item.name,before:_bSync,after:correctLeft,bought:item.bought,eodSold:totalSold,pendSold:pendingSold});
       item.left=correctLeft;
       // Sync flavor stock
       if(Array.isArray(item.flavors)){
         const fSoldData=flavorSoldMap[key]||{};
         const allHaveBought=item.flavors.every(f=>!f.name||f.bought||f.bought===0);
+        if(!allHaveBought)_trace('SYNC_EOD_SKIP',{item:item.name,ok:0,note:'flavors missing bought value — flavor sync SKIPPED',
+          missing:item.flavors.filter(f=>f.name&&!f.bought&&f.bought!==0).map(f=>f.name).join('|')});
         if(allHaveBought){
           item.flavors.forEach(f=>{
             if(!f.name)return;
             const fkey=f.name.toLowerCase();
             const sold=fSoldData[fkey]||0;
+            const _bF=f.stock||0;
             f.stock=Math.max(0,Math.round((f.bought||0)-sold));
+            if(_bF!==f.stock)_trace('SYNC_EOD_FLAV',{item:item.name,flavor:f.name,before:_bF,after:f.stock,bought:f.bought,eodSold:sold});
           });
         }
         // If total flavor stock is zero but item has stock, distribute evenly as fallback
@@ -5233,6 +5344,7 @@ async function saveEdit(){
     const oldLeft=gl(item);
     const newLeft=parseFloat(lv);
     const delta=Math.round((newLeft-oldLeft)*10)/10;
+    if(delta!==0)_trace('EDIT_ITEM',{item:item.name,before:oldLeft,after:newLeft,delta:delta,who:cu?.name||''});
     item.left=newLeft;
     // If stock was manually adjusted, log it so repairStock stays in sync
     if(delta!==0){
@@ -5301,6 +5413,7 @@ async function saveAdjust(){
 
   // Update main stock
   if(delta!==0){
+    _trace('ADJUST',{item:item.name,before:oldLeft,after:newLeft,delta:delta,who:cu?.name||''});
     item.left=newLeft;
     log.unshift({type:'adjustment',name:item.name.toLowerCase(),amount:Math.abs(delta),direction:delta>0?'add':'remove',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'Stock adjustment: '+fmt(oldLeft)+' → '+fmt(newLeft)});
   }
@@ -5316,6 +5429,7 @@ async function saveAdjust(){
       const oldFlav=f.stock||0;
       const fDelta=newFlav-oldFlav;
       if(fDelta!==0){
+        _trace('ADJUST_FLAV',{item:item.name,flavor:f.name,before:oldFlav,after:newFlav,delta:fDelta,who:cu?.name||''});
         f.stock=newFlav;
         log.unshift({type:'adjustment',name:item.name.toLowerCase(),amount:Math.abs(fDelta),direction:fDelta>0?'add':'remove',who:cu?.name||'Owner',timestamp:Date.now(),date:tday(),time:tstr(),note:'Flavor adjust "'+f.name+'": '+oldFlav+' → '+newFlav,flavorName:f.name.toLowerCase()});
       }
@@ -5526,6 +5640,8 @@ function processWebsiteOrders(pendingOrders) {
       pendingWebOrders[fbKey]._stockDeductedLocally = true;
       pendingWebOrders[fbKey]._stockDeducted = true;
       pendingWebOrders[fbKey]._stockDeductedV2 = true;
+      _trace('PEND_NEW',{key:fbKey,src2:order.source||'website',total:order.total,shopDeducted:order._stockDeductedV2?1:0,
+        items:(order.orderItems||[]).map(i=>(i.itemName||i.name||'?')+'x'+(i.qty||1)+(i.label?'/'+i.label:'')+(i.flavorText?'['+i.flavorText+']':'')).join(' | ')});
       let _deductOk=0, _deductFail=0;
       (order.orderItems||[]).forEach(oi=>{
         const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
@@ -5533,19 +5649,21 @@ function processWebsiteOrders(pendingOrders) {
         const cat=(oi.cat||'').trim();
         let realCat=cat;
         if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase().trim()===cat.toLowerCase());if(m)realCat=m;}
-        let foundItem=null;
+        let foundItem=null,_before=null;
         if(!realCat||!inv[realCat]){
-          for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);foundItem=f;break;}}
+          for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){_before=gl(f);f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);foundItem=f;realCat=c;break;}}
         }else{
           const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
-          if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);foundItem=f;}
+          if(f){_before=gl(f);f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);foundItem=f;}
         }
         if(foundItem){
           console.log('[STOCK-DEDUCT] ✅',itemName,'qty='+qty,'newLeft='+foundItem.left,'cat='+realCat);
+          _trace('PEND_DEDUCT',{key:fbKey,item:foundItem.name,cat:realCat,label:oi.label||'',qty:qty,before:_before,after:foundItem.left,ok:1});
           _deductOk++;
         }else{
           console.warn('[STOCK-DEDUCT] ❌ ITEM NOT FOUND:','"'+itemName+'"','cat='+cat,'realCat='+realCat,'— stock NOT deducted for this item!');
           console.warn('[STOCK-DEDUCT] Available items in',realCat||'ALL',':',(inv[realCat]||[]).map(i=>'"'+(i.name||'').toLowerCase().trim()+'"').join(', ')||'(checking all cats...)');
+          _trace('PEND_MISS',{key:fbKey,item:itemName,cat:cat,qty:qty,ok:0,note:'item name not found in inventory'});
           _deductFail++;
         }
         _deductFlavorStock(foundItem,oi,qty);
@@ -5553,6 +5671,7 @@ function processWebsiteOrders(pendingOrders) {
       if(_deductFail>0){
         console.error('[STOCK-DEDUCT] ⚠️ '+_deductFail+' items NOT FOUND — stock not fully deducted for order '+fbKey);
         pendingWebOrders[fbKey]._deductIncomplete=true;
+        _trace('PEND_INCOMPLETE',{key:fbKey,fail:_deductFail,ok:_deductOk,note:'order stock only partially deducted'});
       }
       _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeducted']=true;
       _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeductedV2']=true;
@@ -5562,13 +5681,14 @@ function processWebsiteOrders(pendingOrders) {
       // Instead, we track _deductPushConfirmed which is only set when our push succeeds.
       // Re-apply deduction from the fresh Firebase inv values.
       console.log('[STOCK-RECOVERY] Re-deducting for',fbKey.substr(0,20),'— deduct push not yet confirmed');
+      _trace('PEND_RECOVER',{key:fbKey,note:'re-deducting, push not confirmed'});
       (pendingWebOrders[fbKey].orderItems||[]).forEach(oi=>{
         const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
         if(!itemName)return;
         const qty=Math.max(oi.qty||1,labelToQty(oi.label));
         for(const c of C()){
           const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
-          if(f){f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);_deductFlavorStock(f,oi,qty);break;}
+          if(f){const _b=gl(f);f.left=Math.max(0,Math.round((gl(f)-qty)*10)/10);_trace('PEND_DEDUCT',{key:fbKey,item:f.name,cat:c,qty:qty,before:_b,after:f.left,ok:1,note:'recovery re-deduct'});_deductFlavorStock(f,oi,qty);break;}
         }
       });
       _pendingFbPatches['pending_orders/'+fbKey+'/_stockDeducted']=true;
@@ -5596,11 +5716,14 @@ function processWebsiteOrders(pendingOrders) {
     // Track which orders need confirmation so recovery can re-deduct if push fails
     const _ordersToConfirm=Object.keys(pendingWebOrders).filter(k=>pendingWebOrders[k]&&pendingWebOrders[k]._stockDeductedLocally&&!pendingWebOrders[k]._deductPushConfirmed);
     fetch(FB_URL+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(_deductPayload)}).then(()=>{
+      body:JSON.stringify(_deductPayload)}).then(r=>{
+        if(!r.ok){_trace('PUSH_FAIL',{stageOf:'PEND_DEDUCT',status:r.status,keys:_ordersToConfirm.length,ok:0,note:'Firebase rejected deduct push'});return;}
         // Mark all pending deductions as confirmed — prevents recovery from re-deducting
         _ordersToConfirm.forEach(k=>{if(pendingWebOrders[k])pendingWebOrders[k]._deductPushConfirmed=true;});
         console.log('[DEDUCT-PUSH] ✅ Push confirmed for',_ordersToConfirm.length,'orders');
-      }).catch(e=>console.error('[DEDUCT-PUSH] ❌ Failed:',e,'— recovery will re-deduct on next poll'))
+        _trace('PUSH_OK',{stageOf:'PEND_DEDUCT',keys:_ordersToConfirm.length,ok:1});
+      }).catch(e=>{console.error('[DEDUCT-PUSH] ❌ Failed:',e,'— recovery will re-deduct on next poll');
+        _trace('PUSH_FAIL',{stageOf:'PEND_DEDUCT',err:String(e).substr(0,80),keys:_ordersToConfirm.length,ok:0,note:'network error, recovery will retry'});})
       .finally(()=>{fbPushInFlight=false;fbPushTimer=null;});
     renderStats();renderItems();
   }
@@ -5991,6 +6114,10 @@ function finalizeConfirmOrder(fbKey, assignedTo){
   }
 
   log.unshift(e);
+  _trace('CONFIRM',{key:fbKey,who:assignedTo,total:total,profit:profit,comm:commission,
+    preDeducted:order._stockDeductedLocally?1:0,
+    items:(e.orderItems||[]).map(i=>i.itemName+'x'+(i.qty||1)+(i.label?'/'+i.label:'')+(i.flavorText?'['+i.flavorText+']':'')).join(' | '),
+    note:order._stockDeductedLocally?'stock already deducted at arrival':'stock deducted now at confirm'});
   _debugPending('CONFIRMED',fbKey,'moved to sales log');
   delete pendingWebOrders[fbKey];
   processedOrderIds.add(fbKey); // prevent SSE from re-adding this order
@@ -6060,21 +6187,28 @@ function cancelWebOrder(fbKey) {
   // ALWAYS restore stock on cancel — stock is deducted when any order enters pending,
   // so cancelling must always add it back. Check multiple flags as safety net.
   const _wasDeducted=order._stockDeductedLocally||order._stockDeductedV2||order._stockDeducted;
+  _trace('CANCEL',{key:fbKey,who:cu?.name||'Staff',wasDeducted:_wasDeducted?1:0,total:order.total,
+    items:(order.orderItems||[]).map(i=>(i.itemName||i.name||'?')+'x'+(i.qty||1)).join(' | ')});
   (order.orderItems||[]).forEach(oi=>{
     const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
     const qty=Math.max(oi.qty||1,labelToQty(oi.label));
     const cat=oi.cat||'';
     let realCat=cat;
     if(cat&&!inv[cat]){const m=C().find(c=>c.toLowerCase()===cat.toLowerCase());if(m)realCat=m;}
-    let foundItem=null;
+    let foundItem=null,_bC=null;
     if(!realCat||!inv[realCat]){
-      for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
+      for(const c of C()){const f=(inv[c]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);if(f){_bC=gl(f);f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;break;}}
     }else{
       const f=(inv[realCat]||[]).find(item=>(item.name||'').toLowerCase().trim()===itemName);
-      if(f){f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
+      if(f){_bC=gl(f);f.left=Math.round((gl(f)+qty)*10)/10;foundItem=f;}
     }
-    if(foundItem)console.log('[CANCEL-RESTORE] ✅',itemName,'qty='+qty,'newLeft='+foundItem.left);
-    else console.warn('[CANCEL-RESTORE] ❌ Item not found:',itemName,'cat='+cat);
+    if(foundItem){
+      console.log('[CANCEL-RESTORE] ✅',itemName,'qty='+qty,'newLeft='+foundItem.left);
+      _trace('CANCEL_RESTORE',{key:fbKey,item:foundItem.name,qty:qty,before:_bC,after:foundItem.left,ok:1});
+    }else{
+      console.warn('[CANCEL-RESTORE] ❌ Item not found:',itemName,'cat='+cat);
+      _trace('CANCEL_MISS',{key:fbKey,item:itemName,qty:qty,ok:0,note:'item not found, stock NOT restored'});
+    }
     _restoreFlavorStock(foundItem,oi,qty);
   });
   _debugPending('CANCELLED',fbKey,'user cancelled — stock restored'+((!_wasDeducted)?' (flags missing but restored anyway)':''));
@@ -7002,6 +7136,29 @@ async function fbPullNow(){
         console.log('[PULL] Nuke detected from another device — accepting full wipe');
       }
       // always overwrite ALL fields so resets/clears propagate to all devices
+      // ── TRACE: capture what the incoming pull CHANGES about our local stock ──
+      // This is the #1 place deductions silently disappear: our local deduction
+      // gets replaced by a stale Firebase value from before the deduction landed.
+      try{
+        const _prevSnap={};
+        C().forEach(c=>{(inv[c]||[]).forEach(it=>{if(it&&it.name)_prevSnap[it.name.toLowerCase().trim()]={l:gl(it),f:Array.isArray(it.flavors)?it.flavors.map(f=>(f&&f.stock)||0).join(','):''};});});
+        const _newInv=data.inv||{};
+        const _diffs=[];
+        Object.keys(_newInv).forEach(c=>{
+          (Array.isArray(_newInv[c])?_newInv[c]:Object.values(_newInv[c]||{})).forEach(it=>{
+            if(!it||!it.name)return;
+            const k=it.name.toLowerCase().trim();
+            const prev=_prevSnap[k];
+            if(!prev)return;
+            const newLeft=(it.left!==undefined&&it.left!==null)?parseFloat(it.left):parseFloat(it.bought)||0;
+            const newFl=Array.isArray(it.flavors)?it.flavors.map(f=>(f&&f.stock)||0).join(','):'';
+            if(Math.abs(newLeft-prev.l)>0.05||newFl!==prev.f){
+              _diffs.push({item:it.name,left:prev.l+'→'+newLeft,fl:prev.f!==newFl?(prev.f+'→'+newFl):''});
+            }
+          });
+        });
+        if(_diffs.length)_trace('PULL_OVERWRITE',{n:_diffs.length,changed:_diffs.slice(0,12).map(d=>d.item+' L:'+d.left+(d.fl?' F:'+d.fl:'')).join(' | '),note:'Firebase pull replaced local inv values'});
+      }catch(traceErr){}
       inv=data.inv||{};C().forEach(c=>{if(!inv[c])inv[c]=[];});_scrubInv();
       // PROTECT locally-confirmed orders from being lost during log overwrite
       // If we confirmed an order locally but our push hasn't reached Firebase yet,
@@ -7178,11 +7335,15 @@ function fbPush(){
       };
       _pendingFbPatches={}; // clear queued patches — they're included in this push
       fbLastTimestamp=payload.updatedAt; // prevent echo pull
-      await fetch(FB_URL+'.json',{
+      const _pushRes=await fetch(FB_URL+'.json',{
         method:'PATCH',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify(payload)
       });
+      // TRACE: this PATCH replaces the ENTIRE inv object in Firebase — it is what
+      // can clobber the shop's granular inv/CAT/idx/left writes.
+      _trace(_pushRes&&_pushRes.ok?'PUSH_OK':'PUSH_FAIL',{stageOf:'fbPush',status:_pushRes?_pushRes.status:0,
+        ok:_pushRes&&_pushRes.ok?1:0,logN:log.length,eodN:eodLogs.length,note:'full inv object PATCH'});
       fbPushTimer=null; // clear so fbPull resumes
       fbPushInFlight=false;
       _eodClearAllowed=false; // reset AFTER Firebase confirms — prevents race with debounced push
@@ -9341,6 +9502,8 @@ async function confirmRestock(){
   const oldLeft=gl(item);
   item.left=Math.round((gl(item)+amt)*10)/10;
   item.bought=Math.round(((item.bought||0)+amt)*10)/10;
+  _trace('RESTOCK',{item:item.name,cat:cat,qty:amt,before:oldLeft,after:item.left,bought:item.bought,who:cu.name,
+    note:Array.isArray(item.flavors)&&item.flavors.length?'WARNING: flavor stock NOT increased by restock':''});
   const e={type:'restock',name:item.name,cat,amount:amt,oldLeft,newLeft:item.left,who:cu.name,timestamp:Date.now(),date:tday(),time:tstr()};
   log.unshift(e);persist();closeOv('restock-modal');
   renderStats();renderItems();
@@ -9895,11 +10058,14 @@ function confirmOwnerStaffBuy(){
   _osbItems.forEach(o=>{
     const item=(inv[o.cat]||[])[o.ri];
     const cost=staffCost(item,o.qty);totalOwed+=cost;
+    const _bO=gl(item);
     item.left=Math.max(0,Math.round((gl(item)-o.qty)*10)/10);
+    _trace('STAFFBUY_OWNER',{item:item.name,cat:o.cat,qty:o.qty,before:_bO,after:item.left,flavor:o.flavorText||'',forStaff:_osbStaff||''});
     // Deduct flavor stock
     if(o.flavorText&&Array.isArray(item.flavors)){
       const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===o.flavorText.toLowerCase());
-      if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-o.qty));
+      if(fl){const _bf=fl.stock||0;fl.stock=Math.max(0,Math.round(_bf-o.qty));_trace('FLAV_DEDUCT',{item:item.name,flavor:o.flavorText,qty:o.qty,before:_bf,after:fl.stock,ok:1,via:'staffbuy'});}
+      else _trace('FLAV_MISS',{item:item.name,flavor:o.flavorText,ok:0,note:'staffbuy flavor not found'});
     }
     logItems.push({cat:o.cat,itemName:o.itemName,qty:o.qty,cost,flavorText:o.flavorText||''});
   });
@@ -9924,11 +10090,14 @@ function confirmSelfBuy(){
   selfBuyItems.forEach(o=>{
     const item=(inv[o.cat]||[])[o.ri];if(!item)return;
     const cost=staffCost(item,o.qty);totalOwed+=cost;
+    const _bS=gl(item);
     item.left=Math.max(0,Math.round((gl(item)-o.qty)*10)/10);
+    _trace('SELFBUY',{item:item.name,cat:o.cat,qty:o.qty,before:_bS,after:item.left,flavor:o.flavorText||'',who:cu?.name||''});
     // Deduct flavor stock
     if(o.flavorText&&Array.isArray(item.flavors)){
       const fl=item.flavors.find(f=>f.name&&f.name.toLowerCase()===o.flavorText.toLowerCase());
-      if(fl)fl.stock=Math.max(0,Math.round((fl.stock||0)-o.qty));
+      if(fl){const _bf=fl.stock||0;fl.stock=Math.max(0,Math.round(_bf-o.qty));_trace('FLAV_DEDUCT',{item:item.name,flavor:o.flavorText,qty:o.qty,before:_bf,after:fl.stock,ok:1,via:'selfbuy'});}
+      else _trace('FLAV_MISS',{item:item.name,flavor:o.flavorText,ok:0,note:'selfbuy flavor not found'});
     }
     logItems.push({cat:o.cat,itemName:o.itemName,qty:o.qty,cost,flavorText:o.flavorText||''});
   });
