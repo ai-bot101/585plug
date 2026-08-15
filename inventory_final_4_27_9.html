@@ -1610,9 +1610,9 @@ function _debugOverlayToggle(){
     if(msg.includes('[PENDING-TRACE]')||msg.includes('[RENDER-PENDING]')||msg.includes('[PENDING-AUDIT]'))_debugOverlayLog(msg);
   };
 })();
-const _APP_VERSION='deploy-v153';
-const _BUILD_TS=1786809429993; // build timestamp for auto-update detection
-setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v153]';},1000);
+const _APP_VERSION='deploy-v154';
+const _BUILD_TS=1786810046972; // build timestamp for auto-update detection
+setTimeout(()=>{_debugOverlayLog('[BOOT] '+_APP_VERSION+' loaded');document.title='585 Plug [v154]';},1000);
 // Global error handler — catch uncaught errors so they don't silently crash the app
 window.onerror=function(msg,src,line,col,err){
   console.error('[GLOBAL-ERR] '+msg+' at line '+line+':'+col,err);
@@ -5669,15 +5669,26 @@ function processWebsiteOrders(pendingOrders) {
       // If both the shop AND inventory app deduct (temporary double-deduction),
       // _autoRepairStock on next login detects invSold > logSold and restores the excess.
       pendingWebOrders[fbKey] = {...order, fbKey, heldAt:Date.now(), _stockDeductedLocally:true};
-      console.log('[PENDING] New order from Firebase:', fbKey, 'source:', order.source||'website', 'total:', order.total, 'shopDeducted:', !!order._stockDeductedV2, '— always deducting locally');
+      // Deduct ONLY if this order has not already been deducted.
+      //
+      // `pendingWebOrders` is per-session and starts empty, so every login
+      // makes existing pending orders look brand new. Deducting on sight
+      // therefore removed the same stock again on every single login.
+      // _stockDeductedV2 lives in Firebase and survives sessions, so it is
+      // the thing to trust. If a deduction genuinely goes missing, the
+      // login stock check catches it and asks before removing anything.
+      const _alreadyDeducted = order._stockDeductedV2 === true || order._stockDeducted === true;
+      console.log('[PENDING] Order from Firebase:', fbKey, 'source:', order.source||'website', 'total:', order.total,
+        _alreadyDeducted ? '— already deducted, holding only' : '— deducting now');
       newCount++;
       pendingWebOrders[fbKey]._stockDeductedLocally = true;
       pendingWebOrders[fbKey]._stockDeducted = true;
       pendingWebOrders[fbKey]._stockDeductedV2 = true;
-      _trace('PEND_NEW',{key:fbKey,src2:order.source||'website',total:order.total,shopDeducted:order._stockDeductedV2?1:0,
+      _trace(_alreadyDeducted?'PEND_HOLD':'PEND_NEW',{key:fbKey,src2:order.source||'website',total:order.total,
+        alreadyDeducted:_alreadyDeducted?1:0,
         items:(order.orderItems||[]).map(i=>(i.itemName||i.name||'?')+'x'+(i.qty||1)+(i.label?'/'+i.label:'')+(i.flavorText?'['+i.flavorText+']':'')).join(' | ')});
       let _deductOk=0, _deductFail=0;
-      (order.orderItems||[]).forEach(oi=>{
+      (_alreadyDeducted ? [] : (order.orderItems||[])).forEach(oi=>{
         const itemName=(oi.itemName||oi.name||'').toLowerCase().trim();
         const qty=Math.max(oi.qty||1,labelToQty(oi.label));
         const cat=(oi.cat||'').trim();
